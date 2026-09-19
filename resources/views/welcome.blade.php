@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>{{ config('app.name', 'LSPDMS') }}</title>
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+        <style>
+            :root {
+                --page-bg: #ffffff;
+                --page-bg-deep: #f4f9ff;
+                --panel: #ffffff;
+                --panel-border: rgba(25, 81, 145, 0.10);
+                --text: #0d2339;
+                --muted: #6b8299;
+                --primary: #0a6bd6;
+                --primary-soft: #eaf3ff;
+                --primary-deep: #0a4a8a;
+                --line: rgba(12, 60, 110, 0.12);
+                --shadow: rgba(15, 76, 129, 0.10);
+            }
+
+            * { box-sizing: border-box; }
+
+            html, body {
+                margin: 0;
+                min-height: 100%;
+                font-family: 'Montserrat', sans-serif;
+                background: linear-gradient(180deg, var(--page-bg) 0%, var(--page-bg-deep) 100%);
+                color: var(--text);
+            }
+
+            body {
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+            }
+
+            /* ---------- Intro ---------- */
+
+            .intro-screen {
+                position: fixed;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #ffffff;
+                z-index: 20;
+                transition: opacity 0.9s ease, visibility 0.9s ease;
+            }
+
+            .intro-screen.fade-out {
+                opacity: 0;
+                visibility: hidden;
+            }
+
+            .intro-content {
+                text-align: center;
+                width: min(90%, 640px);
+                padding: 2rem;
+            }
+
+            .welcome-text {
+                font-size: clamp(1.3rem, 2.2vw, 2rem);
+                font-weight: 500;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                color: var(--primary-deep);
+                opacity: 0;
+                transform: translateY(10px);
+                transition: opacity 0.8s ease, transform 0.8s ease;
+            }
+
+            .welcome-text.show {
+                opacity: 1;
+                transform: translateY(0);
+            }
+
+            .welcome-text.fade-out {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            /* Letters row -> column */
+
+            .letters-wrap {
+                display: flex;
+                flex-direction: row;
+                justify-content: center;
+                align-items: center;
+                gap: 0.55rem;
+                min-height: 6rem;
+                margin: 1.6rem auto;
+                transition: opacity 0.5s ease;
+            }
+
+            .letters-wrap.fade-out-list {
+                opacity: 0;
+                pointer-events: none;
+            }
+
+            .letters-wrap.stacked {
+                display: grid;
+                grid-template-columns: auto 1fr;
+                column-gap: 0;
+                row-gap: 0.65rem;
+                justify-content: center;
+                min-height: auto;
+                margin: 0.5rem auto 0;
+            }
+
+            /* display:contents lets each row's children fall straight into the grid */
+            .letters-wrap.stacked .letter-row {
+                display: contents;
+            }
+
+            .letter {
+                width: 4rem;
+                height: 4rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 16px;
+                background: var(--primary-soft);
+                border: 1px solid rgba(10, 107, 214, 0.18);
+                color: var(--primary);
+                font-size: 2rem;
+                font-weight: 800;
+                opacity: 0;
+                transform: translateY(18px) scale(0.85);
+                transition: opacity 0.45s ease, transform 0.45s ease;
+                justify-self: start;
+            }
+
+            .letter.show {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+
+            .word {
+                opacity: 0;
+                max-width: 0;
+                overflow: hidden;
+                white-space: nowrap;
+                font-size: clamp(0.95rem, 1.6vw, 1.3rem);
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                color: var(--primary-deep);
+                justify-self: start;
+                align-self: center;
+                margin-left: 0;
+            }
+
+            .letter-row.active .word {
+                opacity: 1;
+                max-width: 480px;
+                margin-left: 0.9rem;
+                transition: opacity 0.25s ease, margin-left 0.25s ease;
+            }
+
+            .tagline {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                width: calc(100vw - 2rem);
+                min-height: 2.2rem;
+                margin: 0;
+                font-size: clamp(2rem, 5vw, 4.5rem);
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                color: var(--primary-deep);
+                opacity: 0;
+                text-align: center;
+                transform: translate(-50%, -50%);
+                transition: opacity 0.6s ease;
+            }
+
+            .tagline.show {
+                opacity: 1;
+            }
+
+            /* ---------- Login card ---------- */
+
+            .login-shell {
+                position: relative;
+                width: min(100%, 420px);
+                opacity: 0;
+                transform: translateY(18px);
+                transition: opacity 0.8s ease, transform 0.8s ease;
+                pointer-events: none;
+            }
+
+            .login-shell.show {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: auto;
+            }
+
+            .login-card {
+                background: var(--panel);
+                border: 1px solid var(--panel-border);
+                box-shadow: 0 24px 48px var(--shadow);
+                border-radius: 20px;
+                padding: 2.2rem 1.9rem 1.8rem;
+            }
+
+            .brand {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+                margin-bottom: 1.7rem;
+                padding-bottom: 1.3rem;
+                border-bottom: 1px solid var(--line);
+            }
+
+            .brand-badge {
+                width: 38px;
+                height: 38px;
+                border-radius: 50%;
+                border: 1.5px solid var(--primary);
+                display: grid;
+                place-items: center;
+                font-size: 0.95rem;
+                font-weight: 800;
+                color: var(--primary);
+            }
+
+            .brand h1 {
+                margin: 0;
+                font-size: 1.6rem;
+                font-weight: 800;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                color: var(--primary-deep);
+            }
+
+            .brand p {
+                margin: 0;
+                font-size: 0.85rem;
+                color: var(--muted);
+                letter-spacing: 0.16em;
+                text-transform: uppercase;
+            }
+
+            .login-form {
+                display: flex;
+                flex-direction: column;
+                gap: 1.1rem;
+            }
+
+            .field {
+                display: flex;
+                flex-direction: column;
+                gap: 0.45rem;
+                position: relative;
+            }
+
+            label {
+                font-size: 0.7rem;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+
+            input {
+                width: 100%;
+                border: 1px solid rgba(13, 35, 57, 0.1);
+                background: #f7fbff;
+                color: var(--text);
+                border-radius: 10px;
+                padding: 0.85rem 0.95rem;
+                font-size: 0.95rem;
+                outline: none;
+                transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            }
+
+            .field.password-field input {
+                padding-right: 2.6rem;
+            }
+
+            input:focus {
+                border-color: rgba(10, 107, 214, 0.6);
+                box-shadow: 0 0 0 4px rgba(10, 107, 214, 0.08);
+            }
+
+            .toggle-password {
+                position: absolute;
+                right: 0.6rem;
+                bottom: 0.55rem;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: none;
+                border: 0;
+                color: var(--muted);
+                cursor: pointer;
+                padding: 0;
+            }
+
+            .toggle-password:hover {
+                color: var(--primary);
+            }
+
+            .toggle-password svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 0.8rem;
+                margin-top: -0.2rem;
+            }
+
+            .remember {
+                display: inline-flex;
+                align-items: center;
+                gap: 0.5rem;
+                color: var(--muted);
+                font-size: 0.8rem;
+            }
+
+            .remember input {
+                width: 15px;
+                height: 15px;
+                accent-color: var(--primary);
+            }
+
+            .link {
+                color: var(--primary-deep);
+                font-size: 0.78rem;
+                text-decoration: none;
+            }
+
+            .btn {
+                border: 0;
+                border-radius: 10px;
+                background: var(--primary);
+                color: white;
+                padding: 0.9rem 1.2rem;
+                font-size: 0.85rem;
+                font-weight: 700;
+                letter-spacing: 0.1em;
+                text-transform: uppercase;
+                cursor: pointer;
+                box-shadow: 0 14px 26px rgba(10, 107, 214, 0.2);
+                transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+            }
+
+            .btn:hover {
+                transform: translateY(-1px);
+                background: var(--primary-deep);
+                box-shadow: 0 16px 28px rgba(10, 107, 214, 0.24);
+            }
+
+            .register-row {
+                text-align: center;
+                font-size: 0.8rem;
+                color: var(--muted);
+                margin-top: 0.2rem;
+            }
+
+            .register-row a {
+                color: var(--primary);
+                font-weight: 700;
+                text-decoration: none;
+                margin-left: 0.3rem;
+            }
+
+            .register-row a:hover {
+                text-decoration: underline;
+            }
+
+            @media (max-width: 480px) {
+                .login-card { padding: 1.7rem 1.3rem 1.4rem; }
+                .letter { width: 3.2rem; height: 3.2rem; font-size: 1.6rem; }
+            }
+        </style>
+    </head>
+    <body>
+        <div id="introScreen" class="intro-screen">
+            <div class="intro-content">
+                <div id="welcomeText" class="welcome-text">Welcome to</div>
+
+                <div id="lettersWrap" class="letters-wrap" aria-label="LSPDMS">
+                    <div class="letter-row" data-word="LUPON"><span class="letter">L</span><span class="word"></span></div>
+                    <div class="letter-row" data-word="SA"><span class="letter">S</span><span class="word"></span></div>
+                    <div class="letter-row" data-word="PAGPAPATIBAY"><span class="letter">P</span><span class="word"></span></div>
+                    <div class="letter-row" data-word="DATA"><span class="letter">D</span><span class="word"></span></div>
+                    <div class="letter-row" data-word="MANAGEMENT"><span class="letter">M</span><span class="word"></span></div>
+                    <div class="letter-row" data-word="SYSTEM."><span class="letter">S</span><span class="word"></span></div>
+                </div>
+
+                <div id="tagline" class="tagline"></div>
+            </div>
+        </div>
+
+        <main class="login-shell" id="loginShell">
+            <div class="login-card">
+                <div class="brand">
+                    <div>
+                        <h1>LSPDMS</h1>
+                        <p>Secure Access</p>
+                    </div>
+                </div>
+
+                <form class="login-form" method="POST" action="{{ url('/login') }}">
+                    @csrf
+                    <div class="field">
+                        <label for="email">Email address</label>
+                        <input id="email" type="email" name="email" placeholder="name@example.com" value="{{ old('email') }}" required autofocus />
+                    </div>
+
+                    <div class="field password-field">
+                        <label for="password">Password</label>
+                        <input id="password" type="password" name="password" placeholder="••••••••" required />
+                        <button type="button" class="toggle-password" id="togglePassword" aria-label="Show password">
+                            <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="row">
+                        <label class="remember">
+                            <input type="checkbox" name="remember" />
+                            <span>Remember me</span>
+                        </label>
+                        <a href="{{ url('/password/reset') }}" class="link">Forgot password?</a>
+                    </div>
+
+                    <button type="submit" class="btn">Login</button>
+
+                    <p class="register-row">Don't have an account?
+                        <a href="{{ url('/register') }}">Register</a>
+                    </p>
+                </form>
+            </div>
+        </main>
+
+        <script>
+            const introScreen = document.getElementById('introScreen');
+            const loginShell = document.getElementById('loginShell');
+            const welcomeText = document.getElementById('welcomeText');
+            const lettersWrap = document.getElementById('lettersWrap');
+            const tagline = document.getElementById('tagline');
+            const rowEls = [...document.querySelectorAll('.letter-row')];
+            const letterEls = [...document.querySelectorAll('.letter')];
+
+            function wait(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+
+            function typeText(element, text, speed = 50) {
+                return new Promise((resolve) => {
+                    let index = 0;
+                    const timer = setInterval(() => {
+                        element.textContent += text[index] ?? '';
+                        index++;
+                        if (index >= text.length) {
+                            clearInterval(timer);
+                            resolve();
+                        }
+                    }, speed);
+                });
+            }
+
+            async function runIntro() {
+                // 1. Welcome to... fades in, then out
+                await wait(300);
+                welcomeText.classList.add('show');
+                await wait(1100);
+                welcomeText.classList.add('fade-out');
+                await wait(700);
+                welcomeText.style.display = 'none';
+
+                // 2. Letters appear one by one, horizontally
+                for (const letter of letterEls) {
+                    letter.classList.add('show');
+                    await wait(170);
+                }
+                await wait(500);
+
+                // 3. FLIP: letters literally move from the row into a column
+                const firstRects = letterEls.map(el => el.getBoundingClientRect());
+                lettersWrap.classList.add('stacked');
+                const secondRects = letterEls.map(el => el.getBoundingClientRect());
+
+                letterEls.forEach((el, i) => {
+                    const dx = firstRects[i].left - secondRects[i].left;
+                    const dy = firstRects[i].top - secondRects[i].top;
+                    el.style.transition = 'none';
+                    el.style.transform = `translate(${dx}px, ${dy}px)`;
+                });
+
+                // force reflow so the browser registers the start position
+                void lettersWrap.offsetWidth;
+
+                letterEls.forEach(el => {
+                    el.style.transition = 'transform 0.75s cubic-bezier(.22,.9,.32,1)';
+                    el.style.transform = 'translate(0, 0)';
+                });
+                await wait(850);
+
+                // 4. Typewrite each word next to its letter, one row at a time
+                for (const row of rowEls) {
+                    row.classList.add('active');
+                    const wordEl = row.querySelector('.word');
+                    await typeText(wordEl, row.dataset.word, 45);
+                    await wait(220);
+                }
+
+                await wait(700);
+                lettersWrap.classList.add('fade-out-list');
+                await wait(550);
+
+                // 5. Typewrite the tagline
+                tagline.classList.add('show');
+                await typeText(tagline, 'Record Keeping made easier!', 55);
+                await wait(1100);
+
+                // 6. Reveal the login card
+                introScreen.classList.add('fade-out');
+                loginShell.classList.add('show');
+                await wait(900);
+                introScreen.style.display = 'none';
+            }
+
+            runIntro();
+
+            // Password show/hide toggle
+            const togglePassword = document.getElementById('togglePassword');
+            const passwordInput = document.getElementById('password');
+            const eyeIcon = document.getElementById('eyeIcon');
+
+            const eyeOpenPaths = `<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>`;
+            const eyeClosedPaths = `<path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a21.6 21.6 0 015.06-6.06"/><path d="M9.9 4.24A10.94 10.94 0 0112 4c7 0 11 7 11 7a21.6 21.6 0 01-3.22 4.44"/><path d="M14.12 14.12a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`;
+
+            togglePassword.addEventListener('click', () => {
+                const showing = passwordInput.type === 'text';
+                passwordInput.type = showing ? 'password' : 'text';
+                eyeIcon.innerHTML = showing ? eyeOpenPaths : eyeClosedPaths;
+                togglePassword.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+            });
+        </script>
+    </body>
+</html>
