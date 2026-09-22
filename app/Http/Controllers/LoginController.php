@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Cookie;
 
 class LoginController extends Controller
 {
@@ -66,6 +68,7 @@ class LoginController extends Controller
             'code' => Hash::make($code),
             'expires_at' => now()->addMinutes(5)->timestamp,
             'sent_at' => now()->timestamp,
+            'remember' => $request->boolean('remember'),
         ]);
 
         return redirect('/verify-code')->with('status', 'A verification code was sent to your Gmail.');
@@ -112,9 +115,37 @@ class LoginController extends Controller
             'tungkulin' => $pendingUser['tungkulin'],
         ]);
         $request->session()->forget('pending_login_user');
+        if (! empty($pendingUser['remember'])) {
+    $this->rememberUser($pendingUser['id']);
+} else {
+    Cookie::queue(Cookie::forget('remember_token'));
+}
 
-        return redirect('/login')->with('status', 'Login successful.');
+        return redirect('/dashboard')->with('status', 'Login successful.');
     }
+
+    private function rememberUser(int $userId): void
+{
+    $token = Str::random(64);
+
+    DB::table('login_user')->where('id', $userId)->update([
+        'remember_token' => Hash::make($token),
+        'remember_token_expires_at' => now()->addDays(30),
+    ]);
+
+    Cookie::queue(Cookie::make(
+        'remember_token',
+        $userId . '|' . $token,
+        60 * 24 * 30,
+        null,
+        null,
+        config('session.secure'),
+        true,
+        false,
+        'Lax'
+    ));
+}
+
 
     public function resendCode(Request $request)
     {
@@ -147,14 +178,35 @@ class LoginController extends Controller
         return back()->with('status', 'A new verification code was sent.');
     }
 
-    private function sendVerificationCode(string $email): string
-    {
-        $code = (string) random_int(100000, 999999);
+ private function sendVerificationCode(string $email): string
+{
+    $code = (string) random_int(100000, 999999);
 
-        Mail::raw("Your LSPDMS verification code is: {$code}", function ($message) use ($email) {
-            $message->to($email)->subject('LSPDMS verification code');
-        });
+    $html = view('emails.verification-code', ['code' => $code])->render();
 
-        return $code;
-    }
+    Mail::html($html, function ($message) use ($email) {
+        $message->to($email)->subject('LSPDMS verification code');
+    });
+
+    return $code;
 }
+    public function logout(Request $request)
+{
+    $user = $request->session()->get('login_user');
+
+    if ($user) {
+        DB::table('login_user')->where('id', $user['id'])->update([
+            'remember_token' => null,
+            'remember_token_expires_at' => null,
+        ]);
+    }
+
+    $request->session()->forget('login_user');
+    $request->session()->regenerate();
+
+    Cookie::queue(Cookie::forget('remember_token'));
+
+    return redirect('/login')->with('status', 'You have been logged out.');
+}
+}
+

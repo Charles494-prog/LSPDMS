@@ -441,7 +441,7 @@
 
                     <div class="row">
                         <label class="remember">
-                            <input type="checkbox" name="remember" />
+                            <input type="checkbox" name="remember" value="1" />
                             <span>Remember me</span>
                         </label>
                         <a href="{{ url('/password/reset') }}" class="link">Forgot password?</a>
