@@ -291,6 +291,20 @@
                 box-shadow: 0 0 0 4px rgba(10, 107, 214, 0.08);
             }
 
+            input.input-error {
+                border-color: #dc2626;
+                background: #fff7f7;
+                box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.08);
+            }
+
+            .login-error {
+                margin: -0.55rem 0 0;
+                color: #dc2626;
+                font-size: 0.78rem;
+                font-weight: 600;
+                text-align: center;
+            }
+
             .toggle-password {
                 position: absolute;
                 right: 0.6rem;
@@ -390,28 +404,11 @@
         </style>
     </head>
     <body>
-        <div id="introScreen" class="intro-screen">
-            <div class="intro-content">
-                <div id="welcomeText" class="welcome-text">Welcome to</div>
-
-                <div id="lettersWrap" class="letters-wrap" aria-label="LSPDMS">
-                    <div class="letter-row" data-word="LUPON"><span class="letter">L</span><span class="word"></span></div>
-                    <div class="letter-row" data-word="SA"><span class="letter">S</span><span class="word"></span></div>
-                    <div class="letter-row" data-word="PAGPAPATIBAY"><span class="letter">P</span><span class="word"></span></div>
-                    <div class="letter-row" data-word="DATA"><span class="letter">D</span><span class="word"></span></div>
-                    <div class="letter-row" data-word="MANAGEMENT"><span class="letter">M</span><span class="word"></span></div>
-                    <div class="letter-row" data-word="SYSTEM."><span class="letter">S</span><span class="word"></span></div>
-                </div>
-
-                <div id="tagline" class="tagline"></div>
-            </div>
-        </div>
-
-        <main class="login-shell" id="loginShell">
+        <main class="login-shell show" id="loginShell">
             <div class="login-card">
                 <div class="brand">
                     <div>
-                        <h1>LSPDMS</h1>
+                        <h1>LSPDMS v1.0</h1>
                         <p>Secure Access</p>
                     </div>
                 </div>
@@ -420,12 +417,12 @@
                     @csrf
                     <div class="field">
                         <label for="email">Email address</label>
-                        <input id="email" type="email" name="email" placeholder="name@example.com" value="{{ old('email') }}" required autofocus />
+                        <input id="email" type="email" name="email" placeholder="name@example.com" value="{{ old('email') }}" class="{{ $errors->has('login') ? 'input-error' : '' }}" required autofocus />
                     </div>
 
                     <div class="field password-field">
                         <label for="password">Password</label>
-                        <input id="password" type="password" name="password" placeholder="••••••••" required />
+                        <input id="password" type="password" name="password" placeholder="••••••••" class="{{ $errors->has('login') ? 'input-error' : '' }}" required />
                         <button type="button" class="toggle-password" id="togglePassword" aria-label="Show password">
                             <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
@@ -433,6 +430,14 @@
                             </svg>
                         </button>
                     </div>
+
+                    @error('login')
+                        <p class="login-error">{{ $message }}</p>
+                    @enderror
+
+                    @if (request()->query('expired'))
+                        <p class="login-error">Session expired. Please try again.</p>
+                    @endif
 
                     <div class="row">
                         <label class="remember">
@@ -452,95 +457,6 @@
         </main>
 
         <script>
-            const introScreen = document.getElementById('introScreen');
-            const loginShell = document.getElementById('loginShell');
-            const welcomeText = document.getElementById('welcomeText');
-            const lettersWrap = document.getElementById('lettersWrap');
-            const tagline = document.getElementById('tagline');
-            const rowEls = [...document.querySelectorAll('.letter-row')];
-            const letterEls = [...document.querySelectorAll('.letter')];
-
-            function wait(ms) {
-                return new Promise(resolve => setTimeout(resolve, ms));
-            }
-
-            function typeText(element, text, speed = 50) {
-                return new Promise((resolve) => {
-                    let index = 0;
-                    const timer = setInterval(() => {
-                        element.textContent += text[index] ?? '';
-                        index++;
-                        if (index >= text.length) {
-                            clearInterval(timer);
-                            resolve();
-                        }
-                    }, speed);
-                });
-            }
-
-            async function runIntro() {
-                // 1. Welcome to... fades in, then out
-                await wait(300);
-                welcomeText.classList.add('show');
-                await wait(1100);
-                welcomeText.classList.add('fade-out');
-                await wait(700);
-                welcomeText.style.display = 'none';
-
-                // 2. Letters appear one by one, horizontally
-                for (const letter of letterEls) {
-                    letter.classList.add('show');
-                    await wait(170);
-                }
-                await wait(500);
-
-                // 3. FLIP: letters literally move from the row into a column
-                const firstRects = letterEls.map(el => el.getBoundingClientRect());
-                lettersWrap.classList.add('stacked');
-                const secondRects = letterEls.map(el => el.getBoundingClientRect());
-
-                letterEls.forEach((el, i) => {
-                    const dx = firstRects[i].left - secondRects[i].left;
-                    const dy = firstRects[i].top - secondRects[i].top;
-                    el.style.transition = 'none';
-                    el.style.transform = `translate(${dx}px, ${dy}px)`;
-                });
-
-                // force reflow so the browser registers the start position
-                void lettersWrap.offsetWidth;
-
-                letterEls.forEach(el => {
-                    el.style.transition = 'transform 0.75s cubic-bezier(.22,.9,.32,1)';
-                    el.style.transform = 'translate(0, 0)';
-                });
-                await wait(850);
-
-                // 4. Typewrite each word next to its letter, one row at a time
-                for (const row of rowEls) {
-                    row.classList.add('active');
-                    const wordEl = row.querySelector('.word');
-                    await typeText(wordEl, row.dataset.word, 45);
-                    await wait(220);
-                }
-
-                await wait(700);
-                lettersWrap.classList.add('fade-out-list');
-                await wait(550);
-
-                // 5. Typewrite the tagline
-                tagline.classList.add('show');
-                await typeText(tagline, 'Record Keeping made easier!', 55);
-                await wait(1100);
-
-                // 6. Reveal the login card
-                introScreen.classList.add('fade-out');
-                loginShell.classList.add('show');
-                await wait(900);
-                introScreen.style.display = 'none';
-            }
-
-            runIntro();
-
             // Password show/hide toggle
             const togglePassword = document.getElementById('togglePassword');
             const passwordInput = document.getElementById('password');
