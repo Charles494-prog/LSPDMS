@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ ($user['dark_mode'] ?? false) ? 'dark' : 'light' }}">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>@yield('title', 'Dashboard') - {{ config('app.name', 'LSPDMS') }}</title>
+        <link rel="icon" type="image/png" href="{{ asset('../public/LSPIcon.png') }}">
+        <style>
+            :root {
+                --bg: #f6f8fa;
+                --surface: #ffffff;
+                --border: #e3e8ee;
+                --text: #101828;
+                --text-muted: #64748b;
+                --accent: #0a6bd6;
+                --accent-hover: #0a4a8a;
+                --sidebar-bg: #101828;
+                --sidebar-text: #cbd5e1;
+                --sidebar-text-active: #ffffff;
+                --sidebar-active-bg: rgba(255,255,255,0.08);
+                --danger: #dc2626;
+                --sidebar-width: 268px;
+                --sidebar-width-collapsed: 76px;
+
+                /* Sidebar gradient: deep navy fading to near-black, with a
+                   soft accent-blue glow bleeding in from the top corner. */
+                --sidebar-gradient: linear-gradient(165deg, #17233d 0%, #101828 42%, #0a0f1a 100%);
+                --sidebar-glow: radial-gradient(circle at 15% 0%, rgba(59,147,255,0.25), transparent 55%);
+
+                /* Topbar gradient: barely-there cool tint instead of flat white,
+                   plus a thin accent line along the bottom edge. */
+                --topbar-gradient: linear-gradient(120deg, #ffffff 0%, #f3f7fd 55%, #eaf1fb 100%);
+                --topbar-accent-line: linear-gradient(90deg, var(--accent), rgba(10,107,214,0) 65%);
+            }
+            html[data-theme="dark"] {
+                --bg: #0b1220;
+                --surface: #141b2d;
+                --border: #263043;
+                --text: #e5e9f0;
+                --text-muted: #93a0b4;
+                --accent: #3b93ff;
+                --accent-hover: #63acff;
+                --sidebar-bg: #0a0f1a;
+                --sidebar-text: #93a0b4;
+                --sidebar-text-active: #ffffff;
+                --sidebar-active-bg: rgba(255,255,255,0.06);
+
+                --sidebar-gradient: linear-gradient(165deg, #131c30 0%, #0a0f1a 45%, #060910 100%);
+                --sidebar-glow: radial-gradient(circle at 15% 0%, rgba(59,147,255,0.18), transparent 55%);
+
+                --topbar-gradient: linear-gradient(120deg, #141b2d 0%, #161f34 55%, #182339 100%);
+                --topbar-accent-line: linear-gradient(90deg, var(--accent), rgba(59,147,255,0) 65%);
+            }
+            * { box-sizing: border-box; }
+            body {
+                margin: 0;
+                font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                display: flex;
+                min-height: 100vh;
+            }
+
+            /* Sidebar */
+            .sidebar {
+                width: var(--sidebar-width);
+                flex-shrink: 0;
+                background: var(--sidebar-gradient);
+                position: fixed;
+                top: 0; bottom: 0; left: 0;
+                display: flex;
+                flex-direction: column;
+                transform: translateX(0);
+                transition: transform 0.2s ease, width 0.2s ease;
+                z-index: 40;
+                box-shadow: 1px 0 0 rgba(255,255,255,0.04) inset, 4px 0 24px rgba(0,0,0,0.18);
+            }
+            .sidebar::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background: var(--sidebar-glow);
+                pointer-events: none;
+            }
+            .sidebar.collapsed { width: var(--sidebar-width-collapsed); }
+            .sidebar-top {
+                position: relative;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 1.3rem 1.2rem 1.1rem;
+                border-bottom: 1px solid rgba(255,255,255,0.08);
+                margin-bottom: 0.6rem;
+            }
+            .sidebar-brand { color: #ffffff; font-weight: 700; font-size: 1.1rem; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; }
+            .sidebar.collapsed .sidebar-brand { display: none; }
+            .collapse-btn {
+                background: rgba(255,255,255,0.06);
+                border: none;
+                width: 30px; height: 30px;
+                border-radius: 7px;
+                color: var(--sidebar-text);
+                display: flex; align-items: center; justify-content: center;
+                cursor: pointer;
+                flex-shrink: 0;
+            }
+            .collapse-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+            .collapse-btn svg { transition: transform 0.2s ease; }
+            .sidebar.collapsed .collapse-btn svg { transform: rotate(180deg); }
+
+            .sidebar nav { position: relative; flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0.4rem 0.9rem; }
+            .sidebar a {
+                display: flex;
+                align-items: center;
+                gap: 0.85rem;
+                padding: 0.8rem 0.9rem;
+                margin-bottom: 0.25rem;
+                border-radius: 10px;
+                color: var(--sidebar-text);
+                text-decoration: none;
+                font-size: 0.95rem;
+                font-weight: 500;
+                white-space: nowrap;
+                transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+            }
+            .sidebar a svg { flex-shrink: 0; width: 21px; height: 21px; }
+            .sidebar a:hover { background: var(--sidebar-active-bg); color: var(--sidebar-text-active); }
+            .sidebar a.active {
+                background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+                color: #ffffff;
+                box-shadow: 0 4px 14px rgba(10,107,214,0.35);
+            }
+            .sidebar.collapsed a span.label { display: none; }
+            .sidebar.collapsed a { justify-content: center; padding: 0.8rem; }
+
+            .sidebar-section-label {
+                position: relative;
+                font-size: 0.68rem;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: #56617a;
+                padding: 0.9rem 0.9rem 0.4rem;
+                font-weight: 700;
+            }
+            .sidebar.collapsed .sidebar-section-label { display: none; }
+            .sidebar-admin { position: relative; border-top: 1px solid rgba(255,255,255,0.08); padding: 0.4rem 0.9rem 1rem; }
+
+            /* Main area */
+            .main { margin-left: var(--sidebar-width); flex: 1; min-width: 0; display: flex; flex-direction: column; transition: margin-left 0.2s ease; }
+            .main.collapsed { margin-left: var(--sidebar-width-collapsed); }
+            .topbar {
+                position: sticky;
+                top: 0;
+                z-index: 20;
+                background: var(--topbar-gradient);
+                border-bottom: 1px solid var(--border);
+                padding: 0.9rem 1.5rem;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 1rem;
+                box-shadow: 0 1px 0 rgba(15,23,42,0.04), 0 6px 18px rgba(15,23,42,0.05);
+            }
+            .topbar::after {
+                content: "";
+                position: absolute;
+                left: 0; right: 0; bottom: -1px;
+                height: 2px;
+                background: var(--topbar-accent-line);
+                opacity: 0.7;
+            }
+            .topbar-title { font-weight: 700; font-size: 1.05rem; }
+            .menu-toggle {
+                display: none;
+                background: none;
+                border: none;
+                cursor: pointer;
+                padding: 0.4rem;
+                color: var(--text);
+            }
+
+            /* User menu */
+            .user-menu { position: relative; }
+            .user-chip {
+                display: flex; align-items: center; gap: 0.6rem;
+                background: none; border: none; cursor: pointer;
+                padding: 0.3rem 0.5rem 0.3rem 0.3rem;
+                border-radius: 999px;
+                color: inherit;
+            }
+            .user-chip:hover { background: var(--bg); }
+            .user-chip img { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: var(--border); }
+            .user-chip-name { font-size: 0.85rem; font-weight: 600; line-height: 1.2; text-align: left; }
+            .user-chip-role { font-size: 0.72rem; color: var(--text-muted); text-align: left; }
+
+            .user-dropdown {
+                position: absolute;
+                top: calc(100% + 8px);
+                right: 0;
+                width: 220px;
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                box-shadow: 0 12px 28px rgba(15,23,42,0.14);
+                padding: 0.4rem;
+                display: none;
+                z-index: 50;
+            }
+            .user-dropdown.open { display: block; }
+            .user-dropdown a, .user-dropdown button {
+                display: flex; align-items: center; gap: 0.7rem;
+                width: 100%; text-align: left;
+                background: none; border: none; cursor: pointer;
+                padding: 0.65rem 0.7rem;
+                border-radius: 8px;
+                font-size: 0.88rem;
+                color: var(--text);
+                text-decoration: none;
+                font-family: inherit;
+            }
+            .user-dropdown a:hover, .user-dropdown button:hover { background: var(--bg); }
+            .user-dropdown svg { width: 17px; height: 17px; flex-shrink: 0; color: var(--text-muted); }
+            .user-dropdown .divider { height: 1px; background: var(--border); margin: 0.3rem 0.2rem; }
+            .user-dropdown button.logout-item { color: var(--danger); }
+            .user-dropdown button.logout-item svg { color: var(--danger); }
+
+            .content { padding: 1.6rem; flex: 1; }
+
+            .overlay {
+                display: none;
+                position: fixed; inset: 0;
+                background: rgba(0,0,0,0.4);
+                z-index: 30;
+            }
+
+            @media (max-width: 900px) {
+                .sidebar { transform: translateX(-100%); width: var(--sidebar-width) !important; }
+                .sidebar.open { transform: translateX(0); }
+                .main, .main.collapsed { margin-left: 0; }
+                .menu-toggle { display: inline-flex; }
+                .overlay.open { display: block; }
+                .collapse-btn { display: none; }
+                .sidebar.collapsed a span.label { display: inline; }
+                .sidebar.collapsed a { justify-content: flex-start; padding: 0.8rem 0.9rem; }
+                .sidebar.collapsed .sidebar-brand { display: block; }
+            }
+        </style>
+        @stack('styles')
+    </head>
+    <body>
+        <div class="overlay" id="sidebarOverlay"></div>
+
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-top">
+                <div class="sidebar-brand">LSPDMS v1.0</div>
+                <button class="collapse-btn" id="collapseToggle" aria-label="Collapse sidebar">
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4l-6 6 6 6"/></svg>
+                </button>
+            </div>
+
+            @php
+                $icons = [
+                    'home' => '<path d="M3 10.5 10 4l7 6.5"/><path d="M5 9v7h10V9"/>',
+                    'grid' => '<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/>',
+                    'file' => '<path d="M6 2h6l4 4v12H6z"/><path d="M12 2v4h4"/><path d="M8 11h6M8 14h6"/>',
+                    'user-x' => '<circle cx="8" cy="7" r="3"/><path d="M2 17c0-3 2.5-5 6-5"/><path d="M14 8l4 4M18 8l-4 4"/>',
+                    'shield' => '<path d="M10 2l7 3v5c0 4.5-3 7.5-7 8-4-.5-7-3.5-7-8V5l7-3z"/>',
+                    'profile' => '<circle cx="10" cy="7" r="3.2"/><path d="M3.5 17c1-3.2 3.6-5 6.5-5s5.5 1.8 6.5 5"/>',
+                    'logout' => '<path d="M8 17H4V3h4"/><path d="M13 13l4-3-4-3"/><path d="M17 10H8"/>',
+                    'search-edit' => '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5 17 17"/><path d="M12 15.5l2-2 1.5 1.5-2 2H12v-1.5z"/>',
+                ];
+
+            @endphp
+
+            <nav>
+                <a href="{{ route('home') }}" class="{{ request()->routeIs('home') ? 'active' : '' }}">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['home'] !!}</svg>
+                    <span class="label">Home</span>
+                </a>
+
+                <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['grid'] !!}</svg>
+                    <span class="label">Dashboard</span>
+                </a>
+
+                <a href="{{ route('form-generator') }}" class="{{ request()->routeIs('form-generator') ? 'active' : '' }}">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['file'] !!}</svg>
+                    <span class="label">Form Generator</span>
+                </a>
+
+                <a href="{{ route('de-listment') }}" class="{{ request()->routeIs('de-listment') ? 'active' : '' }}">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['user-x'] !!}</svg>
+                    <span class="label">De-Listment</span>
+                </a>
+
+                <a href="{{ Route::has('inquire-modify') ? route('inquire-modify') : '#' }}"
+                   class="{{ request()->routeIs('inquire-modify') ? 'active' : '' }}">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['search-edit'] !!}</svg>
+                    <span class="label">Inquire / Modify</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-admin">
+                <div class="sidebar-section-label">Administration</div>
+                <a href="{{ route('superadmin-dashboard') }}" class="{{ request()->routeIs('superadmin-dashboard') ? 'active' : '' }}">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['shield'] !!}</svg>
+                    <span class="label">Superadmin Dashboard</span>
+                </a>
+            </div>
+        </aside>
+
+        <div class="main" id="mainArea">
+            <header class="topbar">
+                <div style="display:flex; align-items:center; gap:0.8rem;">
+                    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+                        <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+                    </button>
+                    <span class="topbar-title">@yield('title', 'Dashboard')</span>
+                </div>
+
+                @php
+                    $displayName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
+                    $displayName = $displayName !== '' ? $displayName : ($user['gmail'] ?? 'User');
+                @endphp
+
+                <div class="user-menu">
+                    <button class="user-chip" id="userChipBtn">
+                        <img src="{{ !empty($user['profile_picture']) ? asset('storage/' . $user['profile_picture']) : 'https://ui-avatars.com/api/?name=' . urlencode($displayName) . '&background=0A6BD6&color=fff' }}" alt="">
+                        <span>
+                            <div class="user-chip-name">{{ $displayName }}</div>
+                            <div class="user-chip-role">{{ $user['tungkulin'] ?? '' }}</div>
+                        </span>
+                    </button>
+
+                    <div class="user-dropdown" id="userDropdown">
+                        <a href="{{ route('profile') }}">
+                            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['profile'] !!}</svg>
+                            Profile
+                        </a>
+                        <div class="divider"></div>
+                        <form method="POST" action="{{ url('/logout') }}">
+                            @csrf
+                            <button type="submit" class="logout-item">
+                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['logout'] !!}</svg>
+                                Log out
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </header>
+
+            <main class="content">
+                @if (session('status'))
+                    <div style="background: var(--surface); border:1px solid var(--border); border-left:3px solid var(--accent); padding:0.8rem 1rem; border-radius:8px; margin-bottom:1.2rem; font-size:0.9rem;">
+                        {{ session('status') }}
+                    </div>
+                @endif
+
+                @yield('content')
+            </main>
+        </div>
+
+        <script>
+            const sidebar = document.getElementById('sidebar');
+            const mainArea = document.getElementById('mainArea');
+            const overlay = document.getElementById('sidebarOverlay');
+            const menuToggle = document.getElementById('menuToggle');
+            const collapseToggle = document.getElementById('collapseToggle');
+            const userChipBtn = document.getElementById('userChipBtn');
+            const userDropdown = document.getElementById('userDropdown');
+
+            function openSidebar() {
+                sidebar.classList.add('open');
+                overlay.classList.add('open');
+            }
+            function closeSidebar() {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('open');
+            }
+
+            menuToggle?.addEventListener('click', openSidebar);
+            overlay?.addEventListener('click', closeSidebar);
+
+            // Desktop collapse, persisted across page loads
+            try {
+                if (localStorage.getItem('sidebarCollapsed') === '1') {
+                    sidebar.classList.add('collapsed');
+                    mainArea.classList.add('collapsed');
+                }
+            } catch (e) {}
+
+            collapseToggle?.addEventListener('click', () => {
+                const isCollapsed = sidebar.classList.toggle('collapsed');
+                mainArea.classList.toggle('collapsed', isCollapsed);
+                try { localStorage.setItem('sidebarCollapsed', isCollapsed ? '1' : '0'); } catch (e) {}
+            });
+
+            // User dropdown
+            userChipBtn?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                userDropdown.classList.toggle('open');
+            });
+            document.addEventListener('click', (e) => {
+                if (!userDropdown.contains(e.target) && e.target !== userChipBtn) {
+                    userDropdown.classList.remove('open');
+                }
+            });
+        </script>
+        @stack('scripts')
+    </body>
+</html>

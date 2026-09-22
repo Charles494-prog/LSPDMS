@@ -1,21 +1,17 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Dashboard - {{ config('app.name', 'LSPDMS') }}</title>
-    </head>
-    <body>
-        <h1>Welcome, {{ $user['gmail'] ?? 'User' }}</h1>
-        <p>Role: {{ $user['tungkulin'] ?? 'N/A' }}</p>
+@extends('layouts.app')
 
-        @if (session('status'))
-            <p>{{ session('status') }}</p>
-        @endif
+@section('title', 'Dashboard')
 
-        <form method="POST" action="{{ url('/logout') }}">
-            @csrf
-            <button type="submit">Logout</button>
-        </form>
-    </body>
-</html>
+@section('content')
+    <h1 style="font-size:1.4rem; margin:0 0 0.3rem;">Overview</h1>
+    <p style="color: var(--text-muted); margin:0 0 1.5rem; font-size:0.9rem;">
+        A quick look at what's happening across LSPDMS.
+    </p>
+
+    <div style="background: var(--surface); border:1px solid var(--border); border-radius:12px; padding:1.5rem;">
+        <p style="margin:0; color: var(--text-muted); font-size:0.9rem;">
+            Dashboard widgets go here.
+        </p>
+    </div>
+
+@endsection

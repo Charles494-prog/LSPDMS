@@ -13,10 +13,12 @@ class EnsureUserIsLoggedIn
     public function handle(Request $request, Closure $next): Response
     {
         if ($request->session()->has('login_user')) {
+            view()->share('user', $request->session()->get('login_user'));
             return $next($request);
         }
 
         if ($this->attemptRememberLogin($request)) {
+            view()->share('user', $request->session()->get('login_user'));
             return $next($request);
         }
 
@@ -52,6 +54,11 @@ class EnsureUserIsLoggedIn
             'id' => $user->id,
             'gmail' => $user->gmail,
             'tungkulin' => $user->tungkulin,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'gender' => $user->gender,
+            'profile_picture' => $user->profile_picture,
+            'dark_mode' => (bool) $user->dark_mode,
         ]);
 
         return true;

@@ -21,32 +21,37 @@ class LoginController extends Controller
 
         $email = strtolower(trim($credentials['email']));
 
-        $user = DB::table('login_user')
-            ->whereRaw('LOWER(TRIM(gmail)) = ?', [$email])
-            ->where('is_verified', 1)
-            ->first();
+       $user = DB::table('login_user')
+    ->whereRaw('LOWER(TRIM(gmail)) = ?', [$email])
+    ->first();
 
-        $passwordMatches = false;
+$passwordMatches = false;
 
-        if ($user) {
-            $storedPassword = (string) $user->password;
-            $isHashedPassword = str_starts_with($storedPassword, '$2y$')
-                || str_starts_with($storedPassword, '$2a$')
-                || str_starts_with($storedPassword, '$2b$')
-                || str_starts_with($storedPassword, '$argon2');
+if ($user) {
+    $storedPassword = (string) $user->password;
+    $isHashedPassword = str_starts_with($storedPassword, '$2y$')
+        || str_starts_with($storedPassword, '$2a$')
+        || str_starts_with($storedPassword, '$2b$')
+        || str_starts_with($storedPassword, '$argon2');
 
-            if ($isHashedPassword) {
-                $passwordMatches = Hash::check($credentials['password'], $user->password);
-            } else {
-                $passwordMatches = hash_equals($storedPassword, $credentials['password']);
-            }
-        }
+    if ($isHashedPassword) {
+        $passwordMatches = Hash::check($credentials['password'], $user->password);
+    } else {
+        $passwordMatches = hash_equals($storedPassword, $credentials['password']);
+    }
+}
 
-        if (! $passwordMatches) {
-            return back()
-                ->withInput($request->only('email'))
-                ->withErrors(['login' => 'Invalid username or password.']);
-        }
+if (! $passwordMatches) {
+    return back()
+        ->withInput($request->only('email'))
+        ->withErrors(['login' => 'Invalid username or password.']);
+}
+
+if ((int) $user->is_verified !== 1) {
+    return back()
+        ->withInput($request->only('email'))
+        ->withErrors(['login' => 'Account has not been granted access by the head secretary.']);
+}
 
         try {
             $code = $this->sendVerificationCode($user->gmail);
@@ -86,44 +91,53 @@ class LoginController extends Controller
         ]);
     }
 
-    public function verifyCode(Request $request)
-    {
-        $pendingUser = $request->session()->get('pending_login_user');
+public function verifyCode(Request $request)
+{
+    $pendingUser = $request->session()->get('pending_login_user');
 
-        if (! $pendingUser) {
-            return redirect('/login')->withErrors(['login' => 'Please log in again.']);
-        }
-
-        $request->validate([
-            'code' => ['required', 'digits:6'],
-        ]);
-
-        if ($pendingUser['expires_at'] < now()->timestamp) {
-            $request->session()->forget('pending_login_user');
-
-            return redirect('/login?expired=1');
-        }
-
-        if (! Hash::check($request->code, $pendingUser['code'])) {
-            return back()->withErrors(['code' => 'Invalid or expired verification code.']);
-        }
-
-        $request->session()->regenerate();
-        $request->session()->put('login_user', [
-            'id' => $pendingUser['id'],
-            'gmail' => $pendingUser['gmail'],
-            'tungkulin' => $pendingUser['tungkulin'],
-        ]);
-        $request->session()->forget('pending_login_user');
-        if (! empty($pendingUser['remember'])) {
-    $this->rememberUser($pendingUser['id']);
-} else {
-    Cookie::queue(Cookie::forget('remember_token'));
-}
-
-        return redirect('/dashboard')->with('status', 'Login successful.');
+    if (! $pendingUser) {
+        return redirect('/login')->withErrors(['login' => 'Please log in again.']);
     }
 
+    $request->validate([
+        'code' => ['required', 'digits:6'],
+    ]);
+
+    if ($pendingUser['expires_at'] < now()->timestamp) {
+        $request->session()->forget('pending_login_user');
+
+        return redirect('/login?expired=1');
+    }
+
+    if (! Hash::check($request->code, $pendingUser['code'])) {
+        return back()->withErrors(['code' => 'Invalid or expired verification code.']);
+    }
+
+    $request->session()->regenerate();
+
+    $freshUser = DB::table('login_user')->where('id', $pendingUser['id'])->first();
+
+    $request->session()->put('login_user', [
+        'id' => $freshUser->id,
+        'gmail' => $freshUser->gmail,
+        'tungkulin' => $freshUser->tungkulin,
+        'first_name' => $freshUser->first_name,
+        'last_name' => $freshUser->last_name,
+        'gender' => $freshUser->gender,
+        'profile_picture' => $freshUser->profile_picture,
+        'dark_mode' => (bool) $freshUser->dark_mode,
+    ]);
+
+    $request->session()->forget('pending_login_user');
+
+    if (! empty($pendingUser['remember'])) {
+        $this->rememberUser($pendingUser['id']);
+    } else {
+        Cookie::queue(Cookie::forget('remember_token'));
+    }
+
+    return redirect('/home')->with('status', 'Login successful.');
+}
     private function rememberUser(int $userId): void
 {
     $token = Str::random(64);
