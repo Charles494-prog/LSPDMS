@@ -438,13 +438,18 @@
                     @if (request()->query('expired'))
                         <p class="login-error">Session expired. Please try again.</p>
                     @endif
+                    @if (request()->query('access') === 'revoked')
+                        <p class="login-error">Your account access was disabled. Contact the head secretary if you need access restored.</p>
+                    @endif
 
                     <div class="row">
                         <label class="remember">
                             <input type="checkbox" name="remember" value="1" />
                             <span>Remember me</span>
                         </label>
-                        <a href="{{ url('/password/reset') }}" class="link">Forgot password?</a>
+                        @if ($allowForgotPassword ?? true)
+                            <a href="{{ route('password.request') }}" class="link">Forgot password?</a>
+                        @endif
                     </div>
 
                     <button type="submit" class="btn">Login</button>

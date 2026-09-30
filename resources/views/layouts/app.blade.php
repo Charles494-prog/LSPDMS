@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="{{ ($user['dark_mode'] ?? false) ? 'dark' : 'light' }}">
+<html lang="en" data-theme="{{ ($authenticatedUser['dark_mode'] ?? false) ? 'dark' : 'light' }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -148,6 +148,10 @@
             /* Main area */
             .main { margin-left: var(--sidebar-width); flex: 1; min-width: 0; display: flex; flex-direction: column; transition: margin-left 0.2s ease; }
             .main.collapsed { margin-left: var(--sidebar-width-collapsed); }
+            .has-messages-page { height: 100vh; overflow: hidden; }
+            .has-messages-page .main { height: 100vh; min-height: 0; overflow: hidden; }
+            .has-messages-page .topbar { flex: 0 0 auto; }
+            .has-messages-page .content { display: flex; min-height: 0; overflow: hidden; }
             .topbar {
                 position: sticky;
                 top: 0;
@@ -225,6 +229,38 @@
             .user-dropdown button.logout-item svg { color: var(--danger); }
 
             .content { padding: 1.6rem; flex: 1; }
+            .chat-head-launcher {
+                position: fixed;
+                right: 24px;
+                bottom: 24px;
+                z-index: 60;
+                display: flex;
+                align-items: center;
+                gap: 0.65rem;
+                min-height: 56px;
+                padding: 0.55rem 1.1rem 0.55rem 0.65rem;
+                border: 1px solid rgba(255,255,255,0.25);
+                border-radius: 999px;
+                background: linear-gradient(135deg, #1687f8, #0754b8);
+                box-shadow: 0 10px 28px rgba(10, 107, 214, 0.35);
+                color: #fff;
+                font-size: 0.92rem;
+                font-weight: 700;
+                text-decoration: none;
+                transition: transform 0.18s ease, box-shadow 0.18s ease;
+            }
+            .chat-head-launcher:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 14px 32px rgba(10, 107, 214, 0.42);
+            }
+            .chat-head-launcher svg {
+                width: 42px;
+                height: 42px;
+                padding: 9px;
+                border-radius: 50%;
+                background: rgba(255,255,255,0.18);
+            }
+            .has-smart-helper .chat-head-launcher { bottom: 94px; }
 
             .overlay {
                 display: none;
@@ -244,10 +280,15 @@
                 .sidebar.collapsed a { justify-content: flex-start; padding: 0.8rem 0.9rem; }
                 .sidebar.collapsed .sidebar-brand { display: block; }
             }
+            @media (max-width: 600px) {
+                .chat-head-launcher { right: 16px; bottom: 16px; min-height: 52px; }
+                .has-smart-helper .chat-head-launcher { bottom: 84px; }
+                .chat-head-launcher svg { width: 38px; height: 38px; }
+            }
         </style>
         @stack('styles')
     </head>
-    <body>
+    <body class="{{ request()->routeIs('inquire-modify') ? 'has-smart-helper' : '' }}{{ request()->routeIs('messages.*') ? ' has-messages-page' : '' }}">
         <div class="overlay" id="sidebarOverlay"></div>
 
         <aside class="sidebar" id="sidebar">
@@ -269,6 +310,8 @@
                     'logout' => '<path d="M8 17H4V3h4"/><path d="M13 13l4-3-4-3"/><path d="M17 10H8"/>',
                     'search-edit' => '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5 17 17"/><path d="M12 15.5l2-2 1.5 1.5-2 2H12v-1.5z"/>',
                 ];
+                $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($authenticatedUser['tungkulin'] ?? '')) ?? ''));
+                $isHeadSecretary = in_array($role, ['head secretary', 'secretary head'], true);
 
             @endphp
 
@@ -278,35 +321,44 @@
                     <span class="label">Home</span>
                 </a>
 
-                <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['grid'] !!}</svg>
-                    <span class="label">Dashboard</span>
-                </a>
+                @if ($isHeadSecretary || ($authenticatedUser['dashboard_allow'] ?? false))
+                    <a data-feature="dashboard_allow" href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['grid'] !!}</svg>
+                        <span class="label">Dashboard</span>
+                    </a>
+                @endif
 
-                <a href="{{ route('form-generator') }}" class="{{ request()->routeIs('form-generator') ? 'active' : '' }}">
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['file'] !!}</svg>
-                    <span class="label">Form Generator</span>
-                </a>
+                @if ($isHeadSecretary || ($authenticatedUser['form_generator_allow'] ?? false))
+                    <a data-feature="form_generator_allow" href="{{ route('form-generator') }}" class="{{ request()->routeIs('form-generator') ? 'active' : '' }}">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['file'] !!}</svg>
+                        <span class="label">Form Generator</span>
+                    </a>
+                @endif
 
-                <a href="{{ route('de-listment') }}" class="{{ request()->routeIs('de-listment') ? 'active' : '' }}">
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['user-x'] !!}</svg>
-                    <span class="label">De-Listment</span>
-                </a>
+                @if ($isHeadSecretary || ($authenticatedUser['Delistment_allow'] ?? false))
+                    <a data-feature="Delistment_allow" href="{{ route('de-listment') }}" class="{{ request()->routeIs('de-listment') ? 'active' : '' }}">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['user-x'] !!}</svg>
+                        <span class="label">De-Listment</span>
+                    </a>
+                @endif
 
-                <a href="{{ Route::has('inquire-modify') ? route('inquire-modify') : '#' }}"
-                   class="{{ request()->routeIs('inquire-modify') ? 'active' : '' }}">
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['search-edit'] !!}</svg>
-                    <span class="label">Inquire / Modify</span>
-                </a>
+                @if ($isHeadSecretary || ($authenticatedUser['Inquire_Allow'] ?? false))
+                    <a data-feature="Inquire_Allow" href="{{ route('inquire-modify') }}" class="{{ request()->routeIs('inquire-modify') ? 'active' : '' }}">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['search-edit'] !!}</svg>
+                        <span class="label">Inquire / Modify</span>
+                    </a>
+                @endif
             </nav>
 
-            <div class="sidebar-admin">
-                <div class="sidebar-section-label">Administration</div>
-                <a href="{{ route('superadmin-dashboard') }}" class="{{ request()->routeIs('superadmin-dashboard') ? 'active' : '' }}">
-                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['shield'] !!}</svg>
-                    <span class="label">Superadmin Dashboard</span>
-                </a>
-            </div>
+            @if ($isHeadSecretary)
+                <div class="sidebar-admin" data-feature="head_secretary">
+                    <div class="sidebar-section-label">Administration</div>
+                    <a href="{{ route('superadmin-dashboard') }}" class="{{ request()->routeIs('superadmin-dashboard') ? 'active' : '' }}">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['shield'] !!}</svg>
+                        <span class="label">Superadmin Dashboard</span>
+                    </a>
+                </div>
+            @endif
         </aside>
 
         <div class="main" id="mainArea">
@@ -319,16 +371,16 @@
                 </div>
 
                 @php
-                    $displayName = trim(($user['first_name'] ?? '') . ' ' . ($user['last_name'] ?? ''));
-                    $displayName = $displayName !== '' ? $displayName : ($user['gmail'] ?? 'User');
+                    $displayName = trim(($authenticatedUser['first_name'] ?? '') . ' ' . ($authenticatedUser['last_name'] ?? ''));
+                    $displayName = $displayName !== '' ? $displayName : ($authenticatedUser['gmail'] ?? 'User');
                 @endphp
 
                 <div class="user-menu">
                     <button class="user-chip" id="userChipBtn">
-                        <img src="{{ !empty($user['profile_picture']) ? asset('storage/' . $user['profile_picture']) : 'https://ui-avatars.com/api/?name=' . urlencode($displayName) . '&background=0A6BD6&color=fff' }}" alt="">
+                        <img src="{{ !empty($authenticatedUser['profile_picture']) ? asset('storage/' . $authenticatedUser['profile_picture']) : asset('images/avatar-default.svg') }}" alt="">
                         <span>
                             <div class="user-chip-name">{{ $displayName }}</div>
-                            <div class="user-chip-role">{{ $user['tungkulin'] ?? '' }}</div>
+                            <div class="user-chip-role">{{ $authenticatedUser['tungkulin'] ?? '' }}</div>
                         </span>
                     </button>
 
@@ -359,6 +411,16 @@
                 @yield('content')
             </main>
         </div>
+
+        @unless (request()->routeIs('messages.*'))
+            <a class="chat-head-launcher" href="{{ route('messages.index') }}" aria-label="Open messages">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l1.8-3.2A7.5 7.5 0 1 1 20 11.5Z"/>
+                    <path d="M8.5 11.5h7M8.5 14.5h4"/>
+                </svg>
+                <span>Chat</span>
+            </a>
+        @endunless
 
         <script>
             const sidebar = document.getElementById('sidebar');
@@ -405,6 +467,43 @@
                     userDropdown.classList.remove('open');
                 }
             });
+        </script>
+        <script>
+            (() => {
+                const checkSession = async () => {
+                    try {
+                        const response = await fetch(@json(route('session.status')), {
+                            headers: { 'Accept': 'application/json' },
+                            cache: 'no-store',
+                            credentials: 'same-origin',
+                        });
+                        if (response.redirected || !response.ok) window.location.assign('/login?access=revoked');
+                        else {
+                            const { permissions } = await response.json();
+                            document.querySelectorAll('[data-feature]').forEach(link => {
+                                const allowed = Boolean(permissions[link.dataset.feature]);
+                                link.hidden = !allowed;
+                                link.style.display = allowed ? '' : 'none';
+                            });
+                            const currentFeature = Object.entries({
+                                '/dashboard': 'dashboard_allow',
+                                '/de-listment': 'Delistment_allow',
+                                '/form-generator': 'form_generator_allow',
+                                '/forms/monthly': 'form_generator_allow',
+                                '/forms/weekly': 'form_generator_allow',
+                                '/inquire-modify': 'Inquire_Allow',
+                                '/superadmin-dashboard': 'head_secretary',
+                            }).find(([path]) => window.location.pathname === path)?.[1];
+                            if (currentFeature && !permissions[currentFeature]) window.location.assign('/home');
+                        }
+                    } catch (error) {
+                        console.error('Session access check failed:', error);
+                    }
+                };
+                window.setInterval(() => {
+                    if (!document.hidden) checkSession();
+                }, 10000);
+            })();
         </script>
         @stack('scripts')
     </body>

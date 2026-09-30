@@ -1,10 +1,18 @@
 <?php
 
+use App\Http\Controllers\BroadcastAuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DeliberationController;
+use App\Http\Controllers\DelistmentController;
+use App\Http\Controllers\FormGeneratorController;
 use App\Http\Controllers\LoginController;
+use App\Http\Controllers\MessageController;
+use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecordsController;
+use App\Http\Controllers\SecretaryTodoController;
 use App\Http\Controllers\SuperadminController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -15,38 +23,95 @@ Route::get('/intro', function () {
     return view('intro');
 });
 
-Route::get('/login', function () {
-    return view('welcome');
-});
+Route::get('/login', [LoginController::class, 'showLogin'])->name('login.form');
 
 Route::post('/login', [LoginController::class, 'login'])->name('login');
+Route::get('/password/reset', [PasswordResetController::class, 'requestForm'])->name('password.request');
+Route::post('/password/email', [PasswordResetController::class, 'sendLink'])->middleware('throttle:5,1')->name('password.email');
+Route::get('/password/reset/{token}', [PasswordResetController::class, 'resetForm'])->middleware('signed')->name('password.reset.form');
+Route::post('/password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:5,1')->name('password.reset');
 Route::get('/verify-code', [LoginController::class, 'showVerificationForm'])->name('verify-code');
 Route::post('/verify-code', [LoginController::class, 'verifyCode']);
 Route::post('/verify-code/resend', [LoginController::class, 'resendCode'])->name('verify-code.resend');
-Route::get('/forms/weekly', function () {
-    return '<h1>Weekly Forms Page (placeholder)</h1>';
-})->name('forms.weekly');
-
-Route::get('/forms/monthly', function () {
-    return '<h1>Monthly Forms Page (placeholder)</h1>';
-})->name('forms.monthly');
-
 Route::middleware('login.session')->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
-    Route::get('/records/search', [RecordsController::class, 'search'])->name('records.search');
-    Route::get('/records/smart-helper', [RecordsController::class, 'smartHelper'])->name('records.smart-helper');
-    Route::delete('/records/{record}', [RecordsController::class, 'destroy'])->name('records.destroy');
-    Route::put('/records/{record}', [RecordsController::class, 'update'])->name('records.update');
-    Route::get('/superadmin-dashboard', [SuperadminController::class, 'index'])->name('superadmin-dashboard');
-    Route::put('/superadmin/users/{user}', [SuperadminController::class, 'updateUser'])->name('superadmin.users.update');
-    Route::put('/superadmin/permissions', [SuperadminController::class, 'updatePermissions'])->name('superadmin.permissions.update');
-    Route::put('/superadmin/signatories', [SuperadminController::class, 'updateSignatories'])->name('superadmin.signatories.update');
-    Route::put('/superadmin/global-variables', [SuperadminController::class, 'updateGlobalVariables'])->name('superadmin.global-variables.update');
+    Route::get('/secretary-todos', [SecretaryTodoController::class, 'index'])->name('secretary-todos.index');
+    Route::post('/secretary-todos', [SecretaryTodoController::class, 'store'])->middleware('throttle:60,1')->name('secretary-todos.store');
+    Route::patch('/secretary-todos/{todo}', [SecretaryTodoController::class, 'update'])->middleware('throttle:60,1')->name('secretary-todos.update');
+    Route::post('/secretary-todos/{todo}/complete', [SecretaryTodoController::class, 'complete'])->middleware('throttle:60,1')->name('secretary-todos.complete');
+    Route::post('/broadcasting/auth', BroadcastAuthController::class)->name('broadcasting.auth');
+    Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
+    Route::get('/messages/accounts', [MessageController::class, 'accounts'])->name('messages.accounts');
+    Route::get('/messages/conversations', [MessageController::class, 'conversations'])->name('messages.conversations');
+    Route::post('/messages/conversations', [MessageController::class, 'createConversation'])->name('messages.conversations.create');
+    Route::get('/messages/conversations/{conversation}/messages', [MessageController::class, 'messages'])->name('messages.list');
+    Route::post('/messages/conversations/{conversation}/messages', [MessageController::class, 'send'])->middleware('throttle:60,1')->name('messages.send');
+    Route::post('/messages/conversations/{conversation}/typing', [MessageController::class, 'typing'])->middleware('throttle:30,1')->name('messages.typing');
+    Route::post('/messages/{message}/delivered', [MessageController::class, 'delivered'])->name('messages.delivered');
+    Route::post('/messages/{message}/read', [MessageController::class, 'read'])->name('messages.read');
+    Route::get('/messages/{message}/attachment', [MessageController::class, 'attachment'])->name('messages.attachment');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:dashboard_allow')->name('dashboard');
+    Route::get('/de-listment', [DelistmentController::class, 'index'])->middleware('permission:Delistment_allow')->name('de-listment');
+    Route::put('/de-listment/records/{record}/endorsement', [DelistmentController::class, 'endorse'])->middleware('permission:Delistment_allow')->name('de-listment.endorse');
+    Route::put('/de-listment/records/dates', [DelistmentController::class, 'updateDates'])->middleware('permission:Delistment_allow')->name('de-listment.update-dates');
+    Route::middleware('permission:Inquire_Allow')->group(function (): void {
+        Route::get('/records/search', [RecordsController::class, 'search'])->name('records.search');
+        Route::get('/records/smart-helper', [RecordsController::class, 'smartHelper'])->name('records.smart-helper');
+        Route::delete('/records/{record}', [RecordsController::class, 'destroy'])->name('records.destroy');
+        Route::put('/records/{record}', [RecordsController::class, 'update'])->name('records.update');
+    });
+    Route::middleware('permission:form_generator_allow')->group(function (): void {
+        Route::get('/form-generator', [FormGeneratorController::class, 'index'])->name('form-generator');
+        Route::get('/forms/monthly/deliberation', [DeliberationController::class, 'index'])->name('forms.monthly.deliberation');
+        Route::post('/forms/monthly/deliberation/duplicates', [DeliberationController::class, 'duplicates'])
+            ->middleware('throttle:30,1')
+            ->name('forms.monthly.deliberation.duplicates');
+        Route::get('/forms/monthly/deliberation/subtract/search', [DeliberationController::class, 'searchSubtractRecords'])
+            ->middleware('throttle:60,1')
+            ->name('forms.monthly.deliberation.subtract.search');
+        Route::post('/forms/monthly/deliberation/subtract', [DeliberationController::class, 'subtract'])
+            ->middleware('throttle:15,1')
+            ->name('forms.monthly.deliberation.subtract');
+        Route::post('/forms/monthly/deliberation', [DeliberationController::class, 'store'])
+            ->middleware('throttle:15,1')
+            ->name('forms.monthly.deliberation.store');
+        Route::get('/forms/notes', [FormGeneratorController::class, 'notes'])->name('forms.notes');
+        Route::post('/forms/notes/records/{record}', [FormGeneratorController::class, 'appendNote'])->middleware('throttle:30,1')->name('forms.notes.append');
+        Route::delete('/forms/notes/records/{record}/{noteIndex}', [FormGeneratorController::class, 'deleteNote'])
+            ->whereNumber('noteIndex')
+            ->name('forms.notes.delete');
+        Route::get('/forms/weekly', function () {
+            return '<h1>Weekly Forms Page (placeholder)</h1>';
+        })->name('forms.weekly');
+        Route::get('/forms/monthly', function () {
+            return '<h1>Monthly Forms Page (placeholder)</h1>';
+        })->name('forms.monthly');
+    });
+    Route::middleware('head.secretary')->group(function (): void {
+        Route::get('/superadmin-dashboard', [SuperadminController::class, 'index'])->name('superadmin-dashboard');
+        Route::put('/superadmin/users/{user}', [SuperadminController::class, 'updateUser'])->name('superadmin.users.update');
+        Route::put('/superadmin/permissions', [SuperadminController::class, 'updatePermissions'])->name('superadmin.permissions.update');
+        Route::put('/superadmin/signatories', [SuperadminController::class, 'updateSignatories'])->name('superadmin.signatories.update');
+        Route::put('/superadmin/global-variables', [SuperadminController::class, 'updateGlobalVariables'])->name('superadmin.global-variables.update');
+        Route::put('/superadmin/security-settings', [SuperadminController::class, 'updateSecuritySettings'])->name('superadmin.security-settings.update');
+    });
     Route::post('/logout', [LoginController::class, 'logout']);
+    Route::get('/session/status', function (Request $request) {
+        $user = $request->session()->get('login_user', []);
+        $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($user['tungkulin'] ?? '')) ?? ''));
+        $isHeadSecretary = in_array($role, ['head secretary', 'secretary head'], true);
+
+        return response()->json([
+            'permissions' => [
+                'head_secretary' => $isHeadSecretary,
+                'dashboard_allow' => $isHeadSecretary || (bool) ($user['dashboard_allow'] ?? false),
+                'form_generator_allow' => $isHeadSecretary || (bool) ($user['form_generator_allow'] ?? false),
+                'Delistment_allow' => $isHeadSecretary || (bool) ($user['Delistment_allow'] ?? false),
+                'Inquire_Allow' => $isHeadSecretary || (bool) ($user['Inquire_Allow'] ?? false),
+            ],
+        ]);
+    })->name('session.status');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::view('/home', 'home', ['title' => 'Home'])->name('home');
-    Route::view('/form-generator', 'form-generator', ['title' => 'Form Generator (Monthly & Weekly)'])->name('form-generator');
-    Route::view('/inquire-modify', 'inquire-modify', ['title' => 'Inquire / Modify'])->name('inquire-modify');
-    Route::view('/de-listment', 'de-listment', ['title' => 'De-Listment'])->name('de-listment');
+    Route::view('/inquire-modify', 'inquire-modify', ['title' => 'Inquire / Modify'])->middleware('permission:Inquire_Allow')->name('inquire-modify');
 });

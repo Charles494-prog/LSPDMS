@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Purok;
 use App\Models\Record;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class RecordsController extends Controller
 {
@@ -146,10 +148,26 @@ class RecordsController extends Controller
             ],
             'gender' => ['sometimes', 'required', 'string', Rule::in(['Male', 'Female'])],
             'kapisanan' => ['sometimes', 'nullable', 'string', 'max:50'],
-            'grupo' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'grupo' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:24'],
+            'purok' => ['prohibited'],
             'date_of_baptism' => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
+            'date_of_birth' => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
             'evangelist' => ['sometimes', 'nullable', 'string', 'max:150'],
         ]);
+
+        if (isset($validated['grupo']) && $validated['grupo'] !== '') {
+            preg_match('/\d+/', trim((string) $record->purok), $purokNumber);
+            $purokSetting = isset($purokNumber[0])
+                ? Purok::query()->where('purok_number', $purokNumber[0])->first()
+                : null;
+            $minimum = $purokSetting?->grupo_start ?? 1;
+            $maximum = $purokSetting?->grupo_end ?? 24;
+            if ((int) $validated['grupo'] < $minimum || (int) $validated['grupo'] > $maximum) {
+                throw ValidationException::withMessages([
+                    'grupo' => ["Grupo must stay between {$minimum} and {$maximum} for this Purok."],
+                ]);
+            }
+        }
 
         $attributes = [];
         $fieldMap = [
@@ -159,6 +177,7 @@ class RecordsController extends Controller
             'kapisanan' => 'kapisanan',
             'grupo' => 'grupo',
             'date_of_baptism' => 'date_of_baptism',
+            'date_of_birth' => 'date_of_birth',
             'evangelist' => 'evangelist',
         ];
 
@@ -183,7 +202,7 @@ class RecordsController extends Controller
     {
         if (mb_strtolower(trim((string) $record->status)) !== 'inactive') {
             return response()->json([
-                'message' => 'You can only delete this record after changing its status to Inactive in Form Generator > Monthly > Modify.',
+                'message' => 'You can only delete this record after changing its status to Inactive in Form Generator > Monthly > Deliberation.',
             ], 422);
         }
 
@@ -203,6 +222,7 @@ class RecordsController extends Controller
             'purok' => $record->purok ?? '',
             'grupo' => $record->grupo ?? '',
             'date_of_baptism' => $record->date_of_baptism?->format('Y-m-d') ?? '',
+            'date_of_birth' => $record->date_of_birth?->format('Y-m-d') ?? '',
             'evangelist' => $record->evangelist ?? '',
             'date_of_entry' => $record->date_of_entry?->format('Y-m-d') ?? '',
             'r2_10_eligibility' => $record->r2_10_eligibility ?? '',

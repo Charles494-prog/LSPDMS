@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\GlobalVariable;
+use App\Models\Purok;
 use App\Models\Record;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -123,10 +124,12 @@ class DashboardTest extends TestCase
 
                 $registryRow = collect($metrics['registryReport'])->firstWhere('label', 'Registry');
                 $this->assertSame([2], $registryRow['missing']);
-                $this->assertSame([
-                    ['id' => 1, 'name' => 'MS member missing registry', 'status' => 'MS'],
-                    ['id' => 2, 'name' => 'UWP member missing registry', 'status' => 'UWP'],
-                ], $registryRow['details'][0]);
+                $this->assertSame(
+                    ['MS member missing registry', 'UWP member missing registry'],
+                    array_column($registryRow['details'][0], 'name')
+                );
+                $this->assertSame('registry', $registryRow['details'][0][0]['field']);
+                $this->assertTrue($registryRow['details'][0][0]['can_edit_grupo']);
 
                 $birthdayRow = collect($metrics['registryReport'])->firstWhere('label', 'Birthday');
                 $this->assertSame([2], $birthdayRow['missing']);
@@ -166,6 +169,55 @@ class DashboardTest extends TestCase
                     'MK' => ['Binhi' => 0, 'Kadiwa' => 0, 'Buklod' => 1],
                     'UWP' => ['Binhi' => 0, 'Kadiwa' => 1, 'Buklod' => 0],
                 ], $metrics['groupCounts']);
+                $this->assertSame(
+                    [['id' => 1, 'name' => 'MS Binhi', 'status' => 'MS']],
+                    $metrics['groupRecords']['MS']['Binhi']
+                );
+                $this->assertSame(
+                    [['id' => 2, 'name' => 'MK Buklod', 'status' => 'MK']],
+                    $metrics['groupRecords']['MK']['Buklod']
+                );
+                $this->assertSame([], $metrics['groupRecords']['UWP']['Binhi']);
+
+                return true;
+            });
+    }
+
+    public function test_registry_details_include_field_actions_and_the_current_puroks_grupo_range(): void
+    {
+        Purok::query()->create([
+            'purok_number' => 2,
+            'grupo_start' => 6,
+            'grupo_end' => 12,
+        ]);
+        Record::query()->create([
+            'full_name' => 'Missing Grupo Member',
+            'status' => 'MS',
+            'purok' => '2',
+            'grupo' => null,
+        ]);
+        Record::query()->create([
+            'full_name' => 'Missing Purok Member',
+            'status' => 'UWP',
+            'purok' => null,
+            'grupo' => null,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
+                $grupo = collect($metrics['registryReport'])->firstWhere('label', 'Grupo');
+                $grupoEntry = collect($grupo['details'])->flatten(1)->firstWhere('name', 'Missing Grupo Member');
+                $this->assertSame('grupo', $grupoEntry['field']);
+                $this->assertTrue($grupoEntry['can_edit_grupo']);
+                $this->assertSame(6, $grupoEntry['grupo_min']);
+                $this->assertSame(12, $grupoEntry['grupo_max']);
+
+                $purok = collect($metrics['registryReport'])->firstWhere('label', 'Purok');
+                $purokEntry = collect($purok['details'])->flatten(1)->firstWhere('name', 'Missing Purok Member');
+                $this->assertSame('purok', $purokEntry['field']);
+                $this->assertFalse($purokEntry['can_edit_grupo']);
 
                 return true;
             });
@@ -178,7 +230,9 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('const DASHBOARD = {', false)
             ->assertSee('LSP / Locale')
+            ->assertSee('id="cfo-group-modal"', false)
             ->assertSee('id="registry-details-modal"', false)
+            ->assertSee('id="registry-edit-modal"', false)
             ->assertSee('Click any count to view the records.')
             ->assertSee('No newly baptized records were found in the past year.')
             ->assertSee('Filtered by kalagayan: MS, UWP, and MK.')

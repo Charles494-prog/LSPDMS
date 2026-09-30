@@ -89,6 +89,14 @@
             <ul class="legend legend-values" id="locale-legend"></ul>
         </section>
 
+        <dialog class="modal" id="cfo-group-modal" aria-labelledby="cfo-group-title">
+            <div class="modal-head">
+                <div><h2 id="cfo-group-title">CFO group records</h2><p id="cfo-group-sub"></p></div>
+                <button type="button" class="modal-x" data-close aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="cfo-group-body"></div>
+        </dialog>
+
         <section class="panel span-12" aria-labelledby="ot-title">
             <div class="panel-row">
                 <h2 id="ot-title">Records over time</h2>
@@ -140,6 +148,26 @@
         </div>
         <div class="modal-body" id="registry-details-body"></div>
     </dialog>
+
+    <dialog class="modal registry-edit-modal" id="registry-edit-modal" aria-labelledby="registry-edit-title">
+        <div class="modal-head">
+            <div>
+                <h2 id="registry-edit-title">Enter missing data</h2>
+                <p id="registry-edit-sub"></p>
+            </div>
+            <button type="button" class="modal-x" data-close aria-label="Close">&times;</button>
+        </div>
+        <form class="modal-body registry-edit-form" id="registry-edit-form" novalidate>
+            <label class="registry-edit-label" id="registry-edit-label" for="registry-edit-value"></label>
+            <div id="registry-edit-control"></div>
+            <p class="registry-edit-hint" id="registry-edit-hint"></p>
+            <p class="registry-edit-error" id="registry-edit-error" role="alert" hidden></p>
+            <div class="registry-edit-actions">
+                <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+                <button type="submit" class="btn btn-primary" id="registry-edit-save">Save missing data</button>
+            </div>
+        </form>
+    </dialog>
 </div>
 @endsection
 
@@ -147,7 +175,7 @@
 <style>
     .dash {
         --bg: #eef1f4; --card: #fff; --ink: #10233a; --muted: #5b6b7c; --line: #dde3ea;
-        --ms: #0f4c81; --uwp: #e07a1f; --mk: #2a9d8f; --off: #9aa5b1;
+        --ms: #16a34a; --uwp: #f97316; --mk: #eab308; --off: #9aa5b1;
         max-width: 1500px; margin: 0 auto; padding: 1.25rem; border-radius: 18px;
         background: var(--bg); color: var(--ink); font-variant-numeric: tabular-nums;
     }
@@ -178,6 +206,19 @@
     .modal-x { flex: none; width: 34px; height: 34px; border: 0; border-radius: 8px; background: var(--bg); color: var(--ink); font-size: 1.4rem; line-height: 1; cursor: pointer; }
     .modal-x:hover { background: var(--line); }
     .modal-body { padding: 1.1rem 1.4rem 1.4rem; overflow: auto; }
+    .registry-edit-modal { width: min(480px, calc(100vw - 2rem)); }
+    .registry-edit-form { display: grid; gap: .7rem; }
+    .registry-edit-label { font-size: .85rem; font-weight: 750; }
+    .registry-edit-form input, .registry-edit-form select {
+        width: 100%; min-height: 2.7rem; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 8px;
+        background: var(--card); color: var(--ink); font: inherit;
+    }
+    .registry-edit-hint { color: var(--muted); font-size: .78rem; line-height: 1.45; }
+    .registry-edit-error { color: #b42318; font-size: .82rem; font-weight: 650; }
+    .registry-edit-error[hidden] { display: none; }
+    .registry-edit-actions { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .3rem; }
+    .registry-edit-actions .btn { padding: .6rem .9rem; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+    .registry-edit-actions .btn-primary { border-color: var(--ink); background: var(--ink); color: #fff; }
 
     .tbl { width: 100%; border-collapse: collapse; font-size: .88rem; }
     .tbl th { padding: .6rem .75rem; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .78rem; font-weight: 700; text-align: left; white-space: nowrap; }
@@ -244,6 +285,7 @@
     .chart-center { position: absolute; top: 50%; left: 50%; display: grid; justify-items: center; gap: 2px; min-width: 74px; padding: .15rem .3rem; transform: translate(-50%, -50%); border-radius: 8px; background: var(--card); pointer-events: none; }
     .chart-center strong { color: var(--ink); font-size: 1.3rem; font-weight: 800; line-height: 1.1; }
     .chart-center span { color: var(--muted); font-size: .58rem; font-weight: 750; letter-spacing: .04em; }
+    #locale-chart { cursor: pointer; }
 
     .legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin-top: .7rem; font-size: .8rem; color: var(--muted); }
     .legend li { display: flex; align-items: center; gap: .4rem; }
@@ -331,8 +373,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /* ---------- Database-backed dashboard metrics ---------- */
     const DASHBOARD = @json($dashboardMetrics);
-    const COLORS = { MS: '#0f4c81', UWP: '#e07a1f', MK: '#2a9d8f', INACTIVE: '#9aa5b1', UNSPECIFIED: '#c8ced5' };
-    const EXTRA_COLORS = ['#6a4c93', '#1982c4', '#d1495b', '#4f7c5a', '#a65c2e'];
+    const COLORS = { MS: '#16a34a', UWP: '#f97316', MK: '#eab308', INACTIVE: '#9aa5b1', UNSPECIFIED: '#c8ced5' };
+    const EXTRA_COLORS = ['#60a5fa', '#3b82f6', '#93c5fd', '#2563eb', '#bfdbfe'];
     const colorFor = (code, index = 0) => COLORS[code] || EXTRA_COLORS[index % EXTRA_COLORS.length];
     const KEYS = DASHBOARD.activeStatuses;
     const NAMES = Object.fromEntries(KEYS.map(code => [code, code]));
@@ -348,7 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }));
     const gender = DASHBOARD.gender;
     const locale = Object.fromEntries(KEYS.map(code => [code, DASHBOARD.groupLabels.map(label => DASHBOARD.groupCounts[code]?.[label] || 0)]));
-    const LOCALE = DASHBOARD.groupLabels.map((label, index) => [label, ['#4169a1', '#e59a3a', '#3b9b88'][index]]);
+    const LOCALE = DASHBOARD.groupLabels.map((label, index) => [label, ['#16a34a', '#3b82f6', '#ef4444'][index]]);
     const MONTHS = DASHBOARD.monthLabels;
     const DATA_MONTHS = MONTHS.length;
     const overtime = DASHBOARD.monthlyPurokCounts;
@@ -426,7 +468,7 @@ document.addEventListener('DOMContentLoaded', () => {
             chart.data.datasets.forEach((ds, i) => chart.getDatasetMeta(i).data.forEach((bar, idx) => {
                 const v = ds.data[idx];
                 if (!v || Math.abs(bar.x - bar.base) < 16) return;
-                ctx.fillStyle = '#fff';
+                ctx.fillStyle = ds.label === 'MK' ? INK : '#fff';
                 ctx.fillText(String(v), (bar.x + bar.base) / 2, bar.y);
             }));
             ctx.restore();
@@ -492,13 +534,15 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.restore();
         },
     };
-    const doughnut = (id, labels, data, colors) => makeChart(id, {
+    const doughnut = (id, labels, data, colors, onClick = undefined) => makeChart(id, {
         type: 'doughnut',
         data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: '#fff', borderWidth: 3, borderRadius: 4, hoverOffset: 6, spacing: 2 }] },
         options: {
             cutout: '68%',
             responsive: true,
             maintainAspectRatio: false,
+            animation: false,
+            onClick,
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -528,13 +572,45 @@ document.addEventListener('DOMContentLoaded', () => {
     const GROUP_KEYS = ['MS', 'MK', 'UWP'];
     const allGroupCounts = LOCALE.map((_, index) => GROUP_KEYS.reduce((sum, key) => sum + (locale[key]?.[index] || 0), 0));
     locale.ALL = allGroupCounts;
-    const localeChart = doughnut('locale-chart', LOCALE.map(l => l[0]), allGroupCounts, LOCALE.map(l => l[1]));
+    const groupRecords = DASHBOARD.groupRecords;
+    const cfoGroupModal = $('cfo-group-modal');
+    function showCfoGroupRecords(kind, group) {
+        const statuses = kind === 'ALL' ? GROUP_KEYS : [kind];
+        const records = statuses.flatMap(status => groupRecords[status]?.[group] || []);
+        const statusLabel = kind === 'ALL' ? 'All MS, MK, and UWP' : kind;
+        $('cfo-group-title').textContent = `${group} records`;
+        $('cfo-group-sub').textContent = `${records.length} ${statusLabel} record${records.length === 1 ? '' : 's'}`;
+        const body = $('cfo-group-body');
+        if (!records.length) {
+            body.replaceChildren(el('div', 'empty', `No ${statusLabel} records found in ${group}.`));
+            cfoGroupModal.showModal();
+            return;
+        }
+        const table = el('table', 'tbl'), head = el('tr');
+        ['Name', 'Kalagayan'].forEach(label => head.append(el('th', '', label)));
+        const thead = el('thead'); thead.append(head); table.append(thead);
+        const tbody = el('tbody');
+        records.sort((left, right) => left.name.localeCompare(right.name)).forEach(record => {
+            const row = el('tr');
+            row.append(el('td', 'name', record.name), el('td', '', record.status));
+            tbody.append(row);
+        });
+        table.append(tbody);
+        const wrap = el('div', 'tbl-wrap'); wrap.append(table);
+        body.replaceChildren(wrap);
+        cfoGroupModal.showModal();
+    }
+    const localeChart = doughnut('locale-chart', LOCALE.map(l => l[0]), allGroupCounts, LOCALE.map(l => l[1]), (event, elements, chart) => {
+        const [slice] = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+        if (slice) showCfoGroupRecords(document.querySelector('#locale-seg button[aria-checked="true"]')?.dataset.k || 'ALL', LOCALE[slice.index][0]);
+    });
     if (localeChart) localeChart.$centerTotal = add(allGroupCounts);
     function showLocale(kind) {
         const data = locale[kind] || LOCALE.map(() => 0);
         const groupTotal = add(data);
         $('locale-total').textContent = String(groupTotal);
         if (localeChart) {
+            localeChart.stop();
             localeChart.data.datasets[0].data = data;
             localeChart.$centerTotal = groupTotal;
             localeChart.update('none');
@@ -676,6 +752,106 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /* ---------- Registry updating monitoring ---------- */
     const registryDetailsDialog = $('registry-details-modal');
+    const registryEditDialog = $('registry-edit-modal');
+    const registryEditForm = $('registry-edit-form');
+    const registryEditSave = $('registry-edit-save');
+    const RECORD_UPDATE_URL = @json(route('records.update', ['record' => '__RECORD_ID__']));
+    const CSRF_TOKEN = @json(csrf_token());
+    let registryEditTarget = null;
+    const registryFieldConfig = {
+        registry: { label: 'Registry number', key: 'registry_number', type: 'text', hint: 'Enter the member’s registry number.' },
+        gender: { label: 'Gender', key: 'gender', type: 'select', options: ['Male', 'Female'] },
+        purok: { label: 'Purok', key: 'purok', type: 'locked', hint: 'Purok assignments are not changed from Registry Updating.' },
+        grupo: { label: 'Grupo', key: 'grupo', type: 'number', hint: 'Grupo can only be changed within this member’s current Purok.' },
+        kapisanan: { label: 'Kapisanan', key: 'kapisanan', type: 'select', options: ['Binhi', 'Kadiwa', 'Buklod'] },
+        date_of_baptism: { label: 'Date of baptism', key: 'date_of_baptism', type: 'date' },
+        evangelist: { label: 'Evangelist', key: 'evangelist', type: 'text' },
+        date_of_birth: { label: 'Birthday', key: 'date_of_birth', type: 'date' },
+    };
+
+    function openRegistryEdit(entry) {
+        const config = registryFieldConfig[entry.field];
+        if (!config || config.type === 'locked' || (entry.field === 'grupo' && !entry.can_edit_grupo)) return;
+        registryEditTarget = { entry, config };
+        $('registry-edit-title').textContent = `Enter missing ${config.label.toLowerCase()}`;
+        $('registry-edit-sub').textContent = `${entry.name} · ${entry.purok} · ${entry.status}`;
+        $('registry-edit-label').textContent = config.label;
+        $('registry-edit-hint').textContent = entry.field === 'grupo'
+            ? `${config.hint} Allowed range for this Purok: ${entry.grupo_min}–${entry.grupo_max}. Purok cannot be changed here.`
+            : (config.hint || '');
+        $('registry-edit-error').hidden = true;
+
+        let input;
+        if (config.type === 'select') {
+            input = el('select');
+            input.required = true;
+            input.id = 'registry-edit-value';
+            input.append(new Option(`Select ${config.label.toLowerCase()}`, '', true, true));
+            input.options[0].disabled = true;
+            config.options.forEach(value => input.append(new Option(value, value)));
+        } else {
+            input = el('input');
+            input.id = 'registry-edit-value';
+            input.type = config.type;
+            input.required = true;
+            if (entry.field === 'grupo') {
+                input.min = String(entry.grupo_min);
+                input.max = String(entry.grupo_max);
+                input.step = '1';
+            }
+            if (config.type === 'date') {
+                const today = new Date();
+                input.max = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+            }
+        }
+        $('registry-edit-control').replaceChildren(input);
+        registryEditDialog.showModal();
+        input.focus();
+    }
+
+    registryEditForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (!registryEditTarget) return;
+        const { entry, config } = registryEditTarget;
+        const input = $('registry-edit-value');
+        const value = input.value.trim();
+        const error = $('registry-edit-error');
+        if (!value || !input.reportValidity()) {
+            error.textContent = 'Enter a valid value before saving.';
+            error.hidden = false;
+            return;
+        }
+
+        registryEditSave.disabled = true;
+        registryEditSave.textContent = 'Saving…';
+        error.hidden = true;
+        try {
+            const response = await fetch(RECORD_UPDATE_URL.replace('__RECORD_ID__', encodeURIComponent(entry.id)), {
+                method: 'PUT',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': CSRF_TOKEN,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ [config.key]: entry.field === 'registry' ? value.toUpperCase() : value }),
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                const validationMessage = result.errors ? Object.values(result.errors).flat()[0] : null;
+                throw new Error(validationMessage || result.message || 'Unable to save this record.');
+            }
+            registryEditSave.textContent = 'Saved. Refreshing…';
+            window.location.reload();
+        } catch (exception) {
+            error.textContent = exception.message || 'Unable to save this record.';
+            error.hidden = false;
+            registryEditSave.disabled = false;
+            registryEditSave.textContent = 'Save missing data';
+        }
+    });
+    registryEditDialog.addEventListener('close', () => { registryEditTarget = null; });
+
     function showRegistryDetails(label, group, entries) {
         $('registry-details-title').textContent = `Missing ${label} - ${group}`;
         $('registry-details-sub').textContent = `${entries.length} record${entries.length === 1 ? '' : 's'}`;
@@ -684,12 +860,23 @@ document.addEventListener('DOMContentLoaded', () => {
             body.replaceChildren(el('div', 'empty', 'No records are missing this field in this group.'));
         } else {
             const table = el('table', 'tbl'), head = el('tr');
-            ['Name', 'Purok', 'Kalagayan'].forEach(value => head.append(el('th', '', value)));
+            ['Name', 'Purok', 'Kalagayan', 'Action'].forEach(value => head.append(el('th', '', value)));
             const thead = el('thead'); thead.append(head); table.append(thead);
             const tbody = el('tbody');
             entries.forEach(entry => {
                 const row = el('tr');
                 row.append(el('td', 'name', entry.name), el('td', '', entry.purok), el('td', '', entry.status));
+                const action = el('td');
+                const config = registryFieldConfig[entry.field];
+                const edit = el('button', 'reg-count', config?.type === 'locked' ? 'Monthly portal' : 'Enter data');
+                edit.type = 'button';
+                edit.disabled = !config || config.type === 'locked' || (entry.field === 'grupo' && !entry.can_edit_grupo);
+                edit.title = entry.field === 'grupo' && !entry.can_edit_grupo
+                    ? 'Assign this member to a Purok before entering a Grupo.'
+                    : (config?.type === 'locked' ? config.hint : `Enter missing ${config?.label?.toLowerCase() || 'data'}`);
+                edit.addEventListener('click', () => openRegistryEdit(entry));
+                action.append(edit);
+                row.append(action);
                 tbody.append(row);
             });
             table.append(tbody);
@@ -760,6 +947,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     registryDetailsDialog.addEventListener('click', e => {
         if (e.target === registryDetailsDialog || e.target.closest('[data-close]')) registryDetailsDialog.close();
+    });
+    registryEditDialog.addEventListener('click', e => {
+        if (e.target === registryEditDialog || e.target.closest('[data-close]')) registryEditDialog.close();
+    });
+    cfoGroupModal.addEventListener('click', e => {
+        if (e.target === cfoGroupModal || e.target.closest('[data-close]')) cfoGroupModal.close();
     });
     renderBaptisees();
     renderRegistry();

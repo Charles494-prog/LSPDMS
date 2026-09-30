@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Purok;
 use App\Models\Record;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -72,7 +73,7 @@ class RecordsLookupTest extends TestCase
             ->assertSee('class="smart-helper-panel"', false)
             ->assertSee('Click Scan to check for duplicate records.')
             ->assertSee('Delete inactive record')
-            ->assertSee('Form Generator > Monthly > Modify', false)
+            ->assertSee('Form Generator > Monthly > Deliberation', false)
             ->assertSee('Record update guide')
             ->assertSee('none of the matching records is Inactive')
             ->assertSee('id="remind-open">Guidance</button>', false)
@@ -235,7 +236,7 @@ class RecordsLookupTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonPath(
                 'message',
-                'You can only delete this record after changing its status to Inactive in Form Generator > Monthly > Modify.'
+                'You can only delete this record after changing its status to Inactive in Form Generator > Monthly > Deliberation.'
             );
 
         $this->assertDatabaseHas('records', ['id' => $active->id, 'status' => 'MS']);
@@ -283,5 +284,45 @@ class RecordsLookupTest extends TestCase
             'id' => $record->id,
             'gender' => 'L',
         ]);
+    }
+
+    public function test_record_edit_portal_can_update_birthday_and_restricts_group_to_current_purok(): void
+    {
+        Purok::query()->create([
+            'purok_number' => 1,
+            'grupo_start' => 5,
+            'grupo_end' => 10,
+        ]);
+        $record = Record::query()->create([
+            'full_name' => 'Missing Birthday',
+            'purok' => '1',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $record), ['date_of_birth' => '2000-05-10'])
+            ->assertOk()
+            ->assertJsonPath('data.date_of_birth', '2000-05-10');
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $record), ['grupo' => 7])
+            ->assertOk()
+            ->assertJsonPath('data.grupo', '7');
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $record), ['grupo' => 4])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('grupo');
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $record), ['purok' => '2'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('purok');
+
+        $this->assertDatabaseHas('records', [
+            'id' => $record->id,
+            'purok' => '1',
+            'grupo' => '7',
+        ]);
+        $this->assertSame('2000-05-10', $record->fresh()->date_of_birth->format('Y-m-d'));
     }
 }

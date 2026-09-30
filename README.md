@@ -57,3 +57,35 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## Direct messaging (Laravel Reverb)
+
+Messaging is available to verified accounts from the **Messages** navigation item.
+After migrating, configure unique Reverb credentials in `.env` (do not use the
+example credentials in production):
+
+```dotenv
+BROADCAST_CONNECTION=reverb
+REVERB_APP_ID=your-app-id
+REVERB_APP_KEY=your-app-key
+REVERB_APP_SECRET=your-app-secret
+REVERB_HOST=127.0.0.1
+REVERB_PORT=8080
+REVERB_SCHEME=http
+REVERB_SERVER_HOST=0.0.0.0
+REVERB_SERVER_PORT=8080
+VITE_REVERB_APP_KEY="${REVERB_APP_KEY}"
+VITE_REVERB_HOST="${REVERB_HOST}"
+VITE_REVERB_PORT="${REVERB_PORT}"
+VITE_REVERB_SCHEME="${REVERB_SCHEME}"
+```
+
+Build browser assets with `npm run build`. Run `php artisan reverb:start` beside
+the Laravel web server for real-time message and typing updates. In production,
+run Laravel's scheduler every minute (`php artisan schedule:run` from the system
+scheduler); it runs `messages:cleanup-expired` daily to remove expired messages and
+their private image files. For local development, `php artisan schedule:work` runs
+the scheduler continuously. Images use Laravel's private local disk and are served
+only through an authorized conversation route. Messaging and broadcast-channel
+authorization use the existing verified `login_user` session, not Laravel's
+standard authenticated-user guard.

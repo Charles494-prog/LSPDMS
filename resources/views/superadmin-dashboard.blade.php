@@ -665,7 +665,7 @@
                         @forelse ($users as $user)
                             @php
                                 $userName = trim(($user->first_name ?? '').' '.($user->last_name ?? '')) ?: $user->gmail;
-                                $roleOptions = ['Secretary', 'Secretary Head'];
+                                $roleOptions = ['Secretary', 'Head Secretary'];
                                 if ($user->tungkulin && !in_array($user->tungkulin, $roleOptions, true)) {
                                     $roleOptions[] = $user->tungkulin;
                                 }
@@ -995,28 +995,29 @@
                 <div class="settings-row">
                     <div class="settings-row-text">
                         <label for="settingSample1">Require OTP</label>
-                        <span>Needs OTP in Logging In.</span>
+                        <span>When enabled, every account must verify an emailed code after entering a password.</span>
                     </div>
                     <label class="sa-toggle">
-                        <input type="checkbox" id="settingSample1">
+                        <input type="checkbox" id="requireOtpSetting" @checked($globalVariables?->require_otp ?? true)>
                         <span class="sa-toggle-track"></span>
                     </label>
                 </div>
                 <div class="settings-row">
                     <div class="settings-row-text">
                         <label for="settingSample2">Allow Forgot Password</label>
-                        <span>By turning this setting off, secretary needs to consult the head secretary before resetting a password.</span>
+                        <span>When disabled, the forgot-password link and password reset endpoints are unavailable.</span>
                     </div>
                     <label class="sa-toggle">
-                        <input type="checkbox" id="settingSample2" checked>
+                        <input type="checkbox" id="allowForgotPasswordSetting" @checked($globalVariables?->allow_forgot_password ?? true)>
                         <span class="sa-toggle-track"></span>
                     </label>
                 </div>
             </div>
 
             <div class="sa-save-bar">
-                <button type="button" class="sa-btn sa-btn-ghost">Discard</button>
-                <button type="button" class="sa-btn sa-btn-primary">Save Security Settings</button>
+                <span class="sa-feedback" id="securitySettingsFeedback" role="status"></span>
+                <button type="button" class="sa-btn sa-btn-ghost" id="discardSecuritySettingsBtn">Discard</button>
+                <button type="button" class="sa-btn sa-btn-primary" id="saveSecuritySettingsBtn">Save Security Settings</button>
             </div>
         </div>
     </div>
@@ -1251,6 +1252,7 @@
             permissions: @json(route('superadmin.permissions.update')),
             signatories: @json(route('superadmin.signatories.update')),
             globalVariables: @json(route('superadmin.global-variables.update')),
+            securitySettings: @json(route('superadmin.security-settings.update')),
         };
         async function sendUpdate(url, payload) {
             const response = await fetch(url, {
@@ -1297,6 +1299,10 @@
                         pill.classList.toggle('on', data.is_verified);
                         pill.classList.toggle('off', !data.is_verified);
                         pill.lastChild.textContent = data.is_verified ? 'Verified' : 'Not Verified';
+                        if (data.revoked_current_session) {
+                            window.location.assign('/login?access=revoked');
+                            return;
+                        }
                         const permissionRow = document.querySelector(`#permissionsTableBody tr[data-user-id="${row.dataset.userId}"]`);
                         if (!data.is_verified) {
                             permissionRow?.remove();
@@ -1728,6 +1734,31 @@
             }
         });
         document.getElementById('discardGlobalVariablesBtn')?.addEventListener('click', () => window.location.reload());
+
+        const securityInputs = ['requireOtpSetting', 'allowForgotPasswordSetting'];
+        const securityDefaults = Object.fromEntries(securityInputs.map(id => [id, document.getElementById(id).checked]));
+        document.getElementById('saveSecuritySettingsBtn')?.addEventListener('click', async event => {
+            const button = event.currentTarget;
+            const feedback = document.getElementById('securitySettingsFeedback');
+            button.disabled = true;
+            feedback.textContent = 'Saving...';
+            try {
+                await sendUpdate(superadminUrls.securitySettings, {
+                    require_otp: document.getElementById('requireOtpSetting').checked ? 1 : 0,
+                    allow_forgot_password: document.getElementById('allowForgotPasswordSetting').checked ? 1 : 0,
+                });
+                feedback.textContent = 'Security settings saved.';
+            } catch (error) {
+                feedback.textContent = error.message;
+                window.alert(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        });
+        document.getElementById('discardSecuritySettingsBtn')?.addEventListener('click', () => {
+            securityInputs.forEach(id => { document.getElementById(id).checked = securityDefaults[id]; });
+            document.getElementById('securitySettingsFeedback').textContent = '';
+        });
     })();
 </script>
 @endsection

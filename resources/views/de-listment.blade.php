@@ -4,6 +4,12 @@
 
 @section('content')
 <div class="delist-page">
+    <span id="delist-config"
+        data-require-baptism="{{ $requireBaptismDate ? '1' : '0' }}"
+        data-endorse-url="{{ route('de-listment.endorse', ['record' => '__RECORD__']) }}"
+        data-update-dates-url="{{ route('de-listment.update-dates') }}"
+        data-csrf="{{ csrf_token() }}"
+        hidden></span>
     <div class="delist-heading">
         <div>
             <p class="delist-eyebrow">Member overview</p>
@@ -36,7 +42,7 @@
             <div class="panel-heading">
                 <div>
                     <h2 id="eligibility-heading">R2-10 eligibility</h2>
-                    <p id="chart-description">Eligible and not eligible members.</p>
+                    <p id="chart-description">Eligible and not eligible members. Click a chart slice or label to see names.</p>
                 </div>
                 <div class="segmented" role="group" aria-label="Chart detail">
                     <button type="button" class="seg-btn is-active" data-view="overview" aria-pressed="true">Overview</button>
@@ -55,7 +61,7 @@
             <div class="panel-heading">
                 <div>
                     <h2 id="progress-heading">Report progress by kalagayan</h2>
-                    <p>Created &amp; reported versus not yet done.</p>
+                    <p>Created &amp; reported versus not yet done. Select a bar segment to see names.</p>
                 </div>
             </div>
             <div class="bar-wrap">
@@ -174,6 +180,12 @@
             <textarea id="report-note" rows="4" maxlength="500" placeholder="Briefly describe what was endorsed in this R2-10."></textarea>
             <span class="field-count" id="report-count">0 / 500</span>
 
+            <label class="check-row" id="one-year-row" for="one-year-confirmed" hidden>
+                <input type="checkbox" id="one-year-confirmed">
+                <span>I confirm this MS/UWP member has already been in this status for at least 1 year. This will be saved as the endorsement reason.</span>
+            </label>
+            <p class="modal-warn" id="mk-reason-note" hidden>MK is sensitive: a specific brief description is required; the one-year confirmation does not apply.</p>
+
             <label class="check-row" for="report-assure">
                 <input type="checkbox" id="report-assure">
                 <span>I, Secretary for LSP of the locale, assure that the sensitive information I have endorsed and submitted is true and correct, with no errors or omissions.</span>
@@ -188,6 +200,31 @@
         </form>
     </dialog>
 
+    <dialog class="modal modal-wide" id="chart-members-dialog" aria-labelledby="chart-members-title">
+        <div class="modal-body">
+            <div class="modal-head">
+                <div>
+                    <h3 id="chart-members-title">Matching records</h3>
+                    <p class="modal-sub" id="chart-members-sub"></p>
+                </div>
+                <button type="button" class="modal-close" data-close aria-label="Close">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+                </button>
+            </div>
+            <div class="table-scroll">
+                <table class="member-table">
+                    <thead><tr><th scope="col">Name</th><th scope="col">Kalagayan</th><th scope="col">Eligibility</th><th scope="col">Report status</th></tr></thead>
+                    <tbody id="chart-members-rows"></tbody>
+                </table>
+                <div class="empty-state" id="chart-members-empty" hidden>
+                    <strong>No matching records</strong>
+                    <span>There are no records in this chart category.</span>
+                </div>
+            </div>
+            <div class="modal-actions"><button type="button" class="btn" data-close>Close</button></div>
+        </div>
+    </dialog>
+
     <!-- Entries with missing data -->
     <dialog class="modal modal-wide" id="missing-dialog" aria-labelledby="missing-title">
         <div class="modal-body">
@@ -200,7 +237,7 @@
                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
                 </button>
             </div>
-            <p class="modal-lead">The system can't check R2-10 eligibility for these entries because required dates are empty in their records. Fill them in so eligibility can be generated automatically.</p>
+            <p class="modal-lead">A baptism date may be required for the system to determine eligibility. An administrator can configure whether the baptism date affects deliberation.</p>
 
             <div class="table-scroll missing-scroll">
                 <table class="member-table missing-table" id="missing-table">
@@ -209,14 +246,13 @@
                             <th scope="col">Name</th>
                             <th scope="col">Registry number</th>
                             <th scope="col">Date of baptism</th>
-                            <th scope="col">Date of entry</th>
                         </tr>
                     </thead>
                     <tbody id="missing-rows"></tbody>
                 </table>
                 <div class="empty-state" id="missing-empty" hidden>
-                    <strong>All entries are complete</strong>
-                    <span>The system can now generate eligibility for every entry.</span>
+                    <strong>No required dates are missing</strong>
+                    <span>Every applicable date requirement has a value in the Records table.</span>
                 </div>
             </div>
 
@@ -252,6 +288,16 @@
         max-width: 1180px;
         margin: 0 auto;
     }
+    .delist-heading {
+        position: relative; padding: clamp(1.3rem, 3vw, 2rem); overflow: hidden;
+        border: 1px solid color-mix(in srgb, var(--accent) 20%, var(--delist-border));
+        border-radius: 20px; background: linear-gradient(125deg, color-mix(in srgb, var(--accent) 11%, var(--delist-surface)), var(--delist-surface) 64%);
+        box-shadow: 0 12px 32px rgba(16, 24, 40, .06);
+    }
+    .delist-heading::after { position: absolute; right: -34px; bottom: -92px; width: 245px; height: 245px; border: 34px solid color-mix(in srgb, var(--accent) 8%, transparent); border-radius: 50%; content: ""; pointer-events: none; }
+    .delist-heading > * { position: relative; z-index: 1; }
+    .delist-eyebrow { text-transform: uppercase; letter-spacing: .12em; }
+    .delist-heading h1 { font-size: clamp(2rem, 4vw, 2.8rem); }
     html[data-theme="dark"] .delist-page {
         --ok: #75d5a2; --ok-soft: #16372a;
         --bad: #ff9b88; --bad-soft: #3a2424;
@@ -268,7 +314,7 @@
     }
     .delist-heading { margin-bottom: 1.5rem; }
     .delist-eyebrow { margin: 0 0 .45rem; color: var(--accent); font-size: .82rem; font-weight: 700; }
-    .delist-heading h1 { margin: 0; color: var(--delist-ink); font-size: clamp(1.65rem, 3vw, 2.1rem); letter-spacing: -.04em; }
+    .delist-heading h1 { margin: 0; color: var(--delist-ink); font-size: clamp(1.8rem, 4vw, 2.8rem); letter-spacing: -.04em; }
     .delist-subtitle,
     .panel-heading p { margin: .45rem 0 0; color: var(--delist-muted); font-size: .92rem; line-height: 1.55; }
 
@@ -279,8 +325,10 @@
         border: 1px solid var(--delist-border);
         border-radius: 14px;
         background: var(--delist-surface);
-        box-shadow: 0 4px 18px rgba(16, 24, 40, .035);
+        box-shadow: 0 8px 24px rgba(16, 24, 40, .055);
+        transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
     }
+    .delist-stat:hover, .delist-panel:hover { transform: translateY(-2px); box-shadow: 0 13px 30px rgba(16, 24, 40, .09); }
     .delist-stat { display: flex; flex-direction: column; padding: 1.1rem 1.25rem; }
     .stat-label { color: var(--delist-muted); font-size: .82rem; font-weight: 600; }
     .delist-stat strong { margin: .35rem 0 .2rem; color: var(--delist-ink); font-size: 1.8rem; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
@@ -294,7 +342,8 @@
     .stat-button .stat-note { color: var(--accent); font-weight: 600; }
 
     /* Panels */
-    .delist-panel { padding: 1.35rem; margin-bottom: 1rem; }
+    .delist-panel { position: relative; padding: 1.35rem; margin-bottom: 1rem; overflow: hidden; }
+    .chart-panel::before { position: absolute; inset: 0 0 auto; height: 4px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 16%, #fff)); content: ""; }
     .panel-heading { align-items: center; }
     .panel-heading h2 { margin: 0; color: var(--delist-ink); font-size: 1.08rem; letter-spacing: -.02em; }
     .panel-heading p { font-size: .83rem; }
@@ -317,15 +366,17 @@
         outline-offset: 2px;
     }
 
-    .chart-content { display: grid; grid-template-columns: minmax(170px, 230px) minmax(0, 1fr); align-items: center; gap: clamp(1.25rem, 4vw, 3rem); margin: 1.25rem 0 .25rem; }
-    .donut-wrap { position: relative; width: 100%; max-width: 230px; aspect-ratio: 1; justify-self: center; }
-    .bar-wrap { position: relative; height: 230px; margin-top: 1.25rem; }
+    .chart-content { display: grid; grid-template-columns: minmax(190px, 250px) minmax(0, 1fr); align-items: center; gap: clamp(1.25rem, 4vw, 3rem); margin: 1.25rem 0 .25rem; }
+    .donut-wrap { position: relative; width: 100%; max-width: 250px; aspect-ratio: 1; justify-self: center; padding: .35rem; border-radius: 50%; background: radial-gradient(circle, var(--delist-surface) 59%, color-mix(in srgb, var(--accent) 8%, var(--delist-surface)) 60%, transparent 72%); }
+    .bar-wrap { position: relative; height: 250px; margin-top: 1.25rem; padding: .65rem .8rem .25rem; border-radius: 14px; background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 5%, var(--delist-surface)), var(--delist-surface)); }
     .chart-legend { display: grid; gap: .1rem; }
     .legend-row {
+        width: 100%; border: 0; background: transparent; font: inherit; text-align: left;
         display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem;
-        padding: .65rem .5rem; margin: 0 -.5rem; border-radius: 8px; cursor: default; transition: background .15s ease;
+        padding: .7rem .65rem; margin: 0; border-radius: 10px; cursor: pointer; transition: background .15s ease, transform .15s ease;
     }
-    .legend-row:hover { background: var(--bg); }
+    .legend-row:hover { background: var(--bg); transform: translateX(2px); }
+    .legend-row:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 2px; }
     .legend-label { display: flex; align-items: center; gap: .65rem; color: var(--delist-ink); font-size: .84rem; }
     .legend-swatch { width: 11px; height: 11px; flex: 0 0 auto; border-radius: 3px; }
     .legend-value { color: var(--delist-muted); font-size: .81rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -513,6 +564,15 @@
     }
     .missing-count[hidden] { display: none; }
     .modal-wide { width: min(96vw, 760px); }
+    #chart-members-dialog { max-height: min(86vh, 780px); }
+    #chart-members-dialog .modal-body { max-height: min(86vh, 780px); overflow: auto; }
+    #chart-members-dialog .table-scroll { max-height: min(58vh, 520px); overflow: auto; }
+    #chart-members-dialog .member-table { min-width: 600px; }
+    #chart-members-dialog .member-table thead th { position: sticky; top: 0; z-index: 2; background: var(--delist-surface); }
+    #chart-members-dialog .member-table tbody tr { cursor: default; }
+    #chart-members-dialog .member-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 7%, var(--delist-surface)); }
+    #one-year-row[hidden], #mk-reason-note[hidden] { display: none; }
+    .check-row:has(input:checked) { border-color: var(--ok); background: var(--ok-soft); }
     .missing-scroll { max-height: min(50vh, 360px); overflow: auto; }
     .missing-table { min-width: 620px; }
     .missing-table th { position: sticky; top: 0; z-index: 1; padding: .7rem 1rem; color: var(--delist-muted); font-size: .76rem; font-weight: 700; }
@@ -562,22 +622,12 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
-    const STORAGE_KEY = 'delist-reported-v2';
-    const PAGE_SIZE = 5;
+    const config = document.getElementById('delist-config');
+    const members = @json($members);
+    const missingRecords = @json($missingRecords);
+    const requireBaptismDate = config.dataset.requireBaptism === '1';
+    const PAGE_SIZE = 20;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    const members = [
-        { id: 1,  name: 'Sample Member 01', eligible: true,  endorsed: true,  kalagayan: 'MS',  reported: true,  reportedAt: '2022-01-15' },
-        { id: 2,  name: 'Sample Member 02', eligible: true,  endorsed: false, kalagayan: 'UWP', reported: false },
-        { id: 3,  name: 'Sample Member 03', eligible: false, endorsed: false, kalagayan: 'MS',  reported: false },
-        { id: 4,  name: 'Sample Member 04', eligible: true,  endorsed: true,  kalagayan: 'MK',  reported: true,  reportedAt: '2025-03-02' },
-        { id: 5,  name: 'Sample Member 05', eligible: false, endorsed: true,  kalagayan: 'UWP', reported: false },
-        { id: 6,  name: 'Sample Member 06', eligible: true,  endorsed: false, kalagayan: 'MS',  reported: false },
-        { id: 7,  name: 'Sample Member 07', eligible: true,  endorsed: false, kalagayan: 'MK',  reported: false },
-        { id: 8,  name: 'Sample Member 08', eligible: true,  endorsed: true,  kalagayan: 'UWP', reported: true,  reportedAt: '2026-06-20' },
-        { id: 9,  name: 'Sample Member 09', eligible: false, endorsed: true,  kalagayan: 'MS',  reported: false },
-        { id: 10, name: 'Sample Member 10', eligible: true,  endorsed: false, kalagayan: 'MS',  reported: false },
-    ];
 
     /* ---------- Dates ---------- */
     const pad = n => String(n).padStart(2, '0');
@@ -603,38 +653,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (d) parts.push(plural(d, 'Day'));
         return parts.length ? parts.join(', ') : 'Today';
     }
-    const ageYears = member => diffYMD(parseISO(member.reportedAt), startOfToday()).y;
-    const ageDays = member => member.reported && member.reportedAt
-        ? Math.round((startOfToday() - parseISO(member.reportedAt)) / 86400000)
+    const ageYears = member => member.entryDate ? diffYMD(parseISO(member.entryDate), startOfToday()).y : null;
+    const ageDays = member => member.entryDate
+        ? Math.round((startOfToday() - parseISO(member.entryDate)) / 86400000)
         : null;
-
-    /* ---------- Rules + persistence ---------- */
-    members.forEach(m => {
-        m.reportedAt = m.reportedAt || null;
-        m.note = m.note || '';
-        if (m.kalagayan === 'MK') m.eligible = true;            // MK is automatically eligible
-        if (!m.eligible) { m.reported = false; m.reportedAt = null; } // not eligible can never be reported
-    });
-
-    try {
-        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-        members.forEach(m => {
-            const s = saved[m.id];
-            if (s && m.eligible) {
-                m.reported = true;
-                m.reportedAt = s.at || m.reportedAt || toISO(startOfToday());
-                m.note = s.note || '';
-            }
-        });
-    } catch (e) { /* storage unavailable: fall back to sample data */ }
-
-    const persist = () => {
-        try {
-            const out = {};
-            members.filter(m => m.reported).forEach(m => { out[m.id] = { at: m.reportedAt, note: m.note }; });
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(out));
-        } catch (e) {}
-    };
 
     /* ---------- Shared ---------- */
     const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -686,6 +708,30 @@ document.addEventListener('DOMContentLoaded', () => {
         dialog.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', () => dialog.close()));
         dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); }); // backdrop click
     });
+
+    const chartMembersDialog = document.getElementById('chart-members-dialog');
+    function showChartMembers(title, subtitle, matchingMembers) {
+        document.getElementById('chart-members-title').textContent = title;
+        document.getElementById('chart-members-sub').textContent = `${matchingMembers.length} matching ${matchingMembers.length === 1 ? 'record' : 'records'} · ${subtitle}`;
+        const rows = matchingMembers.map(member => {
+            const row = document.createElement('tr');
+            const values = [
+                member.name,
+                member.kalagayan,
+                member.eligible ? 'Eligible' : 'Not eligible',
+                member.reported ? 'Created & reported' : 'Not yet done',
+            ];
+            values.forEach(value => {
+                const cell = document.createElement('td');
+                cell.textContent = value;
+                row.append(cell);
+            });
+            return row;
+        });
+        document.getElementById('chart-members-rows').replaceChildren(...rows);
+        document.getElementById('chart-members-empty').hidden = matchingMembers.length > 0;
+        chartMembersDialog.showModal();
+    }
 
     /* ---------- Entry breakdown popup ---------- */
     const breakdownDialog = document.getElementById('breakdown-dialog');
@@ -803,6 +849,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: reduceMotion ? false : { animateRotate: true, animateScale: true, duration: 1000, easing: 'easeOutQuart' },
+                onClick: (event, _active, chart) => {
+                    const [hit] = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+                    if (!hit) return;
+                    const category = cats[hit.index];
+                    showChartMembers(category.label, 'R2-10 eligibility', members.filter(category.matches));
+                },
                 plugins: {
                     legend: { display: false },
                     tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} (${total ? Math.round(ctx.parsed / total * 100) : 0}%)` } },
@@ -824,7 +876,8 @@ document.addEventListener('DOMContentLoaded', () => {
             `Doughnut chart showing ${cats.map(c => `${c.label}: ${c.count}`).join(', ')}`);
 
         legend.replaceChildren(...cats.map((c, i) => {
-            const row = document.createElement('div');
+            const row = document.createElement('button');
+            row.type = 'button';
             row.className = 'legend-row';
             const label = document.createElement('span');
             label.className = 'legend-label';
@@ -840,6 +893,8 @@ document.addEventListener('DOMContentLoaded', () => {
             strong.textContent = c.count;
             value.append(strong, document.createTextNode(`${total ? Math.round(c.count / total * 100) : 0}%`));
             row.append(label, value);
+            row.setAttribute('aria-label', `Show ${c.count} records: ${c.label}`);
+            row.addEventListener('click', () => showChartMembers(c.label, 'R2-10 eligibility', members.filter(c.matches)));
             row.addEventListener('mouseenter', () => {
                 if (!eligibilityChart || !eligibilityChart.ctx) return;
                 eligibilityChart.setActiveElements([{ datasetIndex: 0, index: i }]);
@@ -854,8 +909,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
 
         description.textContent = detailed
-            ? 'Eligibility split by endorsement, with MK shown separately.'
-            : 'Eligible and not eligible members.';
+            ? 'Eligibility split by endorsement, with MK shown separately. Click a chart slice or label to see names.'
+            : 'Eligible and not eligible members. Click a chart slice or label to see names.';
     }
 
     // Numbers inside each segment, plus the reported % after the bar.
@@ -921,6 +976,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         y: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { font: { weight: '700', size: 13 } } },
                     },
                     plugins: { legend: { display: false } },
+                    onClick: (event, _active, chart) => {
+                        const [hit] = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
+                        if (!hit) return;
+                        const kalagayan = kalagayanTypes[hit.index];
+                        const reported = hit.datasetIndex === 0;
+                        const label = reported ? 'Created & reported' : 'Not yet done';
+                        showChartMembers(`${kalagayan} · ${label}`, 'R2-10 report progress',
+                            members.filter(member => member.kalagayan === kalagayan && member.reported === reported));
+                    },
                 },
                 plugins: [segmentLabels],
             });
@@ -960,34 +1024,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const reportForm = document.getElementById('report-form');
     const reportNote = document.getElementById('report-note');
     const reportAssure = document.getElementById('report-assure');
+    const oneYearRow = document.getElementById('one-year-row');
+    const oneYearConfirmed = document.getElementById('one-year-confirmed');
+    const mkReasonNote = document.getElementById('mk-reason-note');
     const reportSubmit = document.getElementById('report-submit');
     let pendingMember = null;
+    let reportSaving = false;
 
     function updateReportState() {
         document.getElementById('report-count').textContent = `${reportNote.value.length} / 500`;
-        reportSubmit.disabled = !(reportNote.value.trim() && reportAssure.checked);
+        const hasReason = reportNote.value.trim().length > 0;
+        const validReason = pendingMember?.kalagayan === 'MK' ? hasReason : hasReason || oneYearConfirmed.checked;
+        reportSubmit.disabled = reportSaving || !(validReason && reportAssure.checked);
     }
     reportNote.addEventListener('input', updateReportState);
     reportAssure.addEventListener('change', updateReportState);
+    oneYearConfirmed.addEventListener('change', () => {
+        if (oneYearConfirmed.checked) reportNote.value = '';
+        reportNote.disabled = oneYearConfirmed.checked;
+        updateReportState();
+    });
     reportDialog.addEventListener('close', () => { pendingMember = null; });
 
     function openReport(member) {
         pendingMember = member;
         document.getElementById('report-member').textContent = `${member.name} · ${member.kalagayan}`;
         reportNote.value = '';
+        oneYearRow.hidden = !['MS', 'UWP'].includes(member.kalagayan);
+        mkReasonNote.hidden = member.kalagayan !== 'MK';
+        oneYearConfirmed.checked = false;
+        reportNote.disabled = false;
+        reportNote.placeholder = member.kalagayan === 'MK'
+            ? 'A specific description is required for MK.'
+            : 'Enter a brief description, or confirm the one-year MS/UWP condition below.';
         reportAssure.checked = false;
         updateReportState();
         reportDialog.showModal();
         reportNote.focus();
     }
 
-    reportForm.addEventListener('submit', e => {
+    reportForm.addEventListener('submit', async e => {
         e.preventDefault();
-        if (reportSubmit.disabled || !pendingMember) return;
+        if (reportSubmit.disabled || reportSaving || !pendingMember) return;
         const member = pendingMember;
         const note = reportNote.value.trim();
-        reportDialog.close();
-        markReported(member, note);
+        const oneYear = oneYearConfirmed.checked;
+        reportSaving = true;
+        reportSubmit.textContent = 'Saving...';
+        updateReportState();
+        try {
+            await markReported(member, note, oneYear);
+            reportDialog.close();
+        } catch (error) {
+            console.error('R2-10 endorsement could not be saved:', error);
+            showToast(error.message || 'Unable to save the R2-10 endorsement.');
+        } finally {
+            reportSaving = false;
+            reportSubmit.textContent = 'Confirm & mark as reported';
+            updateReportState();
+        }
     });
 
     /* ---------- Table ---------- */
@@ -998,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let justDoneId = null;
 
     const ageMatches = m => state.age === 'all'
-        || (m.reported && m.reportedAt && (state.age === 'under' ? ageYears(m) === 0 : ageYears(m) >= 1));
+        || (m.entryDate && (state.age === 'under' ? ageYears(m) === 0 : ageYears(m) >= 1));
 
     function filtered() {
         const q = state.search.trim().toLowerCase();
@@ -1013,7 +1108,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dir = state.sortDir === 'asc' ? 1 : -1;
             list = [...list].sort((a, b) => {
                 if (state.sortKey === 'age') {
-                    // asc = newest first, desc = longest first; unreported always last
+                    // Sort by time since date of entry; records without a date go last.
                     const av = ageDays(a), bv = ageDays(b);
                     if (av === null && bv === null) return 0;
                     if (av === null) return 1;
@@ -1075,13 +1170,23 @@ document.addEventListener('DOMContentLoaded', () => {
         return btn;
     }
 
-    function markReported(member, note) {
-        if (member.reported || !member.eligible) return; // permanent + eligible only
+    async function markReported(member, note, oneYearConfirmed = false) {
+        if (member.reported || !member.eligible) return;
+        const response = await fetch(config.dataset.endorseUrl.replace('__RECORD__', encodeURIComponent(member.id)), {
+            method: 'PUT',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': config.dataset.csrf,
+            },
+            body: JSON.stringify({ note: note || null, one_year_confirmed: oneYearConfirmed, assurance: true }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || 'Unable to save the R2-10 endorsement.');
+        member.endorsed = true;
         member.reported = true;
-        member.reportedAt = toISO(startOfToday());
         member.note = note;
         justDoneId = member.id;
-        persist();
         renderTable();
         renderStats();
         renderProgress();
@@ -1126,10 +1231,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const age = document.createElement('td');
             const ageEl = document.createElement('span');
-            if (member.reported && member.reportedAt) {
+            if (member.entryDate) {
                 ageEl.className = 'age-value';
-                ageEl.textContent = formatAge(member.reportedAt);
-                ageEl.title = 'Reported on ' + parseISO(member.reportedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+                ageEl.textContent = formatAge(member.entryDate);
+                ageEl.title = 'Entered on ' + parseISO(member.entryDate).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
             } else {
                 ageEl.className = 'age-empty';
                 ageEl.textContent = '—';
@@ -1202,33 +1307,13 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('next-page').addEventListener('click', () => { state.page++; renderTable(); });
 
     /* ---------- Entries with missing data ---------- */
-    const MISSING_KEY = 'delist-missing-v1';
-    const missingRecords = [
-        { id: 'm1', name: 'Sample Member 11', registry: 'REG-2019-0142', baptism: '',           entry: '' },
-        { id: 'm2', name: 'Sample Member 12', registry: 'REG-2021-0387', baptism: '2003-05-18', entry: '' },
-        { id: 'm3', name: 'Sample Member 13', registry: 'REG-2016-0059', baptism: '',           entry: '2016-09-04' },
-        { id: 'm4', name: 'Sample Member 14', registry: 'REG-2023-0721', baptism: '',           entry: '' },
-        { id: 'm5', name: 'Sample Member 15', registry: 'REG-2018-0210', baptism: '1998-11-22', entry: '' },
-    ];
-    try {
-        const saved = JSON.parse(localStorage.getItem(MISSING_KEY) || '{}');
-        missingRecords.forEach(r => { const s = saved[r.id]; if (s) { r.baptism = s.baptism || ''; r.entry = s.entry || ''; } });
-    } catch (e) {}
-    const persistMissing = () => {
-        try {
-            const out = {};
-            missingRecords.forEach(r => { out[r.id] = { baptism: r.baptism, entry: r.entry }; });
-            localStorage.setItem(MISSING_KEY, JSON.stringify(out));
-        } catch (e) {}
-    };
-
     const missingDialog = document.getElementById('missing-dialog');
     const missingRowsEl = document.getElementById('missing-rows');
     const missingSave = document.getElementById('missing-save');
     const missingHint = document.getElementById('missing-hint');
-    const isComplete = r => Boolean(r.baptism && r.entry);
+    const isComplete = r => !requireBaptismDate || Boolean(r.baptism);
     const stillMissing = () => missingRecords.filter(r => !isComplete(r));
-    let drafts = {}; // record id -> { baptism, entry } while editing
+    let drafts = {}; // record id -> baptism date while editing
 
     function renderMissingCount() {
         const n = stillMissing().length;
@@ -1242,8 +1327,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function changedIds() {
         return Object.keys(drafts).filter(id => {
-            const r = missingRecords.find(x => x.id === id);
-            return drafts[id].baptism !== r.baptism || drafts[id].entry !== r.entry;
+            const r = missingRecords.find(x => String(x.id) === id);
+            return drafts[id].baptism !== r.baptism;
         });
     }
     function updateSaveState() {
@@ -1262,7 +1347,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const flag = () => input.classList.toggle('is-missing', !input.value);
         flag();
         input.addEventListener('input', () => {
-            drafts[record.id] = { baptism: record.baptism, entry: record.entry, ...(drafts[record.id] || {}), [field]: input.value };
+            drafts[record.id] = { ...(drafts[record.id] || {}), [field]: input.value };
             flag();
             updateSaveState();
         });
@@ -1284,9 +1369,7 @@ document.addEventListener('DOMContentLoaded', () => {
             registry.textContent = record.registry;
             const baptism = document.createElement('td');
             baptism.append(makeDateInput(record, 'baptism', 'Date of baptism'));
-            const entry = document.createElement('td');
-            entry.append(makeDateInput(record, 'entry', 'Date of entry'));
-            row.append(name, registry, baptism, entry);
+            row.append(name, registry, baptism);
             return row;
         }));
     }
@@ -1300,35 +1383,52 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     missingDialog.addEventListener('close', () => { drafts = {}; });
 
-    missingSave.addEventListener('click', () => {
+    missingSave.addEventListener('click', async () => {
         const ids = changedIds();
         if (!ids.length) return;
         const today = toISO(startOfToday());
-        if (ids.some(id => drafts[id].baptism > today || drafts[id].entry > today)) {
+        if (ids.some(id => drafts[id].baptism > today)) {
             showToast("Dates can't be in the future.");
             return;
         }
-        const completed = [];
-        ids.forEach(id => {
-            const r = missingRecords.find(x => x.id === id);
-            const wasComplete = isComplete(r);
-            r.baptism = drafts[id].baptism;
-            r.entry = drafts[id].entry;
-            if (!wasComplete && isComplete(r)) completed.push(r.id);
-        });
-        drafts = {};
-        persistMissing();
-        renderMissingCount();
-        updateSaveState();
+        missingSave.disabled = true;
+        missingSave.textContent = 'Saving...';
+        try {
+            const response = await fetch(config.dataset.updateDatesUrl, {
+                method: 'PUT',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': config.dataset.csrf,
+                },
+                body: JSON.stringify({
+                    changes: ids.map(id => ({
+                        id: Number(id),
+                        baptism: drafts[id].baptism,
+                    })),
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || 'Unable to save record dates.');
 
-        if (completed.length) {
-            // Flash completed rows green, then let them leave the list.
-            missingRowsEl.querySelectorAll('tr').forEach(tr => { if (completed.includes(tr.dataset.id)) tr.classList.add('is-complete'); });
-            setTimeout(renderMissingRows, reduceMotion ? 0 : 900);
-            showToast(`${completed.length} ${completed.length === 1 ? 'entry' : 'entries'} completed. Eligibility will be generated automatically.`);
-        } else {
+            result.data.forEach(saved => {
+                const record = missingRecords.find(item => item.id === saved.id);
+                if (record) {
+                    record.baptism = saved.baptism;
+                }
+            });
+            drafts = {};
+            renderMissingCount();
             renderMissingRows();
-            showToast('Changes saved.');
+            updateSaveState();
+            renderTable();
+            showToast('Record dates saved. Eligibility remains as recorded in the Records table.');
+        } catch (error) {
+            console.error('Record dates could not be saved:', error);
+            showToast(error.message || 'Unable to save record dates.');
+            updateSaveState();
+        } finally {
+            missingSave.textContent = 'Save changes';
         }
     });
 

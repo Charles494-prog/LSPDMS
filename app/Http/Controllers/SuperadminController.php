@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class SuperadminController extends Controller
@@ -46,7 +47,7 @@ class SuperadminController extends Controller
     public function updateUser(Request $request, User $user): JsonResponse
     {
         $validated = $request->validate([
-            'tungkulin' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'tungkulin' => ['sometimes', 'nullable', 'string', 'max:100', Rule::in(['Secretary', 'Head Secretary'])],
             'is_verified' => ['sometimes', 'boolean'],
         ]);
 
@@ -57,12 +58,19 @@ class SuperadminController extends Controller
         }
 
         $user->fill($validated)->save();
+        if (array_key_exists('is_verified', $validated) && ! $user->is_verified) {
+            $user->forceFill([
+                'remember_token' => null,
+                'remember_token_expires_at' => null,
+            ])->save();
+        }
 
         return response()->json([
             'data' => [
                 'id' => $user->id,
                 'tungkulin' => $user->tungkulin,
                 'is_verified' => (bool) $user->is_verified,
+                'revoked_current_session' => (int) $request->session()->get('login_user.id') === (int) $user->id && ! $user->is_verified,
             ],
         ]);
     }
@@ -201,6 +209,24 @@ class SuperadminController extends Controller
         return response()->json([
             'message' => 'Global variables saved.',
             'data' => $globalVariables,
+        ]);
+    }
+
+    public function updateSecuritySettings(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'require_otp' => ['required', 'boolean'],
+            'allow_forgot_password' => ['required', 'boolean'],
+        ]);
+        $globalVariables = GlobalVariable::query()->first() ?? new GlobalVariable;
+        $globalVariables->fill($validated)->save();
+
+        return response()->json([
+            'message' => 'Security settings saved.',
+            'data' => [
+                'require_otp' => (bool) $globalVariables->require_otp,
+                'allow_forgot_password' => (bool) $globalVariables->allow_forgot_password,
+            ],
         ]);
     }
 }

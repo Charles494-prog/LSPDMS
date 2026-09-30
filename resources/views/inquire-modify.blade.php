@@ -69,10 +69,10 @@
                 <p>Correct personal details, such as name, registry number, gender, baptism date, and evangelist. Update Binhi records and move a group within the same Purok.</p>
             </section>
             <section class="rem-guide-card rem-guide-monthly">
-                <span class="rem-guide-label">Form Generator &rsaquo; Monthly &rsaquo; Modify</span>
+                <span class="rem-guide-label">Form Generator &rsaquo; Monthly &rsaquo; Deliberation</span>
                 <p>Change a member's status or move a group between Puroks. Remove duplicate entries here only when <strong>none of the matching records is Inactive</strong>.</p>
             </section>
-            <div class="rem-warn"><strong>Duplicate removal:</strong> If a match includes an Inactive record, Smart Helper lets you remove that Inactive record. If all matches are active (for example, MS and UWP), use Monthly Modify.</div>
+            <div class="rem-warn"><strong>Duplicate removal:</strong> If a match includes an Inactive record, Smart Helper lets you remove that Inactive record. If all matches are active (for example, MS and UWP), use Monthly Deliberation.</div>
         </div>
         <div class="rem-foot"><button type="button" class="btn btn-ink" id="rem-ok">Got it</button></div>
     </aside>
@@ -111,7 +111,7 @@
                         <div class="f"><label for="rm-evangelist">Evangelist</label><input type="text" id="rm-evangelist"><p class="err" data-err="evangelist"></p></div>
                     </div>
 
-                    <h3 class="reg-locked-title">Monthly portal only <small>Form Generator › Monthly › Modify</small></h3>
+                    <h3 class="reg-locked-title">Monthly portal only <small>Form Generator › Monthly › Deliberation</small></h3>
                     <div class="reg-locks">
                         <div class="lock"><span class="lock-k">Purok</span><span class="lock-v" id="rm-purok-display">--</span></div>
                         <div class="lock"><span class="lock-k">Status</span><span class="lock-v" id="rm-status-text">--</span></div>
@@ -447,7 +447,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 card.append(el(
                     'p',
                     'smart-helper-delete-warning',
-                    'No inactive match. To remove this duplicate, change its status to Inactive in Form Generator > Monthly > Modify.'
+                    'No inactive match. To remove this duplicate, change its status to Inactive in Form Generator > Monthly > Deliberation.'
                 ));
             }
             smartResults.append(card);

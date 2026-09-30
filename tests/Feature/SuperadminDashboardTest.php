@@ -19,7 +19,7 @@ class SuperadminDashboardTest extends TestCase
             'password' => 'secret-password',
             'first_name' => 'Real',
             'last_name' => 'User',
-            'tungkulin' => 'Secretary',
+            'tungkulin' => 'Head Secretary',
             'is_verified' => true,
         ]);
 
@@ -37,11 +37,41 @@ class SuperadminDashboardTest extends TestCase
             ->assertSee('id="closeSignatoriesSuccess"', false);
     }
 
+    public function test_superadmin_layout_keeps_authenticated_head_secretary_identity_after_user_loops(): void
+    {
+        $headSecretary = User::query()->create([
+            'gmail' => 'head@example.test',
+            'password' => 'secret-password',
+            'first_name' => 'Dudu',
+            'last_name' => 'Bear',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        User::query()->create([
+            'gmail' => 'last.user@example.test',
+            'password' => 'secret-password',
+            'first_name' => 'Last',
+            'last_name' => 'User',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->get(route('superadmin-dashboard'))
+            ->assertOk()
+            ->assertSee('Dudu Bear')
+            ->assertSee('Head Secretary')
+            ->assertSee('Superadmin Dashboard')
+            ->assertDontSee('CHARLESS 2 Secretary');
+    }
+
     public function test_user_access_and_tungkulin_are_saved_to_login_user(): void
     {
         $admin = User::query()->create([
             'gmail' => 'admin@example.test',
             'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
         ]);
         $user = User::query()->create([
             'gmail' => 'secretary@example.test',
@@ -53,16 +83,16 @@ class SuperadminDashboardTest extends TestCase
         $this->withSession(['login_user' => ['id' => $admin->id]])
             ->putJson(route('superadmin.users.update', $user), [
                 'is_verified' => 1,
-                'tungkulin' => 'Secretary Head',
+                'tungkulin' => 'Head Secretary',
             ])
             ->assertOk()
             ->assertJsonPath('data.is_verified', true)
-            ->assertJsonPath('data.tungkulin', 'Secretary Head');
+            ->assertJsonPath('data.tungkulin', 'Head Secretary');
 
         $this->assertDatabaseHas('login_user', [
             'id' => $user->id,
             'is_verified' => 1,
-            'tungkulin' => 'Secretary Head',
+            'tungkulin' => 'Head Secretary',
         ]);
     }
 
@@ -71,6 +101,8 @@ class SuperadminDashboardTest extends TestCase
         $admin = User::query()->create([
             'gmail' => 'admin@example.test',
             'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
         ]);
         $verifiedUser = User::query()->create([
             'gmail' => 'verified@example.test',
@@ -121,6 +153,8 @@ class SuperadminDashboardTest extends TestCase
         $admin = User::query()->create([
             'gmail' => 'admin@example.test',
             'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
         ]);
         $secretary = User::query()->create([
             'gmail' => 'secretary@example.test',
@@ -208,5 +242,102 @@ class SuperadminDashboardTest extends TestCase
             ->assertSee('Sample District')
             ->assertSee('D-456')
             ->assertSee('Pastor Person');
+    }
+
+    public function test_security_settings_are_persisted_and_only_head_secretary_can_access_them(): void
+    {
+        $headSecretary = User::query()->create([
+            'gmail' => 'head@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $secretary = User::query()->create([
+            'gmail' => 'secretary@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->putJson(route('superadmin.security-settings.update'), [
+                'require_otp' => 0,
+                'allow_forgot_password' => 0,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.require_otp', false)
+            ->assertJsonPath('data.allow_forgot_password', false);
+
+        $this->assertDatabaseHas('global_variables', [
+            'require_otp' => 0,
+            'allow_forgot_password' => 0,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->get(route('superadmin-dashboard'))
+            ->assertOk()
+            ->assertSee('id="requireOtpSetting"', false)
+            ->assertSee('id="allowForgotPasswordSetting"', false);
+
+        $this->withSession(['login_user' => ['id' => $secretary->id]])
+            ->get(route('superadmin-dashboard'))
+            ->assertForbidden();
+
+        $this->withSession(['login_user' => ['id' => $secretary->id]])
+            ->putJson(route('superadmin.security-settings.update'), [
+                'require_otp' => 1,
+                'allow_forgot_password' => 1,
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_disabling_user_access_invalidates_the_account_session_and_remember_login(): void
+    {
+        $headSecretary = User::query()->create([
+            'gmail' => 'head@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $secretary = User::query()->create([
+            'gmail' => 'secretary@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+            'remember_token' => 'stored-token',
+            'remember_token_expires_at' => now()->addDay(),
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->putJson(route('superadmin.users.update', $secretary), ['is_verified' => 0])
+            ->assertOk()
+            ->assertJsonPath('data.is_verified', false)
+            ->assertJsonPath('data.revoked_current_session', false);
+
+        $this->assertDatabaseHas('login_user', [
+            'id' => $secretary->id,
+            'is_verified' => 0,
+            'remember_token' => null,
+            'remember_token_expires_at' => null,
+        ]);
+        $this->withSession(['login_user' => ['id' => $secretary->id]])
+            ->get(route('home'))
+            ->assertRedirect('/login');
+    }
+
+    public function test_disabling_current_users_access_tells_the_browser_to_log_out_immediately(): void
+    {
+        $headSecretary = User::query()->create([
+            'gmail' => 'head@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->putJson(route('superadmin.users.update', $headSecretary), ['is_verified' => 0])
+            ->assertOk()
+            ->assertJsonPath('data.is_verified', false)
+            ->assertJsonPath('data.revoked_current_session', true);
     }
 }

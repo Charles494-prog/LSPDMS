@@ -1,5 +1,8 @@
 <?php
 
+use App\Http\Middleware\EnsureUserHasPermission;
+use App\Http\Middleware\EnsureUserIsHeadSecretary;
+use App\Http\Middleware\EnsureUserIsLoggedIn;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -12,7 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'login.session' => \App\Http\Middleware\EnsureUserIsLoggedIn::class,
+            'login.session' => EnsureUserIsLoggedIn::class,
+            'permission' => EnsureUserHasPermission::class,
+            'head.secretary' => EnsureUserIsHeadSecretary::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
