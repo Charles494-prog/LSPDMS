@@ -143,6 +143,7 @@
     table.sa-table tr:last-child td { border-bottom: none; }
     .sa-user-cell { display: flex; align-items: center; gap: 0.65rem; }
     .sa-user-cell img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: var(--sa-border); flex-shrink: 0; }
+    .sa-user-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--sa-accent); color: #fff; font-weight: 700; flex-shrink: 0; }
     .sa-user-name { font-weight: 600; font-size: 0.88rem; }
     .sa-user-email { font-size: 0.78rem; color: var(--sa-ink-soft); }
 
@@ -228,22 +229,54 @@
         gap: 0.8rem;
     }
     .purok-head-left { display: flex; align-items: center; gap: 0.7rem; flex: 1; min-width: 0; }
+    .purok-name-wrap { flex: 1; min-width: 0; }
+    .purok-name-view { display: flex; align-items: center; gap: 0.4rem; }
+    .purok-name-display {
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: var(--sa-navy);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .purok-edit-btn {
+        background: none;
+        border: 1px solid transparent;
+        color: var(--sa-ink-soft);
+        border-radius: 6px;
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .purok-edit-btn:hover { background: var(--sa-surface); border-color: var(--sa-border); color: var(--sa-accent); }
+    .purok-name-edit { display: none; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .purok-name-edit.active { display: flex; }
     .purok-name-input {
         font-family: inherit;
         font-weight: 700;
         font-size: 0.95rem;
         color: var(--sa-navy);
-        background: transparent;
-        border: 1px solid transparent;
-        border-radius: 6px;
-        padding: 0.3rem 0.5rem;
-        max-width: 220px;
-    }
-    .purok-name-input:hover, .purok-name-input:focus {
-        outline: none;
-        border-color: var(--sa-border);
         background: var(--sa-surface);
+        border: 1px solid var(--sa-border);
+        border-radius: 6px;
+        padding: 0.35rem 0.55rem;
+        width: 200px;
+        max-width: 100%;
     }
+    .purok-name-input:focus { outline: none; border-color: var(--sa-accent); }
+    .purok-name-input.invalid { border-color: var(--sa-danger); }
+    .purok-name-error {
+        display: none;
+        margin-top: 0.35rem;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--sa-danger);
+    }
+    .purok-name-error.active { display: block; }
     .purok-body { padding: 1.1rem; display: flex; flex-direction: column; gap: 0.9rem; }
 
     .signatory-row {
@@ -283,13 +316,36 @@
         grid-template-columns: 150px 1fr;
         gap: 0.7rem;
         align-items: start;
-        padding-top: 0.6rem;
-        margin-top: 0.2rem;
-        border-top: 1px dashed var(--sa-border);
+        transition: opacity 0.15s ease;
     }
     @media (max-width: 640px) {
         .sakop-row { grid-template-columns: 1fr; }
     }
+    .sakop-row.disabled { opacity: 0.5; }
+    .sakop-row.disabled .signatory-input { cursor: not-allowed; color: var(--sa-ink-soft); }
+    .sakop-row.disabled .sakop-preview { color: var(--sa-ink-soft); background: var(--sa-bg); }
+
+    /* Complete Purok checkbox row */
+    .complete-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.65rem;
+        padding: 0.8rem 0.9rem;
+        margin-top: 0.2rem;
+        border: 1px solid var(--sa-border);
+        border-radius: 10px;
+        background: var(--sa-bg);
+        cursor: pointer;
+    }
+    .complete-row input[type="checkbox"] {
+        width: 17px; height: 17px;
+        margin-top: 0.1rem;
+        accent-color: var(--sa-accent);
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+    .complete-row-text strong { display: block; font-size: 0.88rem; color: var(--sa-navy); }
+    .complete-row-text span { font-size: 0.78rem; color: var(--sa-ink-soft); }
     .sakop-range-inputs {
         display: grid;
         grid-template-columns: 1fr auto 1fr;
@@ -417,6 +473,12 @@
         gap: 0.7rem;
         margin-top: 0.2rem;
     }
+    #saveSignatoriesBtn:disabled {
+        background: #cbd5e1;
+        color: #64748b;
+        cursor: not-allowed;
+        box-shadow: none;
+    }
 
     .sa-empty {
         text-align: center;
@@ -458,6 +520,48 @@
         box-sizing: border-box;
     }
     .sa-modal-overlay.active { display: flex !important; }
+    .sa-success-overlay {
+        align-items: center;
+        padding: 1rem;
+        background: rgba(16, 24, 40, 0.62) !important;
+        backdrop-filter: blur(4px);
+    }
+    .sa-success-modal {
+        max-width: 420px;
+        padding: 2.2rem 2rem;
+        text-align: center;
+        animation: success-modal-in 280ms cubic-bezier(.2,.8,.2,1) both;
+    }
+    .sa-success-icon {
+        width: 76px;
+        height: 76px;
+        margin: 0 auto 1rem;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: #e8f8ee;
+        color: #16a34a;
+    }
+    .sa-success-icon svg { width: 42px; height: 42px; overflow: visible; }
+    .sa-success-icon circle {
+        stroke-dasharray: 150;
+        stroke-dashoffset: 150;
+        animation: success-circle 500ms ease-out 100ms forwards;
+    }
+    .sa-success-icon path {
+        stroke-dasharray: 36;
+        stroke-dashoffset: 36;
+        animation: success-check 300ms ease-out 500ms forwards;
+    }
+    .sa-success-modal h2 { margin: 0; color: var(--sa-navy); font-size: 1.35rem; }
+    .sa-success-modal p { margin: 0.5rem 0 1.4rem; color: var(--sa-ink-soft); font-size: 0.92rem; }
+    .sa-success-modal .sa-btn { min-width: 130px; justify-content: center; }
+    @keyframes success-modal-in {
+        from { opacity: 0; transform: translateY(12px) scale(.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes success-circle { to { stroke-dashoffset: 0; } }
+    @keyframes success-check { to { stroke-dashoffset: 0; } }
     .sa-modal {
         background: var(--sa-surface);
         border-radius: 14px;
@@ -558,94 +662,50 @@
                         </tr>
                     </thead>
                     <tbody id="usersTableBody">
-                        <!-- Sample rows — replace with real data from login_user later -->
-                        <tr data-name="charles andrei galvan" data-email="formalcharlesandreigalvan@gmail.com">
-                            <td>
-                                <div class="sa-user-cell">
-                                    <img src="https://ui-avatars.com/api/?name=Charles+Galvan&background=0A6BD6&color=fff" alt="">
-                                    <div>
-                                        <div class="sa-user-name">Charles Andrei Galvan</div>
-                                        <div class="sa-user-email">formalcharlesandreigalvan@gmail.com</div>
+                        @forelse ($users as $user)
+                            @php
+                                $userName = trim(($user->first_name ?? '').' '.($user->last_name ?? '')) ?: $user->gmail;
+                                $roleOptions = ['Secretary', 'Secretary Head'];
+                                if ($user->tungkulin && !in_array($user->tungkulin, $roleOptions, true)) {
+                                    $roleOptions[] = $user->tungkulin;
+                                }
+                            @endphp
+                            <tr data-user-id="{{ $user->id }}" data-name="{{ strtolower($userName) }}" data-email="{{ strtolower($user->gmail) }}">
+                                <td>
+                                    <div class="sa-user-cell">
+                                        <span class="sa-user-avatar" aria-hidden="true">{{ strtoupper(substr($userName, 0, 1)) }}</span>
+                                        <div>
+                                            <div class="sa-user-name">{{ $userName }}</div>
+                                            <div class="sa-user-email">{{ $user->gmail }}</div>
+                                        </div>
                                     </div>
-                                </div>
-                            </td>
-                            <td>
-                                <select class="sa-select tungkulin-select">
-                                    <option value="secretary" selected>Secretary</option>
-                                    <option value="secretary_head">Secretary Head</option>
-                                </select>
-                            </td>
-                            <td>
-                                <label class="sa-toggle">
-                                    <input type="checkbox" class="access-toggle" checked>
-                                    <span class="sa-toggle-track"></span>
-                                </label>
-                            </td>
-                            <td>
-                                <span class="sa-status-pill on status-pill">
-                                    <svg viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
-                                    Verified
-                                </span>
-                            </td>
-                        </tr>
-                        <tr data-name="maria santos" data-email="maria.santos@example.com">
-                            <td>
-                                <div class="sa-user-cell">
-                                    <img src="https://ui-avatars.com/api/?name=Maria+Santos&background=64748b&color=fff" alt="">
-                                    <div>
-                                        <div class="sa-user-name">Maria Santos</div>
-                                        <div class="sa-user-email">maria.santos@example.com</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <select class="sa-select tungkulin-select">
-                                    <option value="secretary" selected>Secretary</option>
-                                    <option value="secretary_head">Secretary Head</option>
-                                </select>
-                            </td>
-                            <td>
-                                <label class="sa-toggle">
-                                    <input type="checkbox" class="access-toggle">
-                                    <span class="sa-toggle-track"></span>
-                                </label>
-                            </td>
-                            <td>
-                                <span class="sa-status-pill off status-pill">
-                                    <svg viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
-                                    Not Verified
-                                </span>
-                            </td>
-                        </tr>
-                        <tr data-name="juan dela cruz" data-email="juan.delacruz@example.com">
-                            <td>
-                                <div class="sa-user-cell">
-                                    <img src="https://ui-avatars.com/api/?name=Juan+Dela+Cruz&background=64748b&color=fff" alt="">
-                                    <div>
-                                        <div class="sa-user-name">Juan Dela Cruz</div>
-                                        <div class="sa-user-email">juan.delacruz@example.com</div>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <select class="sa-select tungkulin-select">
-                                    <option value="secretary">Secretary</option>
-                                    <option value="secretary_head" selected>Secretary Head</option>
-                                </select>
-                            </td>
-                            <td>
-                                <label class="sa-toggle">
-                                    <input type="checkbox" class="access-toggle" checked>
-                                    <span class="sa-toggle-track"></span>
-                                </label>
-                            </td>
-                            <td>
-                                <span class="sa-status-pill on status-pill">
-                                    <svg viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
-                                    Verified
-                                </span>
-                            </td>
-                        </tr>
+                                </td>
+                                <td>
+                                    <select class="sa-select tungkulin-select" data-previous-value="{{ $user->tungkulin }}" aria-label="Tungkulin for {{ $userName }}">
+                                        @foreach ($roleOptions as $role)
+                                            <option value="{{ $role }}" @selected($user->tungkulin === $role)>{{ $role }}</option>
+                                        @endforeach
+                                        @if (!$user->tungkulin)
+                                            <option value="" selected>Not assigned</option>
+                                        @endif
+                                    </select>
+                                </td>
+                                <td>
+                                    <label class="sa-toggle">
+                                        <input type="checkbox" class="access-toggle" @checked($user->is_verified)>
+                                        <span class="sa-toggle-track"></span>
+                                    </label>
+                                </td>
+                                <td>
+                                    <span class="sa-status-pill {{ $user->is_verified ? 'on' : 'off' }} status-pill">
+                                        <svg viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
+                                        {{ $user->is_verified ? 'Verified' : 'Not Verified' }}
+                                    </span>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="sa-empty">No registered users found.</td></tr>
+                        @endforelse
                     </tbody>
                 </table>
                 <div class="sa-empty" id="usersEmptyState" style="display:none;">No users match your search.</div>
@@ -664,21 +724,102 @@
             </div>
 
             <div class="sa-note">
-                Sakop na Grupo is a numeric range. For "Purok 2a" with range 1–6, members are 2-1 through 2-6. For "Purok 2b" with range 7–10, members are 2-7 through 2-10. The prefix number is taken automatically from the Purok name.
+                Set the Assigned Number for each Purok. Tick "Complete Purok" if every group starting with that number belongs to it (e.g. 1-1, 1-2, 1-3 ...). Leave it unticked when a number is split between Puroks, such as "Purok 2a" with range 1–6 (2-1 to 2-6) and "Purok 2b" with range 7–10 (2-7 to 2-10).
             </div>
 
             <div class="purok-list" id="purokList">
+                @foreach ($puroks as $purok)
+                    <div class="purok-card" data-id="{{ $purok->id }}">
+                        <div class="purok-head">
+                            <div class="purok-head-left">
+                                <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="color:var(--sa-ink-soft); flex-shrink:0;"><path d="M3 8l7-5 7 5v9H3z"/><path d="M8 17v-5h4v5"/></svg>
+                                <div class="purok-name-wrap">
+                                    <div class="purok-name-view">
+                                        <span class="purok-name-display">{{ $purok->purok_name ?: 'Purok '.$purok->purok_number }}</span>
+                                        <button type="button" class="purok-edit-btn" title="Edit Purok name" aria-label="Edit Purok name"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M12 5l3 3"/></svg></button>
+                                    </div>
+                                    <div class="purok-name-edit">
+                                        <input type="text" class="purok-name-input" value="{{ $purok->purok_name ?: 'Purok '.$purok->purok_number }}" maxlength="40">
+                                        <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
+                                        <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
+                                    </div>
+                                    <div class="purok-name-error"></div>
+                                </div>
+                            </div>
+                            <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
+                        </div>
+                        <div class="purok-body">
+                            <div class="signatory-row">
+                                <span class="signatory-role-badge">Assigned Number</span>
+                                <input type="number" class="signatory-input purok-number-input" placeholder="e.g. 1" min="1" value="{{ $purok->purok_number }}">
+                            </div>
+                            <div class="signatory-row">
+                                <span class="signatory-role-badge">Secretary</span>
+                                <select class="signatory-input secretary-input">
+                                    <option value="">Not assigned</option>
+                                    @foreach ($users as $user)
+                                        <option value="{{ $user->id }}" @selected($purok->secretary === $user->id)>{{ trim(($user->first_name ?? '').' '.($user->last_name ?? '')) ?: $user->gmail }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="signatory-row">
+                                <span class="signatory-role-badge">Manggagawa</span>
+                                <input type="text" class="signatory-input manggagawa-input" placeholder="Full name" maxlength="255" value="{{ $purok->manggagawa }}">
+                            </div>
+                            <div class="signatory-row">
+                                <span class="signatory-role-badge">ID Number</span>
+                                <input type="text" class="signatory-input purok-id-input" placeholder="Ministerial ID number" value="{{ $purok->ministerial_id }}">
+                            </div>
+                            <label class="complete-row">
+                                <input type="checkbox" class="complete-purok-check" @checked($purok->full_purok)>
+                                <div class="complete-row-text">
+                                    <strong>Complete Purok</strong>
+                                    <span>Includes every group that starts with this Purok number (e.g. 1-1, 1-2, 1-3 ...).</span>
+                                </div>
+                            </label>
+                            <div class="sakop-row {{ $purok->full_purok ? 'disabled' : '' }}">
+                                <span class="signatory-role-badge">Sakop na Grupo</span>
+                                <div>
+                                    <div class="sakop-range-inputs">
+                                        <input type="number" class="signatory-input sakop-from" placeholder="From" min="0" value="{{ $purok->grupo_start }}" @disabled($purok->full_purok)>
+                                        <span>to</span>
+                                        <input type="number" class="signatory-input sakop-to" placeholder="To" min="0" value="{{ $purok->grupo_end }}" @disabled($purok->full_purok)>
+                                    </div>
+                                    <div class="sakop-preview"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+                @if ($puroks->isEmpty())
+                    <div class="sa-empty" id="noPuroksMessage">No Purok signatories are configured yet.</div>
+                @endif
+                @if (false)
                 <!-- Sample Purok 1: full range 1–24 -->
                 <div class="purok-card">
                     <div class="purok-head">
                         <div class="purok-head-left">
                             <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="color:var(--sa-ink-soft); flex-shrink:0;"><path d="M3 8l7-5 7 5v9H3z"/><path d="M8 17v-5h4v5"/></svg>
-                            <input type="text" class="purok-name-input" value="Purok 1">
+                            <div class="purok-name-wrap">
+                                <div class="purok-name-view">
+                                    <span class="purok-name-display">Purok 1</span>
+                                    <button type="button" class="purok-edit-btn" title="Edit Purok name" aria-label="Edit Purok name"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M12 5l3 3"/></svg></button>
+                                </div>
+                                <div class="purok-name-edit">
+                                    <input type="text" class="purok-name-input" value="Purok 1" maxlength="40">
+                                    <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
+                                    <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
+                                </div>
+                                <div class="purok-name-error"></div>
+                            </div>
                         </div>
                         <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
                     </div>
                     <div class="purok-body">
                         <div class="signatory-row">
+                            <span class="signatory-role-badge">Assigned Number</span>
+                            <input type="number" class="signatory-input purok-number-input" placeholder="e.g. 1" min="1" value="1">
+                        </div>                        <div class="signatory-row">
                             <span class="signatory-role-badge">Secretary</span>
                             <input type="text" class="signatory-input" placeholder="Full name">
                         </div>
@@ -690,15 +831,22 @@
                             <span class="signatory-role-badge">ID Number</span>
                             <input type="text" class="signatory-input purok-id-input" placeholder="Ministerial ID number">
                         </div>
-                        <div class="sakop-row">
+                        <label class="complete-row">
+                            <input type="checkbox" class="complete-purok-check" checked>
+                            <div class="complete-row-text">
+                                <strong>Complete Purok</strong>
+                                <span>Includes every group that starts with this Purok number (e.g. 1-1, 1-2, 1-3 ...).</span>
+                            </div>
+                        </label>
+                        <div class="sakop-row disabled">
                             <span class="signatory-role-badge">Sakop na Grupo</span>
                             <div>
                                 <div class="sakop-range-inputs">
-                                    <input type="number" class="signatory-input sakop-from" placeholder="From" value="1" min="0">
+                                    <input type="number" class="signatory-input sakop-from" disabled placeholder="From" value="1" min="0">
                                     <span>to</span>
-                                    <input type="number" class="signatory-input sakop-to" placeholder="To" value="24" min="0">
+                                    <input type="number" class="signatory-input sakop-to" disabled placeholder="To" value="24" min="0">
                                 </div>
-                                <div class="sakop-preview">Range: Purok 1-1 to 1-24</div>
+                                <div class="sakop-preview">All groups: Purok 1-1, 1-2, 1-3 ...</div>
                             </div>
                         </div>
                     </div>
@@ -709,12 +857,26 @@
                     <div class="purok-head">
                         <div class="purok-head-left">
                             <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="color:var(--sa-ink-soft); flex-shrink:0;"><path d="M3 8l7-5 7 5v9H3z"/><path d="M8 17v-5h4v5"/></svg>
-                            <input type="text" class="purok-name-input" value="Purok 2a">
+                            <div class="purok-name-wrap">
+                                <div class="purok-name-view">
+                                    <span class="purok-name-display">Purok 2a</span>
+                                    <button type="button" class="purok-edit-btn" title="Edit Purok name" aria-label="Edit Purok name"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M12 5l3 3"/></svg></button>
+                                </div>
+                                <div class="purok-name-edit">
+                                    <input type="text" class="purok-name-input" value="Purok 2a" maxlength="40">
+                                    <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
+                                    <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
+                                </div>
+                                <div class="purok-name-error"></div>
+                            </div>
                         </div>
                         <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
                     </div>
                     <div class="purok-body">
                         <div class="signatory-row">
+                            <span class="signatory-role-badge">Assigned Number</span>
+                            <input type="number" class="signatory-input purok-number-input" placeholder="e.g. 1" min="1" value="2">
+                        </div>                        <div class="signatory-row">
                             <span class="signatory-role-badge">Secretary</span>
                             <input type="text" class="signatory-input" placeholder="Full name">
                         </div>
@@ -726,6 +888,13 @@
                             <span class="signatory-role-badge">ID Number</span>
                             <input type="text" class="signatory-input purok-id-input" placeholder="Ministerial ID number">
                         </div>
+                        <label class="complete-row">
+                            <input type="checkbox" class="complete-purok-check">
+                            <div class="complete-row-text">
+                                <strong>Complete Purok</strong>
+                                <span>Includes every group that starts with this Purok number (e.g. 1-1, 1-2, 1-3 ...).</span>
+                            </div>
+                        </label>
                         <div class="sakop-row">
                             <span class="signatory-role-badge">Sakop na Grupo</span>
                             <div>
@@ -745,12 +914,26 @@
                     <div class="purok-head">
                         <div class="purok-head-left">
                             <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="color:var(--sa-ink-soft); flex-shrink:0;"><path d="M3 8l7-5 7 5v9H3z"/><path d="M8 17v-5h4v5"/></svg>
-                            <input type="text" class="purok-name-input" value="Purok 2b">
+                            <div class="purok-name-wrap">
+                                <div class="purok-name-view">
+                                    <span class="purok-name-display">Purok 2b</span>
+                                    <button type="button" class="purok-edit-btn" title="Edit Purok name" aria-label="Edit Purok name"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M12 5l3 3"/></svg></button>
+                                </div>
+                                <div class="purok-name-edit">
+                                    <input type="text" class="purok-name-input" value="Purok 2b" maxlength="40">
+                                    <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
+                                    <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
+                                </div>
+                                <div class="purok-name-error"></div>
+                            </div>
                         </div>
                         <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
                     </div>
                     <div class="purok-body">
                         <div class="signatory-row">
+                            <span class="signatory-role-badge">Assigned Number</span>
+                            <input type="number" class="signatory-input purok-number-input" placeholder="e.g. 1" min="1" value="2">
+                        </div>                        <div class="signatory-row">
                             <span class="signatory-role-badge">Secretary</span>
                             <input type="text" class="signatory-input" placeholder="Full name">
                         </div>
@@ -762,6 +945,13 @@
                             <span class="signatory-role-badge">ID Number</span>
                             <input type="text" class="signatory-input purok-id-input" placeholder="Ministerial ID number">
                         </div>
+                        <label class="complete-row">
+                            <input type="checkbox" class="complete-purok-check">
+                            <div class="complete-row-text">
+                                <strong>Complete Purok</strong>
+                                <span>Includes every group that starts with this Purok number (e.g. 1-1, 1-2, 1-3 ...).</span>
+                            </div>
+                        </label>
                         <div class="sakop-row">
                             <span class="signatory-role-badge">Sakop na Grupo</span>
                             <div>
@@ -775,6 +965,7 @@
                         </div>
                     </div>
                 </div>
+                @endif
             </div>
 
             <button type="button" class="add-purok-btn" id="addPurokBtn" style="margin-top:1rem;">
@@ -783,8 +974,9 @@
             </button>
 
             <div class="sa-save-bar">
-                <button type="button" class="sa-btn sa-btn-ghost">Discard</button>
-                <button type="button" class="sa-btn sa-btn-primary">Save Signatories</button>
+                <button type="button" class="sa-btn sa-btn-ghost" id="discardSignatoriesBtn">Discard</button>
+                <button type="button" class="sa-btn sa-btn-primary" id="saveSignatoriesBtn" disabled>Save Signatories</button>
+                <span class="sa-save-feedback" id="signatoriesFeedback" role="status"></span>
             </div>
         </div>
     </div>
@@ -841,42 +1033,59 @@
 
             <div class="gv-grid">
                 <div class="gv-field">
-                    <label for="gvLocaleNumber">Locale S Number</label>
-                    <input type="text" id="gvLocaleNumber" placeholder="e.g. S-123">
+                    <label for="gvLocale">Locale</label>
+                    <input type="text" id="gvLocale" placeholder="Locale" value="{{ $globalVariables?->locale }}">
+                </div>
+                <div class="gv-field">
+                    <label for="gvLcode">Lcode</label>
+                    <input type="text" id="gvLcode" placeholder="Lcode" value="{{ $globalVariables?->lcode }}">
+                </div>
+                <div class="gv-field">
+                    <label for="gvDistrict">District</label>
+                    <input type="text" id="gvDistrict" placeholder="District" value="{{ $globalVariables?->district }}">
+                </div>
+                <div class="gv-field">
+                    <label for="gvDcode">DCode</label>
+                    <input type="text" id="gvDcode" placeholder="DCode" value="{{ $globalVariables?->dcode }}">
+                </div>
+                <div class="gv-field">
+                    <label for="gvSNumber">S Number</label>
+                    <input type="text" id="gvSNumber" placeholder="e.g. S-123" value="{{ $globalVariables?->s_number }}">
                 </div>
                 <div class="gv-field">
                     <label for="gvPastor">Pastor / Destinado</label>
-                    <input type="text" id="gvPastor" placeholder="Full name">
+                    <input type="text" id="gvPastor" placeholder="Full name" value="{{ $globalVariables?->pastor_destinado }}">
                 </div>
                 <div class="gv-field">
-                    <label for="gvKsp">KSP ng Lokal</label>
-                    <input type="text" id="gvKsp" placeholder="Full name">
-                </div>
-                <div class="gv-field">
-                    <label for="gvPdTagasubaybay">PD Tagasubaybay</label>
-                    <input type="text" id="gvPdTagasubaybay" placeholder="Full name">
+                    <label for="gvKsp">KSP ng Lokal / Pangulong Diakono</label>
+                    <input type="text" id="gvKsp" placeholder="Full name" value="{{ $globalVariables?->ksp_pd }}">
+                    <div class="gv-hint">Also used as the Pangulong Diakono in generated forms.</div>
                 </div>
                 <div class="gv-field">
                     <label for="gvKalihimMs">Kalihim ng MS</label>
-                    <input type="text" id="gvKalihimMs" placeholder="Full name">
+                    <input type="text" id="gvKalihimMs" placeholder="Full name" value="{{ $globalVariables?->kalihim_ms }}">
                 </div>
                 <div class="gv-field">
                     <label for="gvKalihimUwp">Kalihim ng UWP</label>
-                    <input type="text" id="gvKalihimUwp" placeholder="Full name">
+                    <input type="text" id="gvKalihimUwp" placeholder="Full name" value="{{ $globalVariables?->kalihim_uwp }}">
                 </div>
 
-                <div class="gv-field disabled" id="gvBaptismField">
+                <div class="gv-field {{ $globalVariables?->dateofbaptism_requirement_boolean ? '' : 'disabled' }}" id="gvBaptismField">
                     <label for="gvBaptismDate">Date of Baptism Requirement</label>
-                    <input type="date" id="gvBaptismDate" disabled>
+                    <input type="date" id="gvBaptismDate" value="{{ $globalVariables?->baptism_requirement?->format('Y-m-d') }}" @disabled(!$globalVariables?->dateofbaptism_requirement_boolean)>
                     <div class="gv-hint">Enable "Date of Baptism Requirement" below to edit this field.</div>
                 </div>
 
-                <div class="gv-field disabled" id="gvEntryYearsField">
+                <div class="gv-field {{ $globalVariables?->dateofentryrequirement_boolean ? '' : 'disabled' }}" id="gvEntryYearsField">
                     <label for="gvEntryYears">Years Upon Date of Entry Requirement</label>
-                    <select id="gvEntryYears" disabled>
-                        <option value="1">1 year</option>
-                        <option value="2">2 years</option>
-                        <option value="3">3 years</option>
+                    <select id="gvEntryYears" @disabled(!$globalVariables?->dateofentryrequirement_boolean)>
+                        <option value="">Select years</option>
+                        <option value="1" @selected($globalVariables?->entry_years_requirement === 1)>1 year</option>
+                        <option value="2" @selected($globalVariables?->entry_years_requirement === 2)>2 years</option>
+                        <option value="3" @selected($globalVariables?->entry_years_requirement === 3)>3 years</option>
+                        @if ($globalVariables?->entry_years_requirement && !in_array($globalVariables->entry_years_requirement, [1, 2, 3], true))
+                            <option value="{{ $globalVariables->entry_years_requirement }}" selected>{{ $globalVariables->entry_years_requirement }} years</option>
+                        @endif
                     </select>
                     <div class="gv-hint">Enable "Date of Entry Requirement" below to edit this field.</div>
                 </div>
@@ -889,14 +1098,14 @@
 
                 <div class="delist-checks">
                     <div class="delist-check-row">
-                        <input type="checkbox" id="delistBaptismCheck" data-controls="gvBaptismField">
+                        <input type="checkbox" id="delistBaptismCheck" data-controls="gvBaptismField" @checked($globalVariables?->dateofbaptism_requirement_boolean)>
                         <div class="delist-check-text">
                             <label for="delistBaptismCheck">Date of Baptism Requirement</label>
                             <span>Require a recorded date of baptism before de-listment.</span>
                         </div>
                     </div>
                     <div class="delist-check-row">
-                        <input type="checkbox" id="delistEntryCheck" data-controls="gvEntryYearsField">
+                        <input type="checkbox" id="delistEntryCheck" data-controls="gvEntryYearsField" @checked($globalVariables?->dateofentryrequirement_boolean)>
                         <div class="delist-check-text">
                             <label for="delistEntryCheck">Date of Entry Requirement</label>
                             <span>Require a minimum number of years since date of entry.</span>
@@ -906,12 +1115,27 @@
             </div>
 
             <div class="sa-save-bar">
-                <button type="button" class="sa-btn sa-btn-ghost">Discard</button>
-                <button type="button" class="sa-btn sa-btn-primary">Save Global Variables</button>
+                <button type="button" class="sa-btn sa-btn-ghost" id="discardGlobalVariablesBtn">Discard</button>
+                <button type="button" class="sa-btn sa-btn-primary" id="saveGlobalVariablesBtn">Save Global Variables</button>
+                <span class="sa-save-feedback" id="globalVariablesFeedback" role="status"></span>
             </div>
         </div>
     </div>
 
+</div>
+
+<div class="sa-modal-overlay sa-success-overlay" id="signatoriesSuccessModal" role="dialog" aria-modal="true" aria-labelledby="signatoriesSuccessTitle" aria-hidden="true">
+    <div class="sa-modal sa-success-modal">
+        <div class="sa-success-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="3"></circle>
+                <path d="m14 24 7 7 14-15" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>
+            </svg>
+        </div>
+        <h2 id="signatoriesSuccessTitle">Signatories saved!</h2>
+        <p>Your Purok signatory changes have been saved successfully.</p>
+        <button type="button" class="sa-btn sa-btn-primary" id="closeSignatoriesSuccess">Continue</button>
+    </div>
 </div>
 
 <!-- ============ EDIT PERMISSIONS OF SECRETARIES (modal, launched from User Management) ============ -->
@@ -941,37 +1165,26 @@
                     </tr>
                 </thead>
                 <tbody id="permissionsTableBody">
-                    <!-- Sample rows — replace with active (is_verified = 1) secretaries from login_user later -->
-                    <tr data-name="charles andrei galvan" data-email="formalcharlesandreigalvan@gmail.com">
-                        <td>
-                            <div class="sa-user-cell">
-                                <img src="https://ui-avatars.com/api/?name=Charles+Galvan&background=0A6BD6&color=fff" alt="">
-                                <div>
-                                    <div class="sa-user-name">Charles Andrei Galvan</div>
-                                    <div class="sa-user-email">formalcharlesandreigalvan@gmail.com</div>
+                    @forelse ($users->where('is_verified', true) as $user)
+                        @php $userName = trim(($user->first_name ?? '').' '.($user->last_name ?? '')) ?: $user->gmail; @endphp
+                        <tr data-user-id="{{ $user->id }}" data-name="{{ strtolower($userName) }}" data-email="{{ strtolower($user->gmail) }}">
+                            <td>
+                                <div class="sa-user-cell">
+                                    <span class="sa-user-avatar" aria-hidden="true">{{ strtoupper(substr($userName, 0, 1)) }}</span>
+                                    <div>
+                                        <div class="sa-user-name">{{ $userName }}</div>
+                                        <div class="sa-user-email">{{ $user->gmail }}</div>
+                                    </div>
                                 </div>
-                            </div>
-                        </td>
-                        <td class="center"><input type="checkbox" class="sa-checkbox" checked></td>
-                        <td class="center"><input type="checkbox" class="sa-checkbox" checked></td>
-                        <td class="center"><input type="checkbox" class="sa-checkbox"></td>
-                        <td class="center"><input type="checkbox" class="sa-checkbox" checked></td>
-                    </tr>
-                    <tr data-name="juan dela cruz" data-email="juan.delacruz@example.com">
-                        <td>
-                            <div class="sa-user-cell">
-                                <img src="https://ui-avatars.com/api/?name=Juan+Dela+Cruz&background=64748b&color=fff" alt="">
-                                <div>
-                                    <div class="sa-user-name">Juan Dela Cruz</div>
-                                    <div class="sa-user-email">juan.delacruz@example.com</div>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="center"><input type="checkbox" class="sa-checkbox" checked></td>
-                        <td class="center"><input type="checkbox" class="sa-checkbox"></td>
-                        <td class="center"><input type="checkbox" class="sa-checkbox" checked></td>
-                        <td class="center"><input type="checkbox" class="sa-checkbox" checked></td>
-                    </tr>
+                            </td>
+                            <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="dashboard_allow" @checked($user->dashboard_allow)></td>
+                            <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="form_generator_allow" @checked($user->form_generator_allow)></td>
+                            <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="Delistment_allow" @checked($user->Delistment_allow)></td>
+                            <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="Inquire_Allow" @checked($user->Inquire_Allow)></td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="5" class="sa-empty">No verified users found.</td></tr>
+                    @endforelse
                 </tbody>
             </table>
             <div class="sa-empty" id="permEmptyState" style="display:none;">No secretaries match your search.</div>
@@ -979,7 +1192,7 @@
 
         <div class="sa-modal-save-bar">
             <button type="button" class="sa-btn sa-btn-ghost" id="cancelPermissionsBtn">Cancel</button>
-            <button type="button" class="sa-btn sa-btn-primary">Save Permissions</button>
+            <button type="button" class="sa-btn sa-btn-primary" id="savePermissionsBtn">Save Permissions</button>
         </div>
     </div>
 </div>
@@ -990,12 +1203,21 @@
         const tabBtns = document.querySelectorAll('.sa-tab-btn');
         const tabPanels = document.querySelectorAll('.sa-tab-panel');
 
+        function activateTab(tabName) {
+            const button = Array.from(tabBtns).find(tab => tab.dataset.tab === tabName);
+            const panel = document.getElementById(`tab-${tabName}`);
+            if (!button || !panel) return;
+            tabBtns.forEach(tab => tab.classList.toggle('active', tab === button));
+            tabPanels.forEach(tabPanel => tabPanel.classList.toggle('active', tabPanel === panel));
+        }
+
+        const requestedTab = window.location.hash.replace(/^#/, '');
+        if (requestedTab) activateTab(requestedTab);
+
         tabBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                tabBtns.forEach(b => b.classList.remove('active'));
-                tabPanels.forEach(p => p.classList.remove('active'));
-                btn.classList.add('active');
-                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+                activateTab(btn.dataset.tab);
+                window.history.replaceState(null, '', `#${btn.dataset.tab}`);
             });
         });
 
@@ -1011,7 +1233,7 @@
                 let visibleCount = 0;
 
                 body.querySelectorAll('tr').forEach(row => {
-                    const matches = row.dataset.name.includes(term) || row.dataset.email.includes(term);
+                    const matches = (row.dataset.name || '').includes(term) || (row.dataset.email || '').includes(term);
                     row.style.display = matches ? '' : 'none';
                     if (matches) visibleCount++;
                 });
@@ -1023,23 +1245,73 @@
         wireSearch('userSearch', 'usersTableBody', 'usersEmptyState');
         wireSearch('permSearch', 'permissionsTableBody', 'permEmptyState');
 
-        // ===== Access toggle <-> status pill sync (Users tab) =====
+        const csrfToken = @json(csrf_token());
+        const superadminUrls = {
+            users: @json(url('/superadmin/users')),
+            permissions: @json(route('superadmin.permissions.update')),
+            signatories: @json(route('superadmin.signatories.update')),
+            globalVariables: @json(route('superadmin.global-variables.update')),
+        };
+        async function sendUpdate(url, payload) {
+            const response = await fetch(url, {
+                method: 'PUT',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify(payload),
+            });
+            const body = await response.json();
+            if (!response.ok) {
+                const message = body.errors ? Object.values(body.errors).flat()[0] : body.message;
+                throw new Error(message || 'The update could not be saved.');
+            }
+            return body;
+        }
+
+        // ===== Access and role updates =====
         const usersTableBody = document.getElementById('usersTableBody');
         usersTableBody?.addEventListener('change', (e) => {
-            if (!e.target.classList.contains('access-toggle')) return;
+            const control = e.target;
+            const row = control.closest('tr[data-user-id]');
+            if (!row) return;
 
-            const row = e.target.closest('tr');
-            const pill = row.querySelector('.status-pill');
-            const isOn = e.target.checked;
+            const update = control.classList.contains('access-toggle')
+                ? { is_verified: control.checked ? 1 : 0 }
+                : control.classList.contains('tungkulin-select')
+                    ? { tungkulin: control.value || null }
+                    : null;
+            if (!update) return;
 
-            pill.classList.toggle('on', isOn);
-            pill.classList.toggle('off', !isOn);
-            pill.innerHTML = `
-                <svg viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>
-                ${isOn ? 'Verified' : 'Not Verified'}
-            `;
-            // NOTE: frontend-only for now.
-            // Later: send an AJAX/PUT request here to update is_verified in login_user.
+            const previousValue = control.type === 'checkbox' ? !control.checked : control.dataset.previousValue;
+            control.disabled = true;
+            sendUpdate(`${superadminUrls.users}/${row.dataset.userId}`, update)
+                .then(({ data }) => {
+                    if (control.classList.contains('tungkulin-select')) {
+                        control.dataset.previousValue = data.tungkulin || '';
+                    } else {
+                        const pill = row.querySelector('.status-pill');
+                        control.checked = data.is_verified;
+                        pill.classList.toggle('on', data.is_verified);
+                        pill.classList.toggle('off', !data.is_verified);
+                        pill.lastChild.textContent = data.is_verified ? 'Verified' : 'Not Verified';
+                        const permissionRow = document.querySelector(`#permissionsTableBody tr[data-user-id="${row.dataset.userId}"]`);
+                        if (!data.is_verified) {
+                            permissionRow?.remove();
+                            document.getElementById('permEmptyState').style.display =
+                                document.querySelector('#permissionsTableBody tr[data-user-id]') ? 'none' : 'block';
+                        }
+                        if (data.is_verified && !permissionRow) window.location.reload();
+                    }
+                })
+                .catch(error => {
+                    if (control.type === 'checkbox') control.checked = previousValue;
+                    else control.value = previousValue ?? '';
+                    window.alert(error.message);
+                })
+                .finally(() => { control.disabled = false; });
         });
 
         // ===== Edit Permissions of Secretaries modal =====
@@ -1093,6 +1365,27 @@
         editPermissionsBtn?.addEventListener('click', openPermissionsModal);
         closePermissionsModal?.addEventListener('click', closePermissionsModalFn);
         cancelPermissionsBtn?.addEventListener('click', closePermissionsModalFn);
+        document.getElementById('savePermissionsBtn')?.addEventListener('click', async (e) => {
+            const button = e.currentTarget;
+            const permissions = Array.from(document.querySelectorAll('#permissionsTableBody tr[data-user-id]')).map(row => {
+                const values = { id: Number(row.dataset.userId) };
+                row.querySelectorAll('[data-permission]').forEach(input => {
+                    values[input.dataset.permission] = input.checked ? 1 : 0;
+                });
+                return values;
+            });
+
+            button.disabled = true;
+            try {
+                await sendUpdate(superadminUrls.permissions, { permissions });
+                closePermissionsModalFn();
+                window.alert('Permissions saved.');
+            } catch (error) {
+                window.alert(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        });
         permModalOverlay?.addEventListener('click', (e) => {
             if (e.target === permModalOverlay) closePermissionsModalFn();
         });
@@ -1105,7 +1398,46 @@
         // ===== Signatories: add / remove Purok, and Sakop na Grupo preview =====
         const purokList = document.getElementById('purokList');
         const addPurokBtn = document.getElementById('addPurokBtn');
+        const saveSignatoriesBtn = document.getElementById('saveSignatoriesBtn');
+        const signatoriesSuccessModal = document.getElementById('signatoriesSuccessModal');
+        const closeSignatoriesSuccess = document.getElementById('closeSignatoriesSuccess');
+        if (signatoriesSuccessModal.parentElement !== document.body) {
+            document.body.appendChild(signatoriesSuccessModal);
+        }
         let purokCounter = purokList.querySelectorAll('.purok-card').length;
+        const signatoryUsers = @json($users->map(fn ($user) => [
+            'id' => $user->id,
+            'name' => trim(($user->first_name ?? '').' '.($user->last_name ?? '')) ?: $user->gmail,
+        ])->values());
+        const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+        }[character]));
+
+        function collectSignatories() {
+            return Array.from(purokList.querySelectorAll('.purok-card')).map(card => {
+                const id = card.dataset.id;
+                return {
+                    ...(id ? { id: Number(id) } : {}),
+                    purok_number: Number(card.querySelector('.purok-number-input').value),
+                    purok_name: normalizeName(card.querySelector('.purok-name-input').value),
+                    secretary: card.querySelector('.secretary-input').value || null,
+                    manggagawa: card.querySelector('.manggagawa-input').value.trim() || null,
+                    ministerial_id: card.querySelector('.purok-id-input').value.trim() || null,
+                    grupo_start: Number(card.querySelector('.sakop-from').value),
+                    grupo_end: Number(card.querySelector('.sakop-to').value),
+                    full_purok: card.querySelector('.complete-purok-check').checked ? 1 : 0,
+                };
+            });
+        }
+
+        let savedSignatoriesSnapshot = JSON.stringify(collectSignatories());
+        function updateSignatoriesSaveState() {
+            saveSignatoriesBtn.disabled = JSON.stringify(collectSignatories()) === savedSignatoriesSnapshot;
+        }
+
+        purokList.addEventListener('input', updateSignatoriesSaveState);
+        purokList.addEventListener('change', updateSignatoriesSaveState);
+        updateSignatoriesSaveState();
 
         function updateSakopPreview(card) {
             const nameInput = card.querySelector('.purok-name-input');
@@ -1114,51 +1446,90 @@
             const previewEl = card.querySelector('.sakop-preview');
             if (!nameInput || !fromInput || !toInput || !previewEl) return;
 
-            const match = nameInput.value.match(/(\d+)/);
-            const prefix = match ? match[1] : null;
+            const numberInput = card.querySelector('.purok-number-input');
+            const completeCheck = card.querySelector('.complete-purok-check');
+            const sakopRow = card.querySelector('.sakop-row');
+            const prefix = numberInput && numberInput.value !== '' ? numberInput.value : null;
             const from = fromInput.value;
             const to = toInput.value;
+            const isComplete = completeCheck && completeCheck.checked;
 
-            if (prefix && from !== '' && to !== '') {
+            sakopRow.classList.toggle('disabled', isComplete);
+            fromInput.disabled = isComplete;
+            toInput.disabled = isComplete;
+
+            if (isComplete) {
+                previewEl.textContent = prefix
+                    ? `All groups: Purok ${prefix}-1, ${prefix}-2, ${prefix}-3 ...`
+                    : 'Enter an Assigned Number to preview.';
+            } else if (prefix && from !== '' && to !== '') {
                 previewEl.textContent = `Range: Purok ${prefix}-${from} to ${prefix}-${to}`;
             } else {
-                previewEl.textContent = 'Enter a Purok number and a From/To range to preview.';
+                previewEl.textContent = 'Enter an Assigned Number and a From/To range to preview.';
             }
         }
 
-        function buildPurokCard(name) {
+        function buildPurokCard(name, number) {
             const card = document.createElement('div');
             card.className = 'purok-card';
+            const userOptions = signatoryUsers.map(user =>
+                `<option value="${user.id}">${escapeHtml(user.name)}</option>`
+            ).join('');
+            const safeName = escapeHtml(name);
             card.innerHTML = `
                 <div class="purok-head">
                     <div class="purok-head-left">
                         <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="color:var(--sa-ink-soft); flex-shrink:0;"><path d="M3 8l7-5 7 5v9H3z"/><path d="M8 17v-5h4v5"/></svg>
-                        <input type="text" class="purok-name-input" value="${name}">
+                        <div class="purok-name-wrap">
+                            <div class="purok-name-view">
+                                <span class="purok-name-display">${safeName}</span>
+                                <button type="button" class="purok-edit-btn" title="Edit Purok name" aria-label="Edit Purok name"><svg width="15" height="15" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5l3 3L7 16H4v-3z"/><path d="M12 5l3 3"/></svg></button>
+                            </div>
+                            <div class="purok-name-edit">
+                                <input type="text" class="purok-name-input" value="${safeName}" maxlength="40">
+                                <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
+                                <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
+                            </div>
+                            <div class="purok-name-error"></div>
+                        </div>
                     </div>
                     <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
                 </div>
                 <div class="purok-body">
                     <div class="signatory-row">
+                        <span class="signatory-role-badge">Assigned Number</span>
+                        <input type="number" class="signatory-input purok-number-input" placeholder="e.g. 1" min="1" value="${number}">
+                    </div>
+                    <div class="signatory-row">
                         <span class="signatory-role-badge">Secretary</span>
-                        <input type="text" class="signatory-input" placeholder="Full name">
+                        <select class="signatory-input secretary-input">
+                            <option value="">Not assigned</option>${userOptions}
+                        </select>
                     </div>
                     <div class="signatory-row">
                         <span class="signatory-role-badge">Manggagawa</span>
-                        <input type="text" class="signatory-input" placeholder="Full name">
+                        <input type="text" class="signatory-input manggagawa-input" placeholder="Full name" maxlength="255">
                     </div>
                     <div class="signatory-row">
                         <span class="signatory-role-badge">ID Number</span>
                         <input type="text" class="signatory-input purok-id-input" placeholder="Ministerial ID number">
                     </div>
+                    <label class="complete-row">
+                        <input type="checkbox" class="complete-purok-check">
+                        <div class="complete-row-text">
+                            <strong>Complete Purok</strong>
+                            <span>Includes every group that starts with this Purok number (e.g. 1-1, 1-2, 1-3 ...).</span>
+                        </div>
+                    </label>
                     <div class="sakop-row">
                         <span class="signatory-role-badge">Sakop na Grupo</span>
                         <div>
                             <div class="sakop-range-inputs">
-                                <input type="number" class="signatory-input sakop-from" placeholder="From" min="0">
+                                <input type="number" class="signatory-input sakop-from" placeholder="From" value="1" min="0">
                                 <span>to</span>
-                                <input type="number" class="signatory-input sakop-to" placeholder="To" min="0">
+                                <input type="number" class="signatory-input sakop-to" placeholder="To" value="24" min="0">
                             </div>
-                            <div class="sakop-preview">Enter a Purok number and a From/To range to preview.</div>
+                            <div class="sakop-preview">Enter an Assigned Number and a From/To range to preview.</div>
                         </div>
                     </div>
                 </div>
@@ -1168,24 +1539,142 @@
 
         addPurokBtn?.addEventListener('click', () => {
             purokCounter++;
-            const card = buildPurokCard(`Purok ${purokCounter}`);
+            while (nameExists(`Purok ${purokCounter}`)) purokCounter++;
+            const card = buildPurokCard(`Purok ${purokCounter}`, purokCounter);
             purokList.appendChild(card);
+            document.getElementById('noPuroksMessage')?.remove();
+            updateSakopPreview(card);
+            updateSignatoriesSaveState();
         });
+
+        saveSignatoriesBtn?.addEventListener('click', async (e) => {
+            const button = e.currentTarget;
+            const feedback = document.getElementById('signatoriesFeedback');
+            if (button.disabled) return;
+            const puroks = collectSignatories();
+
+            button.disabled = true;
+            feedback.textContent = 'Saving...';
+            try {
+                await sendUpdate(superadminUrls.signatories, { puroks });
+                savedSignatoriesSnapshot = JSON.stringify(puroks);
+                feedback.textContent = '';
+                signatoriesSuccessModal.classList.add('active');
+                signatoriesSuccessModal.setAttribute('aria-hidden', 'false');
+                closeSignatoriesSuccess.focus();
+            } catch (error) {
+                feedback.textContent = error.message;
+                window.alert(error.message);
+            } finally {
+                updateSignatoriesSaveState();
+            }
+        });
+        closeSignatoriesSuccess?.addEventListener('click', () => window.location.reload());
+        document.getElementById('discardSignatoriesBtn')?.addEventListener('click', () => window.location.reload());
 
         purokList?.addEventListener('click', (e) => {
             if (e.target.classList.contains('remove-purok-btn')) {
                 e.target.closest('.purok-card').remove();
+                updateSignatoriesSaveState();
+            }
+        });
+
+        purokList?.addEventListener('change', (e) => {
+            if (e.target.classList.contains('complete-purok-check')) {
+                updateSakopPreview(e.target.closest('.purok-card'));
             }
         });
 
         purokList?.addEventListener('input', (e) => {
             if (
-                e.target.classList.contains('purok-name-input') ||
+                e.target.classList.contains('purok-number-input') ||
                 e.target.classList.contains('sakop-from') ||
                 e.target.classList.contains('sakop-to')
             ) {
                 updateSakopPreview(e.target.closest('.purok-card'));
             }
+        });
+        purokList.querySelectorAll('.purok-card').forEach(updateSakopPreview);
+
+        // ===== Purok name: display + edit icon, with unique-name validation =====
+        function normalizeName(v) {
+            return v.trim().replace(/\s+/g, ' ');
+        }
+
+        function nameExists(name, exceptCard) {
+            const key = normalizeName(name).toLowerCase();
+            return Array.from(purokList.querySelectorAll('.purok-card')).some(card => {
+                if (card === exceptCard) return false;
+                const display = card.querySelector('.purok-name-display');
+                return display && normalizeName(display.textContent).toLowerCase() === key;
+            });
+        }
+
+        function validatePurokName(card) {
+            const input = card.querySelector('.purok-name-input');
+            const errorEl = card.querySelector('.purok-name-error');
+            const value = normalizeName(input.value);
+            let message = '';
+
+            if (value === '') {
+                message = 'Purok name can\'t be empty.';
+            } else if (nameExists(value, card)) {
+                message = `"${value}" is already used by another Purok. Choose a different name.`;
+            }
+
+            input.classList.toggle('invalid', message !== '');
+            errorEl.textContent = message;
+            errorEl.classList.toggle('active', message !== '');
+            return message === '';
+        }
+
+        function openNameEditor(card) {
+            const display = card.querySelector('.purok-name-display');
+            const input = card.querySelector('.purok-name-input');
+            input.value = display.textContent;
+            card.querySelector('.purok-name-view').style.display = 'none';
+            card.querySelector('.purok-name-edit').classList.add('active');
+            validatePurokName(card);
+            input.focus();
+            input.select();
+        }
+
+        function closeNameEditor(card) {
+            const input = card.querySelector('.purok-name-input');
+            const errorEl = card.querySelector('.purok-name-error');
+            input.classList.remove('invalid');
+            errorEl.classList.remove('active');
+            errorEl.textContent = '';
+            card.querySelector('.purok-name-edit').classList.remove('active');
+            card.querySelector('.purok-name-view').style.display = '';
+        }
+
+        function saveName(card) {
+            if (!validatePurokName(card)) return;
+            const input = card.querySelector('.purok-name-input');
+            card.querySelector('.purok-name-display').textContent = normalizeName(input.value);
+            closeNameEditor(card);
+        }
+
+        purokList?.addEventListener('click', (e) => {
+            const card = e.target.closest('.purok-card');
+            if (!card) return;
+            if (e.target.closest('.purok-edit-btn')) openNameEditor(card);
+            else if (e.target.closest('.purok-name-save')) saveName(card);
+            else if (e.target.closest('.purok-name-cancel')) closeNameEditor(card);
+        });
+
+        purokList?.addEventListener('input', (e) => {
+            if (e.target.classList.contains('purok-name-input')) {
+                validatePurokName(e.target.closest('.purok-card'));
+            }
+        });
+
+        purokList?.addEventListener('keydown', (e) => {
+            if (!e.target.classList.contains('purok-name-input')) return;
+            const card = e.target.closest('.purok-card');
+            if (e.key === 'Enter') { e.preventDefault(); saveName(card); }
+            if (e.key === 'Escape') { e.stopPropagation(); closeNameEditor(card); }
         });
 
         // Compute previews for the sample Puroks already on the page
@@ -1202,6 +1691,43 @@
                 input.disabled = !enabled;
             });
         });
+
+        const globalVariableFields = {
+            locale: 'gvLocale',
+            lcode: 'gvLcode',
+            district: 'gvDistrict',
+            dcode: 'gvDcode',
+            s_number: 'gvSNumber',
+            pastor_destinado: 'gvPastor',
+            ksp_pd: 'gvKsp',
+            kalihim_ms: 'gvKalihimMs',
+            kalihim_uwp: 'gvKalihimUwp',
+            baptism_requirement: 'gvBaptismDate',
+            entry_years_requirement: 'gvEntryYears',
+        };
+        document.getElementById('saveGlobalVariablesBtn')?.addEventListener('click', async (e) => {
+            const button = e.currentTarget;
+            const feedback = document.getElementById('globalVariablesFeedback');
+            const values = Object.fromEntries(Object.entries(globalVariableFields).map(([column, id]) => {
+                const value = document.getElementById(id).value;
+                return [column, value === '' ? null : value];
+            }));
+            values.dateofbaptism_requirement_boolean = document.getElementById('delistBaptismCheck').checked ? 1 : 0;
+            values.dateofentryrequirement_boolean = document.getElementById('delistEntryCheck').checked ? 1 : 0;
+
+            button.disabled = true;
+            feedback.textContent = 'Saving...';
+            try {
+                await sendUpdate(superadminUrls.globalVariables, values);
+                feedback.textContent = 'Global variables saved.';
+            } catch (error) {
+                feedback.textContent = error.message;
+                window.alert(error.message);
+            } finally {
+                button.disabled = false;
+            }
+        });
+        document.getElementById('discardGlobalVariablesBtn')?.addEventListener('click', () => window.location.reload());
     })();
 </script>
 @endsection

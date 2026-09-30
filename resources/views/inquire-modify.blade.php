@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Inquire / Modify Member')
+@section('title', 'Inquire / Modify Records')
 
 @section('content')
 <div class="reg-root">
@@ -9,54 +9,72 @@
         <header class="reg-hero">
             <div class="reg-hero-top">
                 <div>
-                    <h1>Member registry</h1>
-                    <p>Look up a member by name or registry number to view or update their record.</p>
+                    <h1>Record registry</h1>
+                    <p>Look up a record by name or registry number to view or update its information.</p>
                 </div>
-                <button type="button" class="reg-remind-btn" id="remind-open">Reminders</button>
+                <button type="button" class="reg-remind-btn" id="remind-open">Guidance</button>
             </div>
 
             <div class="reg-search">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                <input type="text" id="reg-search-input" placeholder="Full name or registry number" autocomplete="off" aria-label="Search members">
+                <input type="text" id="reg-search-input" placeholder="Full name or registry number" autocomplete="off" aria-label="Search records">
                 <button type="button" id="reg-search-btn" class="btn btn-gold">Search</button>
             </div>
             <div id="reg-search-error" class="reg-error" role="alert" hidden></div>
-
-            {{-- Remove this block once wired to the real database --}}
-            <div class="reg-demo">
-                <span>Demo data, try:</span>
-                <button type="button" class="reg-chip" data-q="Charles Andrei Galvan">Charles Andrei Galvan</button>
-                <button type="button" class="reg-chip" data-q="REG-2019-0087">REG-2019-0087</button>
-                <button type="button" class="reg-chip" data-q="Angelica">Angelica (two matches)</button>
-            </div>
         </header>
 
         <section id="reg-results" class="reg-results" aria-live="polite" hidden></section>
+
     </div>
 
+    <section class="smart-helper" aria-label="Smart Helper">
+        <div id="smart-helper-panel" class="smart-helper-panel" aria-hidden="true" inert>
+            <div class="smart-helper-window">
+                <header class="smart-helper-header">
+                    <span class="smart-helper-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="m12 2 1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9L12 2Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m19 15 .9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z" fill="currentColor"/></svg>
+                    </span>
+                    <span class="smart-helper-heading"><strong>Smart Helper</strong><small>Duplicate record checker</small></span>
+                    <button type="button" id="smart-helper-close" class="smart-helper-close" aria-label="Close Smart Helper">&times;</button>
+                </header>
+                <div class="smart-helper-inner">
+                    <p>Scans all records for exact duplicate registry numbers, duplicate names, and names at least 90% similar. Results may include different status or kapisanan values; no records are changed or removed.</p>
+                    <div class="smart-helper-toolbar">
+                        <span id="smart-helper-status" role="status">Click Scan to check for duplicate records.</span>
+                        <button type="button" id="smart-helper-scan" class="btn btn-gold">Scan records</button>
+                    </div>
+                    <div id="smart-helper-results" class="smart-helper-results" aria-live="polite"></div>
+                </div>
+            </div>
+        </div>
+        <button type="button" id="smart-helper-toggle" class="smart-helper-toggle" aria-expanded="false" aria-controls="smart-helper-panel" aria-label="Open Smart Helper">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3a8 8 0 0 0-6.7 12.4L4 21l5.9-1.7A8 8 0 1 0 12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m12 7 .9 3.1L16 11l-3.1.9L12 15l-.9-3.1L8 11l3.1-.9L12 7Z" fill="currentColor"/></svg>
+            <span>Smart Helper</span>
+            <span class="smart-helper-badge" aria-hidden="true"></span>
+        </button>
+    </section>
+
     {{-- ============ Reminder notification (right side) ============ --}}
-    <aside class="reminder" id="reminder" role="region" aria-labelledby="rem-title" hidden>
+    <aside class="reminder" id="reminder" role="dialog" aria-modal="false" aria-labelledby="rem-title" hidden>
         <div class="rem-head">
-            <span class="rem-icon" aria-hidden="true">!</span>
-            <h2 id="rem-title">Why you need to update records</h2>
+            <span class="rem-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9Z" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5m0-8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </span>
+            <div class="rem-title-wrap"><h2 id="rem-title">Record update guide</h2><p>Choose the right portal for each change.</p></div>
             <button type="button" class="rem-x" id="rem-close" aria-label="Close reminder">&times;</button>
         </div>
         <div class="rem-body">
-            <h3>Dito sa portal na ito</h3>
-            <ol>
-                <li><b>Manual na pag-update ng Binhi records.</b></li>
-                <li><b>Paglipat ng Grupo sa loob ng iisang Purok.</b> Halimbawa, 1-1 → 1-2. Kung hinati ang Purok (1A: 1–12, 1B: 13–24), hindi puwedeng tumawid, gaya ng 1-1 → 1-13.</li>
-                <li><b>Pagtatama ng maling entry:</b> Pangalan, Registry, Gender, Petsa ng Bautismo, atbp.</li>
-            </ol>
-            <h3>Sa Monthly portal lang</h3>
-            <p class="rem-path">Form Generator › Monthly › Modify</p>
-            <ul>
-                <li><b>Status</b> at <b>paglipat ng Purok</b> (kasama ang 1A ↔ 1B), para mapasok sa resumen ang bawat galaw.</li>
-                <li><b>Pag-alis ng double entry.</b></li>
-            </ul>
-            <div class="rem-warn"><b>Babala:</b> Ang double entry ay maaari lamang alisin sa Monthly portal.</div>
+            <section class="rem-guide-card">
+                <span class="rem-guide-label">Inquire / Modify</span>
+                <p>Correct personal details, such as name, registry number, gender, baptism date, and evangelist. Update Binhi records and move a group within the same Purok.</p>
+            </section>
+            <section class="rem-guide-card rem-guide-monthly">
+                <span class="rem-guide-label">Form Generator &rsaquo; Monthly &rsaquo; Modify</span>
+                <p>Change a member's status or move a group between Puroks. Remove duplicate entries here only when <strong>none of the matching records is Inactive</strong>.</p>
+            </section>
+            <div class="rem-warn"><strong>Duplicate removal:</strong> If a match includes an Inactive record, Smart Helper lets you remove that Inactive record. If all matches are active (for example, MS and UWP), use Monthly Modify.</div>
         </div>
-        <div class="rem-foot"><button type="button" class="btn btn-ink" id="rem-ok">Naintindihan ko</button></div>
+        <div class="rem-foot"><button type="button" class="btn btn-ink" id="rem-ok">Got it</button></div>
     </aside>
 
     {{-- ============ Record dialog ============ --}}
@@ -76,6 +94,7 @@
             <div id="rm-dup" class="reg-alert" hidden></div>
 
             <form id="reg-form" novalidate>
+                @csrf
                 <input type="hidden" id="rm-id" name="id">
 
                 <div class="reg-body">
@@ -84,7 +103,7 @@
                         <div class="f span2"><label for="rm-name">Name</label><input type="text" id="rm-name"><p class="err" data-err="name"></p></div>
                         <div class="f"><label for="rm-registry">Registry number</label><input type="text" id="rm-registry" placeholder="REG-2024-0001"><p class="err" data-err="registry_number"></p></div>
                         <div class="f"><label for="rm-gender">Gender</label>
-                            <select id="rm-gender"><option value="Male">Male</option><option value="Female">Female</option></select>
+                            <select id="rm-gender" required><option value="" disabled>Select gender</option><option value="Male">Male</option><option value="Female">Female</option></select>
                             <p class="err" data-err="gender"></p></div>
                         <div class="f"><label for="rm-kapisanan">Kapisanan</label><input type="text" id="rm-kapisanan"><p class="err" data-err="kapisanan"></p></div>
                         <div class="f"><label for="rm-grupo">Grupo</label><input type="number" id="rm-grupo" step="1"><p class="hint" id="rm-grupo-hint"></p><p class="err" data-err="grupo"></p></div>
@@ -167,10 +186,6 @@
 .reg-search input:focus { outline: none; }
 .reg-search:focus-within { box-shadow: 0 0 0 3px rgba(200,162,74,.6), 0 10px 30px rgba(0,0,0,.25); }
 .reg-error { margin-top: .7rem; padding: .55rem .8rem; border-radius: 8px; background: rgba(179,38,30,.18); color: #ffd7d3; font-size: .88rem; }
-.reg-demo { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-top: 1rem; color: #9fb0c8; font-size: .8rem; }
-.reg-chip { padding: .25rem .75rem; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; background: transparent; color: #e3eaf5; font: inherit; font-size: .8rem; cursor: pointer; }
-.reg-chip:hover { border-color: var(--gold); color: #e6cf94; }
-
 /* Results */
 .reg-results { margin-top: 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: 14px; background: var(--card); animation: reg-rise .5s var(--ease); }
 @keyframes reg-rise { from { opacity: 0; transform: translateY(10px); } }
@@ -188,20 +203,23 @@
 .reg-badge.is-inactive { background: #e8ecef; color: var(--muted); }
 .reg-badge.is-transferred { background: #fbf0de; color: var(--warn); }
 
-/* Reminder notification */
-.reminder { position: fixed; z-index: 900; right: 1.2rem; top: 5rem; width: min(390px, calc(100vw - 2rem)); max-height: calc(100vh - 7rem); display: flex; flex-direction: column; border-radius: 14px; border-left: 5px solid var(--gold); background: var(--card); box-shadow: 0 20px 50px rgba(16,35,58,.28); transform: translateX(115%); opacity: 0; transition: transform .55s var(--ease), opacity .4s; }
-.reminder.is-in { transform: none; opacity: 1; }
-.rem-head { display: flex; align-items: center; gap: .7rem; padding: 1rem 1rem .6rem 1.1rem; }
-.rem-icon { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; background: var(--gold); color: var(--ink); font-weight: 700; }
-.rem-head h2 { flex: 1; font-size: 1rem; font-weight: 600; line-height: 1.25; }
-.rem-x { width: 30px; height: 30px; border: 0; border-radius: 8px; background: var(--bg); color: var(--ink); font-size: 1.3rem; line-height: 1; cursor: pointer; }
-.rem-body { padding: 0 1.1rem .6rem; overflow: auto; font-size: .88rem; line-height: 1.55; }
-.rem-body h3 { margin: .7rem 0 .35rem; color: var(--gold-deep); font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-.rem-body ol, .rem-body ul { padding-left: 1.2rem; }
-.rem-body li { margin-bottom: .4rem; }
-.rem-path { display: inline-block; margin-bottom: .45rem; padding: .2rem .55rem; border-radius: 6px; background: var(--ink); color: #e6cf94; font-size: .78rem; font-weight: 600; }
-.rem-warn { margin-top: .7rem; padding: .6rem .75rem; border-radius: 9px; background: #fdebe9; color: #8e1d16; }
-.rem-foot { padding: .6rem 1.1rem 1rem; }
+/* Record update guidance */
+.reminder { position: fixed; z-index: 980; right: 1.2rem; top: 5rem; width: min(430px, calc(100vw - 2rem)); max-height: calc(100vh - 7rem); display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 18px; background: var(--card); box-shadow: 0 24px 65px rgba(16,35,58,.3); transform: translateY(12px) scale(.98); opacity: 0; visibility: hidden; transition: transform .25s var(--ease), opacity .2s, visibility .2s; }
+.reminder.is-in { transform: none; opacity: 1; visibility: visible; }
+.rem-head { display: flex; align-items: center; gap: .8rem; padding: 1.1rem 1.1rem .9rem; border-bottom: 1px solid var(--line); }
+.rem-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; background: #f5edda; color: var(--gold-deep); }
+.rem-icon svg { width: 23px; height: 23px; }
+.rem-title-wrap { flex: 1; min-width: 0; }
+.rem-title-wrap h2 { font-size: 1rem; font-weight: 700; line-height: 1.25; }
+.rem-title-wrap p { margin-top: .2rem; color: var(--muted); font-size: .78rem; }
+.rem-x { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg); color: var(--ink); font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.rem-body { display: grid; gap: .75rem; padding: 1rem 1.1rem; overflow: auto; font-size: .86rem; line-height: 1.5; }
+.rem-guide-card { padding: .85rem .9rem; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); }
+.rem-guide-monthly { background: #fffaf0; border-color: #eee0bd; }
+.rem-guide-label { display: block; margin-bottom: .35rem; color: var(--gold-deep); font-size: .73rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.rem-guide-card p { color: var(--ink); }
+.rem-warn { padding: .75rem .85rem; border: 1px solid #f0d39a; border-radius: 11px; background: #fff7e6; color: #704b0e; font-size: .81rem; line-height: 1.45; }
+.rem-foot { padding: 0 1.1rem 1.1rem; }
 .rem-foot .btn { width: 100%; }
 
 /* Dialog */
@@ -259,11 +277,48 @@
 .snack.show { transform: translate(-50%, 0); }
 
 .reg-root :focus-visible { outline: 3px solid #5b9dff; outline-offset: 2px; }
+.smart-helper { position: fixed; z-index: 950; right: 1.35rem; bottom: 1.35rem; }
+.smart-helper-toggle { display: flex; align-items: center; gap: .6rem; min-height: 54px; padding: .7rem 1rem; border: 0; border-radius: 999px; background: linear-gradient(135deg, #14264a, #0a1324); color: #fff; box-shadow: 0 10px 28px rgba(10,19,36,.3); font: inherit; font-size: .9rem; font-weight: 700; cursor: pointer; transition: transform .2s var(--ease), box-shadow .2s var(--ease); }
+.smart-helper-toggle:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(10,19,36,.36); }
+.smart-helper-toggle > svg { width: 23px; height: 23px; color: #e6cf94; }
+.smart-helper-badge { width: 8px; height: 8px; margin-left: .15rem; border-radius: 50%; background: #51d58a; box-shadow: 0 0 0 3px rgba(81,213,138,.18); }
+.smart-helper-panel { position: absolute; right: 0; bottom: calc(100% + .85rem); width: min(440px, calc(100vw - 2rem)); max-height: min(660px, calc(100vh - 7rem)); opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(12px) scale(.98); transform-origin: bottom right; transition: opacity .2s ease, transform .25s var(--ease), visibility .2s; }
+.smart-helper-panel.is-open { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0) scale(1); }
+.smart-helper-window { display: flex; flex-direction: column; max-height: min(660px, calc(100vh - 7rem)); overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--card); box-shadow: 0 24px 60px rgba(10,19,36,.3); }
+.smart-helper-header { display: flex; align-items: center; gap: .75rem; padding: .95rem 1rem; background: linear-gradient(135deg, #14264a, #0a1324); color: #fff; }
+.smart-helper-icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 12px; background: rgba(230,207,148,.14); color: #e6cf94; }
+.smart-helper-icon svg { width: 24px; height: 24px; }
+.smart-helper-heading { display: grid; flex: 1; gap: .12rem; }
+.smart-helper-heading strong { font-size: .95rem; }
+.smart-helper-heading small { color: #c3cede; font-size: .76rem; }
+.smart-helper-close { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 9px; background: rgba(255,255,255,.1); color: #fff; font-size: 1.4rem; cursor: pointer; }
+.smart-helper-close:hover { background: rgba(255,255,255,.2); }
+.smart-helper-inner { min-height: 0; padding: 1rem; overflow-y: auto; }
+.smart-helper-inner > p { margin: 0 0 .8rem; color: var(--muted); font-size: .86rem; line-height: 1.5; }
+.smart-helper-toolbar { display: flex; align-items: center; gap: .8rem; }
+.smart-helper-toolbar [role="status"] { flex: 1; color: var(--muted); font-size: .84rem; }
+.smart-helper-results { display: grid; gap: .65rem; margin-top: .9rem; }
+.smart-helper-finding { padding: .8rem .9rem; border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: 9px; background: #fffdf8; }
+.smart-helper-finding h3 { margin: 0 0 .55rem; font-size: .9rem; }
+.smart-helper-finding ul { display: grid; gap: .35rem; list-style: none; padding: 0; }
+.smart-helper-finding li { display: grid; gap: .12rem; color: var(--muted); font-size: .82rem; }
+.smart-helper-finding li strong { color: var(--ink); font-size: .88rem; }
+.smart-helper-record-actions { margin-top: .35rem; }
+.smart-helper-delete { justify-self: start; padding: .35rem .65rem; border: 1px solid #f0b5b0; border-radius: 7px; background: #fff4f2; color: #a12a20; font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer; }
+.smart-helper-delete:hover { background: #fde6e3; }
+.smart-helper-delete:disabled { cursor: wait; opacity: .65; }
+.smart-helper-delete-warning { margin: .3rem 0 0; color: #8b5a05; font-size: .76rem; line-height: 1.4; }
+.smart-helper-empty { color: var(--ok); font-size: .9rem; font-weight: 600; }
 @media (max-width: 640px) {
     .reg-grid, .reg-locks { grid-template-columns: 1fr; }
     .reg-search { flex-wrap: wrap; } .reg-search .btn { width: 100%; }
-    .reminder { left: 1rem; right: 1rem; top: auto; bottom: 1rem; width: auto; max-height: 75vh; transform: translateY(115%); }
+    .reminder { left: 1rem; right: 1rem; top: auto; bottom: 1rem; width: auto; max-height: 75vh; }
     .reg-band { flex-wrap: wrap; }
+    .smart-helper { right: 1rem; bottom: 1rem; }
+    .smart-helper-toggle { min-height: 50px; padding: .65rem .85rem; }
+    .smart-helper-panel, .smart-helper-window { max-height: calc(100vh - 6rem); }
+    .smart-helper-toolbar { align-items: stretch; flex-direction: column; }
+    .smart-helper-toolbar .btn { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .reg-root *, .reg-root *::before { animation: none !important; transition: none !important; } }
 </style>
@@ -274,35 +329,31 @@
 document.addEventListener('DOMContentLoaded', function () {
     const $ = id => document.getElementById(id);
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const SEARCH_URL = @json(route('records.search'));
+    const SMART_HELPER_URL = @json(route('records.smart-helper'));
+    const DELETE_URL = @json(route('records.destroy', ['record' => '__RECORD_ID__']));
+    const UPDATE_URL = @json(route('records.update', ['record' => '__RECORD_ID__']));
 
-    /* ---------------- Rules (edit to match your registry) ---------------- */
-    const GRUPO_MAX = 24;                                   // grupos per purok
-    const PUROK_SPLITS = { 1: [['1A', 1, 12], ['1B', 13, 24]] }; // split puroks: [label, first grupo, last grupo]
-    const zone = (purok, grupo) => {
-        const s = PUROK_SPLITS[purok];
-        if (!s) return { label: String(purok), min: 1, max: GRUPO_MAX, split: false };
-        const z = s.find(([, a, b]) => grupo >= a && grupo <= b) || s[0];
-        return { label: z[0], min: z[1], max: z[2], split: true };
-    };
+    const GRUPO_MAX = 24;
+    const GRUPO_MIN = 1;
 
-    /* ---------------- DEMO DATA: delete once wired to /members endpoints ---------------- */
-    const DEMO_MEMBERS = [
-        { id: 1, name: 'Charles Andrei Galvan', registry_number: 'REG-2024-0113', gender: 'Male', kapisanan: 'Kapisanang Bayan', purok: 3, grupo: 7, date_of_baptism: '2010-06-12', evangelist: 'Ramon Dela Cruz', date_of_entry: '2010-06-15', r2_10_eligibility: 'Eligible - Tier 2', status: 'Active' },
-        { id: 2, name: 'Maria Fe Santos', registry_number: 'REG-2019-0087', gender: 'Female', kapisanan: 'Kapisanang Kabataan', purok: 1, grupo: 15, date_of_baptism: '2005-09-03', evangelist: 'Isagani Ramos', date_of_entry: '2005-09-10', r2_10_eligibility: 'Not Eligible', status: 'Active' },
-        { id: 3, name: 'Juan Miguel Tolentino', registry_number: 'REG-2015-0042', gender: 'Male', kapisanan: 'Kapisanang Bayan', purok: 1, grupo: 4, date_of_baptism: '1998-02-20', evangelist: 'Ramon Dela Cruz', date_of_entry: '1998-02-25', r2_10_eligibility: 'Eligible - Tier 1', status: 'Inactive' },
-        { id: 4, name: 'Angelica Reyes', registry_number: 'REG-2022-0159', gender: 'Female', kapisanan: 'Kapisanang Kabataan', purok: 5, grupo: 10, date_of_baptism: '2015-11-08', evangelist: 'Isagani Ramos', date_of_entry: '2015-11-12', r2_10_eligibility: 'Under Review', status: 'Active' },
-        { id: 5, name: 'Angelica Reyes', registry_number: 'REG-2022-0160', gender: 'Female', kapisanan: 'Kapisanang Kabataan', purok: 5, grupo: 11, date_of_baptism: '2015-11-08', evangelist: 'Isagani Ramos', date_of_entry: '2015-11-12', r2_10_eligibility: 'Under Review', status: 'Active' },
-        { id: 6, name: 'Renato Bautista', registry_number: 'REG-2008-0021', gender: 'Male', kapisanan: 'Kapisanang Matanda', purok: 2, grupo: 3, date_of_baptism: '1990-04-17', evangelist: 'Domingo Aquino', date_of_entry: '1990-04-20', r2_10_eligibility: 'Eligible - Tier 3', status: 'Transferred' },
-    ];
-
-    // Swap the body of this for the real request; keep it returning a promise.
     async function saveMember(id, changes) {
-        // const res = await fetch(`/members/${id}`, { method: 'PUT',
-        //     headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content },
-        //     body: JSON.stringify(changes) });
-        // if (!res.ok) throw new Error('Save failed');
-        await new Promise(r => setTimeout(r, 400));
-        Object.assign(DEMO_MEMBERS.find(m => m.id === id), changes);
+        const response = await fetch(UPDATE_URL.replace('__RECORD_ID__', encodeURIComponent(id)), {
+            method: 'PUT',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': form.querySelector('input[name="_token"]').value,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify(changes),
+        });
+        const body = await response.json();
+        if (!response.ok) {
+            const message = body.errors ? Object.values(body.errors).flat()[0] : body.message;
+            throw new Error(message || 'Could not save the record.');
+        }
+        return body.data;
     }
 
     /* ---------------- Elements + helpers ---------------- */
@@ -312,17 +363,171 @@ document.addEventListener('DOMContentLoaded', function () {
     };
     const input = k => $(FIELDS[k][0]);
     const overlay = $('reg-modal-overlay'), modal = overlay.querySelector('.reg-modal'), form = $('reg-form');
-    let current = null, original = null, lastTrigger = null, r210 = '', r210Shown = false;
+    let current = null, original = null, lastTrigger = null, r210 = '', r210Shown = false, searchMatches = [];
 
     const initials = n => n.split(/\s+/).filter(Boolean).map((w, i, a) => (i === 0 || i === a.length - 1) ? w[0] : '').join('').toUpperCase();
     const fmtDate = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '--';
     const statusClass = s => ({ active: 'is-active', transferred: 'is-transferred' }[(s || '').toLowerCase()] || 'is-inactive');
     const norm = s => s.toLowerCase().replace(/\s+/g, ' ').trim();
-    const place = m => `Purok ${zone(m.purok, m.grupo).label}, Grupo ${m.grupo}`;
+    const place = m => [
+        m.purok ? `Purok ${m.purok}` : '',
+        m.grupo ? `Grupo ${m.grupo}` : '',
+    ].filter(Boolean).join(', ') || 'Purok / Grupo unavailable';
     const readVal = k => String(input(k).value).trim();
     function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
     let snackTimer;
     function snack(text) { const s = $('snack'); s.textContent = text; s.classList.add('show'); clearTimeout(snackTimer); snackTimer = setTimeout(() => s.classList.remove('show'), 3600); }
+
+    /* ---------------- Smart Helper ---------------- */
+    const smartToggle = $('smart-helper-toggle');
+    const smartPanel = $('smart-helper-panel');
+    const smartStatus = $('smart-helper-status');
+    const smartResults = $('smart-helper-results');
+    let smartHelperLoaded = false;
+
+    function renderSmartHelper(findings, scanned) {
+        smartResults.replaceChildren();
+        smartStatus.textContent = `Scanned ${scanned} ${scanned === 1 ? 'record' : 'records'}; found ${findings.length} ${findings.length === 1 ? 'possible issue' : 'possible issues'}.`;
+
+        if (!findings.length) {
+            smartResults.append(el('p', 'smart-helper-empty', 'No duplicate registry numbers or duplicate/similar names found.'));
+            return;
+        }
+
+        const labels = {
+            duplicate_registry: 'Duplicate registry number',
+            duplicate_name: 'Duplicate name',
+            similar_name: 'Similar names',
+        };
+
+        const parents = new Map();
+        const root = id => {
+            if (!parents.has(id)) parents.set(id, id);
+            if (parents.get(id) !== id) parents.set(id, root(parents.get(id)));
+            return parents.get(id);
+        };
+        findings.forEach(finding => {
+            const ids = finding.records.map(record => record.id);
+            ids.slice(1).forEach(id => { parents.set(root(id), root(ids[0])); });
+        });
+        const inactiveGroups = new Set();
+        findings.forEach(finding => finding.records.forEach(record => {
+            if ((record.status || '').trim().toLowerCase() === 'inactive') {
+                inactiveGroups.add(root(record.id));
+            }
+        }));
+
+        findings.forEach(finding => {
+            const card = el('article', 'smart-helper-finding');
+            let heading = labels[finding.type] || 'Possible duplicate';
+            if (finding.type === 'duplicate_registry') heading += ` — ${finding.match_value}`;
+            if (finding.similarity && finding.similarity < 100) heading += ` (${finding.similarity}% name similarity)`;
+            card.append(el('h3', '', heading));
+
+            const hasInactiveRecord = finding.records.some(record => inactiveGroups.has(root(record.id)));
+            const list = el('ul');
+            finding.records.forEach(record => {
+                const item = el('li');
+                item.append(el('strong', '', record.name || 'Name unavailable'));
+                item.append(el('span', '', `Registry: ${record.registry_number || '—'}`));
+                item.append(el('span', '', `Status: ${record.status || '—'} · Kapisanan: ${record.kapisanan || '—'}`));
+                if (record.purok || record.grupo) item.append(el('span', '', [record.purok ? `Purok ${record.purok}` : '', record.grupo ? `Grupo ${record.grupo}` : ''].filter(Boolean).join(' · ')));
+                const actions = el('div', 'smart-helper-record-actions');
+                if ((record.status || '').trim().toLowerCase() === 'inactive') {
+                    const deleteButton = el('button', 'smart-helper-delete', 'Delete inactive record');
+                    deleteButton.type = 'button';
+                    deleteButton.dataset.recordId = record.id;
+                    actions.append(deleteButton);
+                }
+                item.append(actions);
+                list.append(item);
+            });
+            card.append(list);
+            if (!hasInactiveRecord) {
+                card.append(el(
+                    'p',
+                    'smart-helper-delete-warning',
+                    'No inactive match. To remove this duplicate, change its status to Inactive in Form Generator > Monthly > Modify.'
+                ));
+            }
+            smartResults.append(card);
+        });
+    }
+
+    async function scanSmartHelper() {
+        const button = $('smart-helper-scan');
+        button.disabled = true;
+        button.textContent = 'Scanning...';
+        smartStatus.textContent = 'Scanning all records for duplicate values and similar names...';
+        smartResults.replaceChildren();
+
+        try {
+            const response = await fetch(SMART_HELPER_URL, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.message || 'Unable to scan records.');
+            renderSmartHelper(body.data || [], body.records_scanned || 0);
+            smartHelperLoaded = true;
+        } catch (error) {
+            console.error(error);
+            smartStatus.textContent = error.message || 'Unable to scan records. Please try again.';
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Scan records';
+        }
+    }
+
+    smartResults.addEventListener('click', async event => {
+        const button = event.target.closest('.smart-helper-delete');
+        if (!button) return;
+        const recordId = button.dataset.recordId;
+        if (!window.confirm('Delete this inactive record permanently? This cannot be undone.')) return;
+
+        button.disabled = true;
+        button.textContent = 'Deleting...';
+        smartStatus.textContent = 'Deleting inactive record...';
+        try {
+            const response = await fetch(DELETE_URL.replace('__RECORD_ID__', encodeURIComponent(recordId)), {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': form.querySelector('input[name="_token"]').value,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.message || 'Unable to delete this record.');
+            smartHelperLoaded = false;
+            await scanSmartHelper();
+        } catch (error) {
+            console.error(error);
+            smartStatus.textContent = error.message || 'Unable to delete this record. Please scan again.';
+            button.disabled = false;
+            button.textContent = 'Delete inactive record';
+        }
+    });
+
+    function setSmartHelperOpen(open) {
+        smartToggle.setAttribute('aria-expanded', String(open));
+        smartToggle.setAttribute('aria-label', open ? 'Close Smart Helper' : 'Open Smart Helper');
+        smartPanel.setAttribute('aria-hidden', String(!open));
+        smartPanel.inert = !open;
+        smartPanel.classList.toggle('is-open', open);
+        if (open) $('smart-helper-close').focus();
+        else smartToggle.focus();
+    }
+
+    smartToggle.addEventListener('click', () => {
+        setSmartHelperOpen(smartToggle.getAttribute('aria-expanded') !== 'true');
+    });
+    $('smart-helper-close').addEventListener('click', () => setSmartHelperOpen(false));
+    $('smart-helper-scan').addEventListener('click', scanSmartHelper);
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && smartToggle.getAttribute('aria-expanded') === 'true') {
+            setSmartHelperOpen(false);
+        }
+    });
 
     /* ---------------- Reminder notification ---------------- */
     const rem = $('reminder');
@@ -331,40 +536,100 @@ document.addEventListener('DOMContentLoaded', function () {
     $('rem-close').addEventListener('click', hideRem);
     $('rem-ok').addEventListener('click', hideRem);
     $('remind-open').addEventListener('click', showRem);
-    setTimeout(showRem, reduce ? 0 : 700);
 
     /* ---------------- Search ---------------- */
     const errBox = $('reg-search-error'), results = $('reg-results'), searchInput = $('reg-search-input');
+    let searchTimer = null, activeSearch = null, searchSequence = 0;
     function searchFail(msg) { errBox.textContent = msg; errBox.hidden = false; }
 
-    function runSearch(raw) {
+    async function runSearch(raw, showEmptyError = true) {
         const q = norm(raw ?? searchInput.value);
-        errBox.hidden = true; results.hidden = true;
-        if (!q) return searchFail('Please enter a name or registry number.');
-        const tokens = q.split(' ');
-        const found = DEMO_MEMBERS.filter(m => tokens.every(t => norm(m.name).includes(t)) || norm(m.registry_number).includes(q));
-        if (!found.length) return searchFail('No matching record found. Check the spelling or try the registry number.');
-        if (found.length === 1) return openMember(found[0]);
-        renderResults(found, q);
+        errBox.hidden = true;
+        if (!q) {
+            results.hidden = true;
+            if (showEmptyError) searchFail('Please enter a name or registry number.');
+            return;
+        }
+        if (q.length < 2) {
+            results.hidden = true;
+            return;
+        }
+
+        activeSearch?.abort();
+        activeSearch = new AbortController();
+        const controller = activeSearch;
+        const sequence = ++searchSequence;
+        const button = $('reg-search-btn');
+        button.disabled = true;
+        button.textContent = 'Searching...';
+        try {
+            const response = await fetch(`${SEARCH_URL}?q=${encodeURIComponent(q)}`, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                signal: controller.signal,
+            });
+            const body = await response.json();
+            if (sequence !== searchSequence) return;
+            if (!response.ok) throw new Error(body.message || 'Unable to search records.');
+            const found = body.data;
+            if (!found.length) return searchFail('No matching record found. Check the spelling or try the registry number.');
+            searchMatches = found;
+            renderResults(found, q);
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            if (sequence !== searchSequence) return;
+            console.error(error);
+            searchFail(error.message || 'Unable to search records. Please try again.');
+        } finally {
+            if (sequence === searchSequence) {
+                button.disabled = false;
+                button.textContent = 'Search';
+            }
+        }
     }
     function renderResults(list, q) {
         const dupNames = new Set(list.filter((m, i) => list.findIndex(x => norm(x.name) === norm(m.name)) !== i).map(m => norm(m.name)));
-        results.replaceChildren(el('h2', '', `${list.length} records match "${q}". Choose one to open.`),
+        results.replaceChildren(el('h2', '', `${list.length} ${list.length === 1 ? 'suggestion' : 'suggestions'} for "${q}". Choose a record to open.`),
             ...list.map(m => {
                 const b = el('button', 'reg-result'); b.type = 'button';
-                const who = el('span', 'who'); who.append(el('b', '', m.name), el('small', '', `${m.registry_number}, ${place(m)}`));
+                const who = el('span', 'who');
+                who.append(
+                    el('b', '', m.registry_number ? `${m.name} - ${m.registry_number}` : m.name),
+                    el('small', '', place(m))
+                );
                 b.append(el('span', 'reg-avatar', initials(m.name)), who);
                 if (dupNames.has(norm(m.name))) b.append(el('span', 'reg-dupchip', 'Same name'));
-                b.append(el('span', 'reg-badge ' + statusClass(m.status), m.status));
+                if (m.status) b.append(el('span', 'reg-badge ' + statusClass(m.status), m.status));
                 b.addEventListener('click', () => openMember(m));
                 return b;
             }));
         results.hidden = false;
     }
-    $('reg-search-btn').addEventListener('click', () => runSearch());
-    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); } });
-    document.querySelectorAll('.reg-chip').forEach(c => c.addEventListener('click', () => { searchInput.value = c.dataset.q; runSearch(c.dataset.q); }));
-
+    function scheduleSearch() {
+        clearTimeout(searchTimer);
+        activeSearch?.abort();
+        activeSearch = null;
+        searchSequence++;
+        $('reg-search-btn').disabled = false;
+        $('reg-search-btn').textContent = 'Search';
+        errBox.hidden = true;
+        results.hidden = true;
+        if (!searchInput.value.trim()) {
+            return;
+        }
+        searchTimer = setTimeout(() => runSearch(searchInput.value, false), 250);
+    }
+    $('reg-search-btn').addEventListener('click', () => {
+        clearTimeout(searchTimer);
+        runSearch(searchInput.value);
+    });
+    searchInput.addEventListener('input', scheduleSearch);
+    searchInput.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            clearTimeout(searchTimer);
+            runSearch(searchInput.value);
+        }
+    });
     /* ---------------- Open / close ---------------- */
     function openMember(m) {
         lastTrigger = document.activeElement;
@@ -374,20 +639,17 @@ document.addEventListener('DOMContentLoaded', function () {
         $('rm-avatar').textContent = initials(m.name);
         $('rm-name-display').textContent = m.name;
         $('rm-registry-display').textContent = m.registry_number;
-        const badge = $('rm-status-badge'); badge.textContent = m.status; badge.className = 'reg-badge ' + statusClass(m.status);
+        const badge = $('rm-status-badge'); badge.textContent = m.status || 'Unknown'; badge.className = 'reg-badge ' + statusClass(m.status);
 
-        const z = zone(m.purok, m.grupo);
-        $('rm-purok-display').textContent = `Purok ${z.label}`;
+        $('rm-purok-display').textContent = m.purok ? `Purok ${m.purok}` : '--';
         $('rm-status-text').textContent = m.status;
         $('rm-entry-display').textContent = fmtDate(m.date_of_entry);
         r210 = m.r2_10_eligibility || '--'; r210Shown = false;
         $('rm-r210-display').textContent = '••••••••••'; $('rm-r210-toggle').textContent = 'Show';
-        input('grupo').min = z.min; input('grupo').max = z.max;
-        $('rm-grupo-hint').textContent = z.split
-            ? `Purok ${z.label} allows Grupo ${z.min} to ${z.max}. Moving between 1A and 1B is done in Monthly.`
-            : `Stays inside Purok ${m.purok} (Grupo ${z.min} to ${z.max}).`;
+        input('grupo').min = GRUPO_MIN; input('grupo').max = GRUPO_MAX;
+        $('rm-grupo-hint').textContent = `Grupo must stay between ${GRUPO_MIN} and ${GRUPO_MAX}.`;
 
-        const twins = DEMO_MEMBERS.filter(x => x.id !== m.id && norm(x.name) === norm(m.name));
+        const twins = searchMatches.filter(x => x.id !== m.id && norm(x.name) === norm(m.name));
         const dup = $('rm-dup');
         dup.hidden = !twins.length;
         if (twins.length) dup.textContent = `Another record has this same name (${twins.map(t => t.registry_number).join(', ')}). If it is a double entry, it can only be removed in the Monthly portal.`;
@@ -434,19 +696,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function validate() {
         const errs = {};
         if (readVal('name').length < 2) errs.name = 'Enter the full name.';
-        const reg = readVal('registry_number').toUpperCase();
-        if (!/^REG-\d{4}-\d{4}$/.test(reg)) errs.registry_number = 'Use the format REG-YYYY-NNNN.';
-        else {
-            const clash = DEMO_MEMBERS.find(m => m.id !== current.id && m.registry_number.toUpperCase() === reg);
-            if (clash) errs.registry_number = `Already used by ${clash.name}.`;
-        }
+        const g = Number(readVal('grupo'));
+        if (readVal('grupo') && (!Number.isInteger(g) || g < GRUPO_MIN || g > GRUPO_MAX))
+            errs.grupo = `Grupo must be ${GRUPO_MIN} to ${GRUPO_MAX}.`;
         if (!readVal('gender')) errs.gender = 'Choose a gender.';
-        const g = Number(readVal('grupo')), z = zone(current.purok, original.grupo);
-        if (!readVal('grupo') || !Number.isInteger(g) || g < z.min || g > z.max)
-            errs.grupo = `Grupo must be ${z.min} to ${z.max}.` + (z.split ? ' Crossing 1A and 1B is done in Monthly.' : '');
         const d = readVal('date_of_baptism');
-        if (!d) errs.date_of_baptism = 'Enter the date of baptism.';
-        else if (new Date(d + 'T00:00:00') > new Date()) errs.date_of_baptism = 'The date cannot be in the future.';
+        if (d && new Date(d + 'T00:00:00') > new Date()) errs.date_of_baptism = 'The date cannot be in the future.';
         Object.entries(errs).forEach(([k, msg]) => {
             const p = form.querySelector(`[data-err="${k}"]`); p.textContent = msg; p.closest('.f').classList.add('has-error');
         });
@@ -471,17 +726,18 @@ document.addEventListener('DOMContentLoaded', function () {
     $('reg-back-btn').addEventListener('click', () => modal.classList.remove('is-review'));
     $('reg-confirm-btn').addEventListener('click', async () => {
         const list = changes(), payload = {};
-        list.forEach(c => { payload[c.key] = c.key === 'registry_number' ? readVal(c.key).toUpperCase() : c.key === 'grupo' ? Number(readVal(c.key)) : readVal(c.key); });
+        list.forEach(c => { payload[c.key] = c.key === 'registry_number' ? readVal(c.key).toUpperCase() : readVal(c.key); });
         const btn = $('reg-confirm-btn'); btn.disabled = true; btn.textContent = 'Saving...';
         try {
-            await saveMember(current.id, payload);
+            const updated = await saveMember(current.id, payload);
+            current = updated;
             const name = payload.name || current.name;
             closeModal(true);
             snack(`Record updated: ${name} (${list.length} ${list.length === 1 ? 'change' : 'changes'})`);
             results.hidden = true;
         } catch (err) {
             console.error(err);
-            $('reg-review-err').textContent = 'Could not save the changes. Please try again.';
+            $('reg-review-err').textContent = err.message || 'Could not save the changes. Please try again.';
         } finally { btn.disabled = false; btn.textContent = 'Confirm and save'; }
     });
 });

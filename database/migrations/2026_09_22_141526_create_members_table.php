@@ -22,6 +22,7 @@ return new class extends Migration
             $table->string('kalagayan')->nullable();
             $table->boolean('r2_10_endorsement')->default(false);
             $table->text('notes')->nullable();
+            $table->timestamps();
         });
     }
 

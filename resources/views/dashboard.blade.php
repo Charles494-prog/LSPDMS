@@ -7,7 +7,7 @@
     <header class="dash-head">
         <div>
             <h1>Dashboard</h1>
-            <p class="dash-lede">Active records, updating progress and monthly movement.</p>
+            <p class="dash-lede">{{ $globalVariables?->locale ?: 'Records' }} · Active records and updating progress</p>
         </div>
         <button type="button" class="primary-btn" id="open-baptisee" aria-haspopup="dialog">
             New Baptisee <span class="badge" id="bap-count"></span>
@@ -40,20 +40,20 @@
         <section class="panel span-5" aria-labelledby="monitor-title">
             <h2 id="monitor-title">Updating progress</h2>
             <div class="gauges">
-                <figure class="gauge" data-value="28.96">
-                    <svg viewBox="0 0 120 120" role="img" aria-label="R2-10 Pendings 28.96%"><circle class="g-track" cx="60" cy="60" r="50"/><circle class="g-bar" cx="60" cy="60" r="50" transform="rotate(-90 60 60)"/><text class="g-text" x="60" y="60">0%</text></svg>
-                    <figcaption>R2-10 Pendings</figcaption>
+                <figure class="gauge" data-value="{{ number_format($dashboardMetrics['r210Updating'], 2, '.', '') }}">
+                    <svg viewBox="0 0 120 120" role="img" aria-label="R2-10 endorsement completion"><circle class="g-track" cx="60" cy="60" r="50"/><circle class="g-bar" cx="60" cy="60" r="50" transform="rotate(-90 60 60)"/><text class="g-text" x="60" y="60">0%</text></svg>
+                    <figcaption>R2-10 Updating</figcaption>
                 </figure>
-                <figure class="gauge" data-value="0">
+                <figure class="gauge" data-value="{{ number_format($dashboardMetrics['registryCompletion'], 2, '.', '') }}">
                     <button type="button" class="gauge-btn" id="open-registry" aria-haspopup="dialog">
                         <svg viewBox="0 0 120 120" role="img" aria-label="Registry Updating"><circle class="g-track" cx="60" cy="60" r="50"/><circle class="g-bar" cx="60" cy="60" r="50" transform="rotate(-90 60 60)"/><text class="g-text" x="60" y="60">0%</text></svg>
                         <span class="cap">Registry Updating</span>
                         <span class="cap-hint">See what's missing</span>
                     </button>
                 </figure>
-                <figure class="gauge" data-value="30.03">
-                    <svg viewBox="0 0 120 120" role="img" aria-label="LSP / Locale S # 30.03%"><circle class="g-track" cx="60" cy="60" r="50"/><circle class="g-bar" cx="60" cy="60" r="50" transform="rotate(-90 60 60)"/><text class="g-text" x="60" y="60">0%</text></svg>
-                    <figcaption>LSP / Locale S #</figcaption>
+                <figure class="gauge" data-value="{{ number_format($dashboardMetrics['localeActivePercentage'], 2, '.', '') }}">
+                    <svg viewBox="0 0 120 120" role="img" aria-label="Active records as a percentage of Locale S Number"><circle class="g-track" cx="60" cy="60" r="50"/><circle class="g-bar" cx="60" cy="60" r="50" transform="rotate(-90 60 60)"/><text class="g-text" x="60" y="60">0%</text></svg>
+                    <figcaption>LSP / Locale</figcaption>
                 </figure>
             </div>
         </section>
@@ -82,7 +82,10 @@
                 <h2 id="locale-title">Records by CFO group</h2>
                 <div class="seg" role="radiogroup" aria-label="Kalagayan" id="locale-seg"></div>
             </div>
-            <div class="chart-box" style="height:190px"><canvas id="locale-chart" role="img" aria-label="Records by locale group"></canvas></div>
+            <div class="chart-box chart-doughnut" style="height:190px">
+                <canvas id="locale-chart" role="img" aria-label="Records by CFO group"></canvas>
+                <div class="chart-center" aria-hidden="true"><strong id="locale-total">0</strong><span>RECORDS</span></div>
+            </div>
             <ul class="legend legend-values" id="locale-legend"></ul>
         </section>
 
@@ -98,10 +101,10 @@
                 </div>
                 <aside class="filters">
                     <div class="filter-head">
-                        <span>Month, 2025</span>
+                        <span>Month</span>
                         <button type="button" class="link-btn" id="month-clear">All periods</button>
                     </div>
-                    <div class="chips months" id="tl-months" role="group" aria-label="Months of 2025"></div>
+                    <div class="chips months" id="tl-months" role="group" aria-label="Month filter"></div>
                     <p class="hint" id="month-hint">Select a month, then another to pick a range.</p>
                     <div class="filter-head">
                         <span>Purok</span>
@@ -124,10 +127,18 @@
 
     <dialog class="modal modal-wide" id="registry-modal" aria-labelledby="reg-title">
         <div class="modal-head">
-            <div><h2 id="reg-title">Registry updating monitoring</h2><p>Records with no data in each column. Birthday is not counted.</p></div>
+            <div><h2 id="reg-title">Registry updating monitoring</h2><p>MS, UWP, and MK records only. Blank fields and Registry values of RFID are counted as missing. Click any count to view the records.</p></div>
             <button type="button" class="modal-x" data-close aria-label="Close">&times;</button>
         </div>
         <div class="modal-body" id="reg-body"></div>
+    </dialog>
+
+    <dialog class="modal" id="registry-details-modal" aria-labelledby="registry-details-title">
+        <div class="modal-head">
+            <div><h2 id="registry-details-title">Records missing data</h2><p id="registry-details-sub"></p></div>
+            <button type="button" class="modal-x" data-close aria-label="Close">&times;</button>
+        </div>
+        <div class="modal-body" id="registry-details-body"></div>
     </dialog>
 </div>
 @endsection
@@ -177,21 +188,33 @@
     .empty { padding: 3rem 1rem; text-align: center; color: var(--muted); }
     .empty strong { display: block; margin-bottom: .3rem; color: var(--ink); font-size: 1.15rem; }
 
-    .reg { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 1.5rem; }
+    .reg { display: block; }
     .tbl-wrap { overflow-x: auto; }
-    .reg .tbl th, .reg .tbl td { text-align: center; }
-    .reg .tbl th:first-child, .reg .tbl td:first-child { text-align: left; font-weight: 700; }
-    .reg .gap-cell { background: #fdecd9; color: #964508; font-weight: 700; }
+    .reg .tbl { min-width: 760px; table-layout: fixed; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .reg .tbl th, .reg .tbl td { width: auto; text-align: center; vertical-align: middle; }
+    .reg .tbl th:first-child, .reg .tbl td:first-child { position: sticky; left: 0; width: 140px; background: var(--card); text-align: left; font-weight: 700; z-index: 1; }
+    .reg .tbl thead th { position: sticky; top: 0; background: #f2f6fa; color: var(--ink); z-index: 2; }
+    .reg .tbl thead th:first-child { background: #f2f6fa; z-index: 3; }
+    .reg .tbl tbody tr:nth-child(even) td:not(.gap-cell):not(.ok-cell):not(.tot) { background: #fafbfd; }
+    .reg .gap-cell { background: #fff4e8; color: #964508; font-weight: 700; }
     .reg .ok-cell { color: var(--off); }
-    .reg .tot { background: var(--bg); font-weight: 700; }
-    .reg tfoot td { border-top: 2px solid var(--ink); border-bottom: 0; font-weight: 700; }
+    .reg-count { display: inline-grid; min-width: 2.2rem; min-height: 2rem; place-items: center; padding: .2rem .55rem; border: 1px solid #f3d4b6; border-radius: 999px; background: #fff; color: #964508; font: inherit; font-weight: 750; cursor: pointer; }
+    .reg-count:hover { border-color: var(--ms); background: #eef5fb; color: var(--ms); }
+    .reg-count.is-zero { border-color: transparent; background: transparent; color: #8995a2; }
+    .reg-count.is-zero:hover { border-color: var(--line); background: #f5f8fb; color: var(--ms); }
+    .reg .tot { background: #eef3f8; font-weight: 700; }
+    .reg tfoot td { border-top: 2px solid #c8d3df; background: #f6f8fb; font-weight: 700; }
+    .reg-summary { margin-top: 1.3rem; padding: 1rem; border: 1px solid var(--line); border-radius: 10px; background: #fafbfd; }
     .reg-summary h3 { margin: 0 0 .8rem; font-size: 1rem; font-weight: 800; }
-    .sum-item + .sum-item { margin-top: .8rem; }
-    .sum-top { display: flex; justify-content: space-between; gap: .5rem; font-size: .85rem; }
-    .sum-top span:last-child { font-weight: 700; }
-    .meter { height: 8px; margin-top: .3rem; border-radius: 99px; background: var(--bg); overflow: hidden; }
+    .reg-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
+    .sum-item { min-width: 0; padding: .7rem; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+    .sum-top { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; font-size: .82rem; }
+    .sum-top span:first-child { overflow-wrap: anywhere; }
+    .sum-top span:last-child { flex: none; font-weight: 750; }
+    .meter { height: 7px; margin-top: .55rem; border-radius: 99px; background: var(--bg); overflow: hidden; }
     .meter span { display: block; height: 100%; border-radius: inherit; }
-    @media (max-width: 800px) { .reg { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { .reg-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 560px) { .reg-summary-grid { grid-template-columns: 1fr; } }
 
     /* Hero */
     .hero {
@@ -218,6 +241,9 @@
     .panel > h2 { margin-bottom: .9rem; }
     .panel-row { display: flex; justify-content: space-between; align-items: center; gap: .75rem; flex-wrap: wrap; margin-bottom: .9rem; }
     .chart-box { position: relative; min-width: 0; }
+    .chart-center { position: absolute; top: 50%; left: 50%; display: grid; justify-items: center; gap: 2px; min-width: 74px; padding: .15rem .3rem; transform: translate(-50%, -50%); border-radius: 8px; background: var(--card); pointer-events: none; }
+    .chart-center strong { color: var(--ink); font-size: 1.3rem; font-weight: 800; line-height: 1.1; }
+    .chart-center span { color: var(--muted); font-size: .58rem; font-weight: 750; letter-spacing: .04em; }
 
     .legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin-top: .7rem; font-size: .8rem; color: var(--muted); }
     .legend li { display: flex; align-items: center; gap: .4rem; }
@@ -245,9 +271,10 @@
     .gbar span { display: block; height: 100%; width: 0; transition: width .9s cubic-bezier(.2,.8,.2,1); }
 
     /* Segmented control + chips */
-    .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--bg); }
-    .seg button { padding: .3rem .7rem; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
-    .seg button[aria-checked="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(16,35,58,.15); }
+    .seg { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: #f4f7fa; }
+    .seg button { min-width: 42px; padding: .38rem .72rem; border: 0; border-radius: 7px; background: transparent; color: var(--muted); font: inherit; font-size: .78rem; font-weight: 750; cursor: pointer; transition: background .18s ease, color .18s ease, box-shadow .18s ease; }
+    .seg button:hover { color: var(--ink); background: rgba(255,255,255,.7); }
+    .seg button[aria-checked="true"] { background: var(--card); color: var(--ms); box-shadow: 0 1px 3px rgba(16,35,58,.16); }
 
     .ot { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 1.25rem; }
     .ot-chart { position: relative; height: 340px; min-width: 0; }
@@ -302,42 +329,42 @@ document.addEventListener('DOMContentLoaded', () => {
         Chart.defaults.animation = reduceMotion ? false : { duration: 800, easing: 'easeOutQuart' };
     }
 
-    /* ---------- Sample data (reconciles to 442 active records) ---------- */
-    const COLORS = { ms: '#0f4c81', uwp: '#e07a1f', mk: '#2a9d8f', off: '#9aa5b1' };
-    const KEYS = ['ms', 'uwp', 'mk'], NAMES = { ms: 'MS', uwp: 'UWP', mk: 'MK' };
-    const puroks = [
-        { id: 1, ms: 51, uwp: 11, mk: 5 }, { id: 2, ms: 24, uwp: 3, mk: 3 }, { id: 3, ms: 66, uwp: 11, mk: 11 },
-        { id: 4, ms: 71, uwp: 28, mk: 7 }, { id: 5, ms: 35, uwp: 6, mk: 1 }, { id: 6, ms: 84, uwp: 12, mk: 13 },
-    ].map(p => ({ ...p, total: p.ms + p.uwp + p.mk }));
-    const sum = k => puroks.reduce((a, p) => a + p[k], 0);
-    const active = { ms: sum('ms'), uwp: sum('uwp'), mk: sum('mk') };
-    const totalActive = active.ms + active.uwp + active.mk;
-    const inactive = 157;
-    const gender = { female: { ms: 156, uwp: 34, mk: 18 } };
-    gender.male = { ms: active.ms - 156, uwp: active.uwp - 34, mk: active.mk - 18 };
-    const locale = { MS: [70, 146, 115], UWP: [12, 38, 21], MK: [6, 22, 12] };
-    const LOCALE = [['Binhi', '#6a4c93'], ['Kadiwa', '#1982c4'], ['Buklod', '#d1495b']];
-    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const DATA_MONTHS = 10;
-    const shape = [16, 16, 14, 11, 7, 7, 5, 2, 1, 0];
-    const overtime = puroks.map(p => {
-        const drop = Math.round(p.ms * 0.31);
-        return { ms: shape.map(s => p.ms + Math.round(s * drop / 16)), uwp: Array(DATA_MONTHS).fill(p.uwp), mk: Array(DATA_MONTHS).fill(p.mk) };
-    });
-
-    /* ---------- Registry updating: missing entries per column, per purok (birthday excluded) ---------- */
-    const REG_FIELDS = [
-        ['Registry', [0, 0, 0, 4, 2, 4]], ['Gender', [0, 0, 0, 0, 0, 0]], ['Grupo', [0, 0, 0, 0, 0, 1]],
-        ['Kapisanan', [0, 0, 0, 2, 2, 3]], ['Baptism date', [3, 1, 4, 10, 11, 8]], ['Evangelist', [4, 0, 2, 10, 11, 6]],
-        ['Entry date', [0, 0, 0, 0, 0, 1]], ['Binhi', [8, 9, 12, 11, 4, 29]], ['Purok', [0, 0, 0, 0, 0, 0]],
-    ];
+    /* ---------- Database-backed dashboard metrics ---------- */
+    const DASHBOARD = @json($dashboardMetrics);
+    const COLORS = { MS: '#0f4c81', UWP: '#e07a1f', MK: '#2a9d8f', INACTIVE: '#9aa5b1', UNSPECIFIED: '#c8ced5' };
+    const EXTRA_COLORS = ['#6a4c93', '#1982c4', '#d1495b', '#4f7c5a', '#a65c2e'];
+    const colorFor = (code, index = 0) => COLORS[code] || EXTRA_COLORS[index % EXTRA_COLORS.length];
+    const KEYS = DASHBOARD.activeStatuses;
+    const NAMES = Object.fromEntries(KEYS.map(code => [code, code]));
+    const statuses = DASHBOARD.statuses;
+    const active = Object.fromEntries(KEYS.map(code => [code, statuses.find(status => status.code === code)?.count || 0]));
+    const totalActive = DASHBOARD.activeCount;
+    const inactive = DASHBOARD.inactiveCount;
+    const puroks = DASHBOARD.puroks.map(p => ({
+        id: p.id,
+        ...Object.fromEntries(KEYS.map(code => [code, p.counts[code] || 0])),
+        total: p.total,
+        recordTotal: p.recordTotal,
+    }));
+    const gender = DASHBOARD.gender;
+    const locale = Object.fromEntries(KEYS.map(code => [code, DASHBOARD.groupLabels.map(label => DASHBOARD.groupCounts[code]?.[label] || 0)]));
+    const LOCALE = DASHBOARD.groupLabels.map((label, index) => [label, ['#4169a1', '#e59a3a', '#3b9b88'][index]]);
+    const MONTHS = DASHBOARD.monthLabels;
+    const DATA_MONTHS = MONTHS.length;
+    const overtime = DASHBOARD.monthlyPurokCounts;
+    const REG_FIELDS = DASHBOARD.registryReport.map(field => [field.label, field.missing, field.details]);
     const add = a => a.reduce((x, y) => x + y, 0);
-    const regTotals = puroks.map(p => p.total), regAll = add(regTotals);
+    const registryPuroks = DASHBOARD.registryPuroks;
+    const regTotals = registryPuroks.map(p => p.recordTotal), regAll = DASHBOARD.registryRecordCount;
     const regOverall = regAll * REG_FIELDS.length;
-    const regPct = (regOverall - add(REG_FIELDS.map(f => add(f[1])))) / regOverall * 100;
+    const regPct = DASHBOARD.registryCompletion;
     const regGauge = document.getElementById('open-registry').closest('.gauge');
     regGauge.dataset.value = regPct.toFixed(2);
     regGauge.querySelector('svg').setAttribute('aria-label', `Registry Updating ${regPct.toFixed(2)}%`);
+    document.querySelectorAll('.gauge')[0].querySelector('svg').setAttribute('aria-label', `R2-10 Updating ${DASHBOARD.r210Updating.toFixed(2)}%`);
+    document.querySelectorAll('.gauge')[2].querySelector('svg').setAttribute('aria-label', `LSP / Locale: ${DASHBOARD.activeCount} active records of ${DASHBOARD.localeSNumberTarget} S Number (${DASHBOARD.localeActivePercentage.toFixed(2)}%)`);
+    document.querySelectorAll('.gauge')[2].dataset.value = DASHBOARD.localeActivePercentage.toFixed(2);
+    document.querySelectorAll('.gauge')[0].dataset.value = DASHBOARD.r210Updating.toFixed(2);
 
     /* ---------- Helpers ---------- */
     const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
@@ -374,19 +401,19 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(tick);
     }
     function segments(container, parts, base) {
-        const nodes = parts.map(([label, n, color]) => { const s = el('span'); s.style.background = color; s.title = `${label}: ${n}`; return [s, n / base * 100]; });
+        const nodes = parts.map(([label, n, color]) => { const s = el('span'); s.style.background = color; s.title = `${label}: ${n}`; return [s, base ? n / base * 100 : 0]; });
         container.replaceChildren(...nodes.map(n => n[0]));
         requestAnimationFrame(() => requestAnimationFrame(() => nodes.forEach(([s, w]) => { s.style.width = w + '%'; })));
     }
-    const statusItems = KEYS.map(k => [NAMES[k], COLORS[k]]);
+    const statusItems = KEYS.map(k => [NAMES[k], colorFor(k)]);
 
     /* ---------- Hero ---------- */
     animateNumber($('hero-total'), totalActive, 0, '');
     animateNumber($('hero-inactive'), inactive, 0, '');
-    segments($('split-bar'), KEYS.map(k => [NAMES[k], active[k], COLORS[k]]), totalActive);
+    segments($('split-bar'), KEYS.map(k => [NAMES[k], active[k], colorFor(k)]), totalActive);
     $('split-bar').setAttribute('aria-label', 'Active records: ' + KEYS.map(k => `${NAMES[k]} ${active[k]}`).join(', '));
     $('split-legend').replaceChildren(...KEYS.map(k => {
-        const li = el('li'); li.append(swatch(COLORS[k]), NAMES[k] + ' ', el('strong', '', active[k])); return li;
+        const li = el('li'); li.append(swatch(colorFor(k)), NAMES[k] + ' ', el('strong', '', active[k])); return li;
     }));
 
     /* ---------- By purok ---------- */
@@ -408,13 +435,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const purokChart = makeChart('purok-chart', {
         type: 'bar',
         data: {
-            labels: puroks.map(p => `Purok ${p.id} · ${p.total}`),
-            datasets: KEYS.map(k => ({ label: NAMES[k], data: puroks.map(p => p[k]), backgroundColor: COLORS[k], barPercentage: .7, borderSkipped: false })),
+            labels: puroks.map(p => `${p.id === 'Unassigned' ? 'Unassigned' : `Purok ${p.id}`} · ${p.total}`),
+            datasets: KEYS.map(k => ({ label: NAMES[k], data: puroks.map(p => p[k]), backgroundColor: colorFor(k), barPercentage: .7, borderSkipped: false })),
         },
         options: {
             indexAxis: 'y', responsive: true, maintainAspectRatio: false,
             scales: {
-                x: { stacked: true, display: false, min: 0, max: Math.max(...puroks.map(p => p.total)) },
+                x: { stacked: true, display: false, min: 0, max: Math.max(1, ...puroks.map(p => p.total)) },
                 y: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: INK, font: { size: 12, weight: '600' } } },
             },
             plugins: { legend: { display: false } },
@@ -422,62 +449,118 @@ document.addEventListener('DOMContentLoaded', () => {
         plugins: [barLabels],
     });
     if (purokChart) purokChart.canvas.setAttribute('aria-label',
-        'Active records by purok: ' + puroks.map(p => `Purok ${p.id} ${p.total} (MS ${p.ms}, UWP ${p.uwp}, MK ${p.mk})`).join('; '));
+        'Active records by purok: ' + puroks.map(p => `${p.id === 'Unassigned' ? 'Unassigned' : `Purok ${p.id}`} ${p.total} (${KEYS.map(k => `${k} ${p[k]}`).join(', ')})`).join('; '));
 
     /* ---------- Gauges ---------- */
     document.querySelectorAll('.gauge').forEach((g, i) => {
         const v = Number(g.dataset.value), c = 2 * Math.PI * 50;
         setTimeout(() => {
-            g.querySelector('.g-bar').style.strokeDashoffset = String(c * (1 - v / 100));
+            g.querySelector('.g-bar').style.strokeDashoffset = String(c * (1 - Math.min(Math.max(v, 0), 100) / 100));
             animateNumber(g.querySelector('.g-text'), v, 2, '%');
         }, reduceMotion ? 0 : 150 + i * 120);
     });
 
     /* ---------- Gender ---------- */
     ['female', 'male'].forEach(key => {
-        const g = gender[key], n = g.ms + g.uwp + g.mk, pct = n / totalActive * 100;
-        segments($(`bar-${key}`), KEYS.map(k => [NAMES[k], g[k], COLORS[k]]), totalActive);
-        $(`bar-${key}`).setAttribute('aria-label', `${key}: ${pct.toFixed(2)}% of active records (MS ${g.ms}, UWP ${g.uwp}, MK ${g.mk})`);
+        const g = gender[key], n = add(KEYS.map(k => g[k] || 0)), pct = totalActive ? n / totalActive * 100 : 0;
+        segments($(`bar-${key}`), KEYS.map(k => [NAMES[k], g[k] || 0, colorFor(k)]), totalActive);
+        $(`bar-${key}`).setAttribute('aria-label', `${key}: ${pct.toFixed(2)}% of active records (${KEYS.map(k => `${k} ${g[k] || 0}`).join(', ')})`);
         animateNumber($(`pct-${key}`), pct, 2, '%');
     });
     legend('gender-legend', statusItems);
 
     /* ---------- Doughnuts ---------- */
+    const doughnutCenter = {
+        id: 'doughnutCenter',
+        afterDraw(chart) {
+            if (chart.canvas.id === 'locale-chart') return;
+            if (!chart.chartArea) return;
+            const values = chart.data.datasets[0]?.data || [];
+            const total = chart.$centerTotal ?? values.reduce((sum, value) => sum + (Number(value) || 0), 0);
+            const { left, right, top, bottom } = chart.chartArea;
+            const x = (left + right) / 2, y = (top + bottom) / 2;
+            const { ctx } = chart;
+            ctx.save();
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = INK;
+            ctx.font = `750 20px ${Chart.defaults.font.family}`;
+            ctx.fillText(String(total), x, y - 5);
+            ctx.fillStyle = MUTED;
+            ctx.font = `700 9px ${Chart.defaults.font.family}`;
+            ctx.fillText('RECORDS', x, y + 13);
+            ctx.restore();
+        },
+    };
     const doughnut = (id, labels, data, colors) => makeChart(id, {
         type: 'doughnut',
-        data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: '#fff', borderWidth: 2 }] },
-        options: { cutout: '62%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } },
+        data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: '#fff', borderWidth: 3, borderRadius: 4, hoverOffset: 6, spacing: 2 }] },
+        options: {
+            cutout: '68%',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label(context) {
+                            const value = Number(context.raw) || 0;
+                            const total = context.dataset.data.reduce((sum, item) => sum + (Number(item) || 0), 0);
+                            const percent = total ? ` (${(value / total * 100).toFixed(1)}%)` : '';
+                            return `${context.label}: ${value}${percent}`;
+                        },
+                    },
+                },
+            },
+        },
+        plugins: [doughnutCenter],
     });
 
-    const pieItems = [...KEYS.map(k => [NAMES[k], COLORS[k], active[k]]), ['Inactive', COLORS.off, inactive]];
+    const pieItems = ['MS', 'MK', 'UWP'].map(status => [
+        status,
+        colorFor(status),
+        DASHBOARD.kalagayanCounts[status] || 0,
+    ]);
     const pie = doughnut('pie-chart', pieItems.map(i => i[0]), pieItems.map(i => i[2]), pieItems.map(i => i[1]));
-    valueLegend('pie-legend', pieItems, totalActive + inactive);
+    valueLegend('pie-legend', pieItems, add(pieItems.map(i => i[2])));
     if (pie) pie.canvas.setAttribute('aria-label', 'Records by kalagayan: ' + pieItems.map(i => `${i[0]} ${i[2]}`).join(', '));
 
-    const localeChart = doughnut('locale-chart', LOCALE.map(l => l[0]), locale.MS, LOCALE.map(l => l[1]));
+    const GROUP_KEYS = ['MS', 'MK', 'UWP'];
+    const allGroupCounts = LOCALE.map((_, index) => GROUP_KEYS.reduce((sum, key) => sum + (locale[key]?.[index] || 0), 0));
+    locale.ALL = allGroupCounts;
+    const localeChart = doughnut('locale-chart', LOCALE.map(l => l[0]), allGroupCounts, LOCALE.map(l => l[1]));
+    if (localeChart) localeChart.$centerTotal = add(allGroupCounts);
     function showLocale(kind) {
-        const data = locale[kind], total = data.reduce((a, b) => a + b, 0);
+        const data = locale[kind] || LOCALE.map(() => 0);
+        const groupTotal = add(data);
+        $('locale-total').textContent = String(groupTotal);
         if (localeChart) {
             localeChart.data.datasets[0].data = data;
-            localeChart.update();
-            localeChart.canvas.setAttribute('aria-label', `${kind} records by locale group: ` + LOCALE.map((l, i) => `${l[0]} ${data[i]}`).join(', '));
+            localeChart.$centerTotal = groupTotal;
+            localeChart.update('none');
+            const statusLabel = kind === 'ALL' ? 'All MS, MK, and UWP' : kind;
+            localeChart.canvas.setAttribute('aria-label', `${statusLabel}: ${groupTotal} records in Binhi, Kadiwa, and Buklod; Kapisanan breakdown: ` + LOCALE.map((l, i) => `${l[0]} ${data[i]}`).join(', '));
         }
-        valueLegend('locale-legend', LOCALE.map((l, i) => [l[0], l[1], data[i]]), total);
+        valueLegend('locale-legend', LOCALE.map((l, i) => [l[0], l[1], data[i]]), groupTotal);
         document.querySelectorAll('#locale-seg button').forEach(b => b.setAttribute('aria-checked', String(b.dataset.k === kind)));
     }
-    $('locale-seg').replaceChildren(...Object.keys(locale).map(k => {
+    $('locale-seg').replaceChildren(...['ALL', ...GROUP_KEYS].map(k => {
         const b = el('button', '', k); b.type = 'button'; b.dataset.k = k; b.setAttribute('role', 'radio');
         b.addEventListener('click', () => showLocale(k));
         return b;
     }));
-    showLocale('MS');
+    if (GROUP_KEYS.some(key => Object.hasOwn(locale, key))) showLocale('ALL');
+    else {
+        valueLegend('locale-legend', LOCALE.map(([label, color]) => [label, color, 0]), 0);
+        $('locale-seg').replaceChildren(el('span', 'hint', 'No active status data.'));
+    }
 
     /* ---------- Over time ---------- */
     legend('ot-legend', statusItems);
     const state = { s: 0, e: 11, puroks: new Set() }; // empty set = all puroks
     const allIds = puroks.map(p => p.id);
     const dataset = k => ({
-        label: NAMES[k], data: [], borderColor: COLORS[k], backgroundColor: COLORS[k], borderWidth: 2.5, tension: .25,
+        label: NAMES[k], data: [], borderColor: colorFor(k), backgroundColor: colorFor(k), borderWidth: 2.5, tension: .25,
         pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2,
     });
     const otChart = makeChart('ot-chart', {
@@ -500,20 +583,20 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let m = state.s; m <= Math.min(state.e, DATA_MONTHS - 1); m++) idxs.push(m);
         $('ot-empty').hidden = idxs.length > 0;
         if (!otChart) return;
-        const series = k => idxs.map(m => ids.reduce((t, id) => t + overtime[id - 1][k][m], 0));
+        const series = k => idxs.map(m => ids.reduce((t, id) => t + (overtime[m]?.[id]?.[k] || 0), 0));
         const s = Object.fromEntries(KEYS.map(k => [k, series(k)]));
         otChart.data.labels = idxs.map(m => MONTHS[m]);
         KEYS.forEach((k, i) => { otChart.data.datasets[i].data = s[k]; });
         otChart.update();
         otChart.canvas.setAttribute('aria-label',
             `Records over time for ${ids.length === allIds.length ? 'all puroks' : 'Purok ' + ids.join(', ')}: ` +
-            idxs.map((m, i) => `${MONTHS[m]} MS ${s.ms[i]}, UWP ${s.uwp[i]}, MK ${s.mk[i]}`).join('; '));
+            idxs.map((m, i) => `${MONTHS[m]} ${KEYS.map(k => `${k} ${s[k][i]}`).join(', ')}`).join('; '));
     }
 
     const monthsEl = $('tl-months');
     monthsEl.replaceChildren(...MONTHS.map((name, m) => {
         const b = el('button', 'chip', name); b.type = 'button';
-        b.setAttribute('aria-label', `${name} 2025`);
+        b.setAttribute('aria-label', name);
         b.addEventListener('click', () => {
             const all = state.s === 0 && state.e === 11, single = state.s === state.e;
             if (all) state.s = state.e = m;
@@ -528,14 +611,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const all = state.s === 0 && state.e === 11;
         monthsEl.querySelectorAll('.chip').forEach((b, m) => b.setAttribute('aria-pressed', String(!all && m >= state.s && m <= state.e)));
         $('month-hint').textContent = all ? 'Select a month, then another to pick a range.'
-            : state.s === state.e ? `Showing ${MONTHS[state.s]} 2025. Select another month to make a range.`
-            : `Showing ${MONTHS[state.s]} to ${MONTHS[state.e]} 2025.`;
+            : state.s === state.e ? `Showing ${MONTHS[state.s]}. Select another month to make a range.`
+            : `Showing ${MONTHS[state.s]} to ${MONTHS[state.e]}.`;
     }
     $('month-clear').addEventListener('click', () => { state.s = 0; state.e = 11; renderMonths(); renderOvertime(); });
 
     function renderPuroks() {
         $('purok-list').replaceChildren(...puroks.map(p => {
-            const b = el('button', 'chip', `Purok ${p.id}`); b.type = 'button';
+            const label = p.id === 'Unassigned' ? 'Unassigned' : `Purok ${p.id}`;
+            const b = el('button', 'chip', label); b.type = 'button';
             b.setAttribute('aria-pressed', String(state.puroks.has(p.id)));
             b.addEventListener('click', () => {
                 if (state.puroks.has(p.id)) state.puroks.delete(p.id); else state.puroks.add(p.id);
@@ -548,16 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /* ---------- New baptisees (baptized less than 1 year ago) ---------- */
     // Pass $newBaptisees from the controller: [{name, purok, grupo, status, evangelist, baptized_at: 'YYYY-MM-DD'}]
-    const serverBaptisees = @json($newBaptisees ?? null);
-    const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-    const sampleBaptisees = [
-        { name: 'Maria Lourdes Santos', purok: 3, grupo: 'Binhi', status: 'MS', evangelist: 'Ramon Dela Cruz', baptized_at: daysAgo(12) },
-        { name: 'John Paul Reyes', purok: 1, grupo: 'Kadiwa', status: 'MS', evangelist: 'Elena Bautista', baptized_at: daysAgo(45) },
-        { name: 'Angelica Mendoza', purok: 5, grupo: 'Buklod', status: 'UWP', evangelist: 'Ramon Dela Cruz', baptized_at: daysAgo(98) },
-        { name: 'Christian Villanueva', purok: 6, grupo: 'Binhi', status: 'MS', evangelist: 'Joel Navarro', baptized_at: daysAgo(206) },
-        { name: 'Rosario Aquino', purok: 4, grupo: 'Kadiwa', status: 'MK', evangelist: 'Elena Bautista', baptized_at: daysAgo(311) },
-        { name: 'Long-time Member (excluded)', purok: 2, grupo: 'Buklod', status: 'MS', evangelist: 'Joel Navarro', baptized_at: daysAgo(500) },
-    ];
+    const serverBaptisees = @json($newBaptisees);
     function since(from) {
         const a = new Date(from + 'T00:00:00'), now = new Date(), b = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         let months = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();
@@ -569,16 +644,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const spanText = ({ months, days }) => months && days ? `${plural(months, 'month')} and ${plural(days, 'day')}` : months ? plural(months, 'month') : plural(days, 'day');
 
     function renderBaptisees() {
-        const list = (serverBaptisees || sampleBaptisees)
+        const list = serverBaptisees
             .map(b => ({ ...b, span: since(b.baptized_at) }))
-            .filter(b => b.span.months >= 0 && b.span.months < 12)
             .sort((x, y) => y.baptized_at.localeCompare(x.baptized_at));
         $('bap-count').textContent = list.length || '';
         $('bap-sub').textContent = list.length ? `Baptized within the last year: ${list.length} in the system.` : 'Baptized within the last year.';
         const body = $('bap-body');
         if (!list.length) {
             const box = el('div', 'empty');
-            box.append(el('strong', '', "It's lonely here, but maybe it's better that way :)"), el('span', '', 'No one has been baptized in the last year.'));
+            box.append(el('strong', '', 'No newly baptized records were found in the past year.'), el('span', '', 'Filtered by kalagayan: MS, UWP, and MK.'));
             body.replaceChildren(box);
             return;
         }
@@ -589,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = el('tbody');
         list.forEach(b => {
             const tr = el('tr'), status = el('td'), tag = el('span', 'tag', b.status), days = el('td', '', spanText(b.span));
-            tag.style.background = COLORS[String(b.status).toLowerCase()] || COLORS.off;
+            tag.style.background = colorFor(String(b.status).toUpperCase());
             status.append(tag);
             days.append(el('small', '', 'Baptized ' + new Date(b.baptized_at + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })));
             tr.append(el('td', 'name', b.name), el('td', '', `Purok ${b.purok} / ${b.grupo}`), status, el('td', '', b.evangelist || 'None'), days);
@@ -601,38 +675,80 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* ---------- Registry updating monitoring ---------- */
+    const registryDetailsDialog = $('registry-details-modal');
+    function showRegistryDetails(label, group, entries) {
+        $('registry-details-title').textContent = `Missing ${label} - ${group}`;
+        $('registry-details-sub').textContent = `${entries.length} record${entries.length === 1 ? '' : 's'}`;
+        const body = $('registry-details-body');
+        if (!entries.length) {
+            body.replaceChildren(el('div', 'empty', 'No records are missing this field in this group.'));
+        } else {
+            const table = el('table', 'tbl'), head = el('tr');
+            ['Name', 'Purok', 'Kalagayan'].forEach(value => head.append(el('th', '', value)));
+            const thead = el('thead'); thead.append(head); table.append(thead);
+            const tbody = el('tbody');
+            entries.forEach(entry => {
+                const row = el('tr');
+                row.append(el('td', 'name', entry.name), el('td', '', entry.purok), el('td', '', entry.status));
+                tbody.append(row);
+            });
+            table.append(tbody);
+            const wrap = el('div', 'tbl-wrap'); wrap.append(table);
+            body.replaceChildren(wrap);
+        }
+        registryDetailsDialog.showModal();
+    }
     function renderRegistry() {
         const table = el('table', 'tbl'), head = el('tr');
-        ['Data', ...puroks.map(p => `Purok ${p.id}`), 'Total'].forEach(h => head.append(el('th', '', h)));
+        ['Data', ...registryPuroks.map(p => p.id === 'Unassigned' ? 'Unassigned' : `Purok ${p.id}`), 'Total'].forEach(h => head.append(el('th', '', h)));
         const thead = el('thead'); thead.append(head); table.append(thead);
         const tbody = el('tbody');
-        REG_FIELDS.forEach(([label, miss]) => {
+        const countButton = (value, label, group, entries) => {
+            const button = el('button', `reg-count${value ? '' : ' is-zero'}`, String(value));
+            button.type = 'button';
+            button.setAttribute('aria-label', `${value} records missing ${label} in ${group}`);
+            button.addEventListener('click', () => showRegistryDetails(label, group, entries));
+            return button;
+        };
+        REG_FIELDS.forEach(([label, miss, details]) => {
             const tr = el('tr', '', null);
             tr.append(el('td', '', label));
-            miss.forEach(v => tr.append(el('td', v ? 'gap-cell' : 'ok-cell', v || '0')));
-            tr.append(el('td', 'tot', add(miss)));
+            miss.forEach((value, index) => {
+                const cell = el('td', value ? 'gap-cell' : 'ok-cell');
+                const group = registryPuroks[index].id === 'Unassigned' ? 'Unassigned' : `Purok ${registryPuroks[index].id}`;
+                cell.append(countButton(value, label, group, details[index].map(entry => ({ ...entry, purok: group }))));
+                tr.append(cell);
+            });
+            const allEntries = details.flatMap((entries, index) => {
+                const group = registryPuroks[index].id === 'Unassigned' ? 'Unassigned' : `Purok ${registryPuroks[index].id}`;
+                return entries.map(entry => ({ ...entry, purok: group }));
+            });
+            const totalCell = el('td', 'tot');
+            totalCell.append(countButton(add(miss), label, 'all puroks', allEntries));
+            tr.append(totalCell);
             tbody.append(tr);
         });
         const foot = el('tfoot'), fr = el('tr');
-        fr.append(el('td', '', 'Encoded / all data'));
+        fr.append(el('td', '', 'Encoded / active data'));
         regTotals.forEach((t, i) => fr.append(el('td', '', `${t * REG_FIELDS.length - add(REG_FIELDS.map(f => f[1][i]))} / ${t * REG_FIELDS.length}`)));
-        fr.append(el('td', 'tot', `${Math.round(regPct / 100 * regOverall)} / ${regOverall}`));
+        fr.append(el('td', 'tot', `${DASHBOARD.registryEncoded} / ${regOverall}`));
         foot.append(fr);
         table.append(tbody, foot);
         const wrap = el('div', 'tbl-wrap'); wrap.append(table);
 
-        const summary = el('div', 'reg-summary');
+        const summary = el('div', 'reg-summary'), summaryGrid = el('div', 'reg-summary-grid');
         summary.append(el('h3', '', 'Summary'));
         REG_FIELDS.forEach(([label, miss]) => {
-            const done = regAll - add(miss), pct = done / regAll * 100;
+            const done = regAll - add(miss), pct = regAll ? done / regAll * 100 : 0;
             const item = el('div', 'sum-item'), top = el('div', 'sum-top'), meter = el('div', 'meter'), fill = el('span');
             fill.style.width = pct + '%';
-            fill.style.background = pct >= 95 ? COLORS.mk : COLORS.uwp;
+            fill.style.background = pct >= 95 ? colorFor('MK') : colorFor('UWP');
             meter.append(fill);
             top.append(el('span', '', `${label}: ${done} of ${regAll}`), el('span', '', pct.toFixed(2) + '%'));
             item.append(top, meter);
-            summary.append(item);
+            summaryGrid.append(item);
         });
+        summary.append(summaryGrid);
         const layout = el('div', 'reg'); layout.append(wrap, summary);
         $('reg-body').replaceChildren(layout);
     }
@@ -641,6 +757,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const dlg = $(dlgId);
         $(btn).addEventListener('click', () => dlg.showModal());
         dlg.addEventListener('click', e => { if (e.target === dlg || e.target.closest('[data-close]')) dlg.close(); });
+    });
+    registryDetailsDialog.addEventListener('click', e => {
+        if (e.target === registryDetailsDialog || e.target.closest('[data-close]')) registryDetailsDialog.close();
     });
     renderBaptisees();
     renderRegistry();

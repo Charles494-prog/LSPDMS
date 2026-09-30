@@ -6,73 +6,65 @@
         <meta name="color-scheme" content="light">
         <title>Your verification code</title>
         <style>
-            @media only screen and (max-width: 480px) {
+            @media only screen and (max-width: 520px) {
                 .container { width: 100% !important; }
-                .padding { padding: 2rem 1.5rem !important; }
-                .code-box { font-size: 1.6rem !important; letter-spacing: 0.3em !important; }
+                .padding   { padding: 1.5rem 1.25rem !important; }
+                .code      { font-size: 1.5rem !important; letter-spacing: 0.28em !important; }
             }
         </style>
     </head>
-    <body style="margin:0; padding:0; background:#f0f2f5; font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5; padding: 2.5rem 0;">
+    <body style="margin:0; padding:0; background:#f4f6f9; font-family: 'Inter', -apple-system, 'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9; padding: 3rem 1rem;">
             <tr>
                 <td align="center">
+
                     <table role="presentation" width="480" class="container" cellpadding="0" cellspacing="0"
-                        style="max-width:480px; width:100%; background:#ffffff; border-radius:8px; overflow:hidden;">
-
-                        <!-- Logo mark -->
+                        style="max-width:480px; width:100%; background:#ffffff; border:1px solid #e6e9ef; border-radius:16px; box-shadow:0 1px 3px rgba(16,24,40,0.06);">
                         <tr>
-                            <td style="padding: 2.2rem 2.5rem 0;">
-                                <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <circle cx="18" cy="18" r="18" fill="#0866FF"/>
-                                    <path d="M12 18.5L16 22.5L24 13.5" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-                                </svg>
-                            </td>
-                        </tr>
+                            <td class="padding" style="padding: 2rem 2rem 2.1rem;">
 
-                        <tr>
-                            <td class="padding" style="padding: 1.4rem 2.5rem 2.4rem;">
+                                <!-- Icon -->
+                                <table role="presentation" cellpadding="0" cellspacing="0">
+                                    <tr>
+                                        <td width="44" height="44" align="center" valign="middle"
+                                            style="width:44px; height:44px; background:#e8f0ff; border-radius:22px; color:#0866FF; font-size:20px; font-weight:700; line-height:44px; text-align:center;">
+                                            &#10003;
+                                        </td>
+                                    </tr>
+                                </table>
 
-                                <h1 style="color:#050505; font-size:1.375rem; line-height:1.35; margin:0 0 0.5rem; font-weight:700; letter-spacing:-0.01em;">
-                                    Confirm it's you
+                                <h1 style="color:#0f172a; font-size:1.25rem; line-height:1.4; margin:1.25rem 0 0.4rem; font-weight:600; letter-spacing:-0.01em;">
+                                    Confirm your login
                                 </h1>
 
-                                <p style="color:#65676b; font-size:0.9375rem; line-height:1.55; margin:0 0 1.75rem;">
-                                    Enter this code to finish logging in to LSPDMS. It's only valid for the next 5 minutes.
+                                <p style="color:#5b6472; font-size:0.875rem; line-height:1.6; margin:0 0 1.25rem;">
+                                    You requested to log in to <strong style="color:#0f172a; font-weight:600;">LSPDMS</strong>. Your one-time code is:
                                 </p>
 
                                 <!-- Code -->
                                 <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
                                     <tr>
-                                        <td style="background:#f0f2f5; border-radius:8px; padding: 1.1rem 0; text-align:center;">
-                                            <span class="code-box" style="font-size:1.875rem; font-weight:700; letter-spacing:0.4em; color:#050505; font-family: 'Helvetica Neue', Arial, sans-serif;">
-                                                {{ $code }}
-                                            </span>
+                                        <td align="center" style="background:#f3f5f9; border-radius:10px; padding:1rem 0.5rem;">
+                                            <div class="code" style="display:block; font-size:1.625rem; font-weight:600; letter-spacing:0.4em; text-indent:0.4em; color:#0866FF; font-family: 'SF Mono', 'Roboto Mono', Consolas, 'Courier New', monospace; -webkit-user-select:all; user-select:all;">{{ $code }}</div>
                                         </td>
                                     </tr>
                                 </table>
 
-                                <p style="color:#8a8d91; font-size:0.8125rem; line-height:1.55; margin:1.75rem 0 0;">
-                                    If you didn't request this, you can safely ignore this email — no changes will be made to your account.
+                                <p style="color:#0f172a; font-size:0.8125rem; font-weight:600; line-height:1.6; margin:1.25rem 0 0;">
+                                    This code expires in 5 minutes.
                                 </p>
-                            </td>
-                        </tr>
 
-                        <!-- Divider -->
-                        <tr>
-                            <td style="padding: 0 2.5rem;">
-                                <div style="height:1px; background:#e4e6eb;"></div>
-                            </td>
-                        </tr>
-
-                        <tr>
-                            <td style="padding: 1.5rem 2.5rem 2rem;">
-                                <p style="color:#8a8d91; font-size:0.75rem; line-height:1.6; margin:0;">
-                                    This is an automated message from LSPDMS. Please don't reply to this email.
+                                <p style="color:#5b6472; font-size:0.8125rem; line-height:1.65; margin:1.1rem 0 0;">
+                                    If you didn't request this, you can safely ignore this email. Someone else might have typed your email address by mistake.
                                 </p>
                             </td>
                         </tr>
                     </table>
+
+                    <p style="max-width:480px; color:#9aa3b2; font-size:0.75rem; line-height:1.6; margin:1.25rem 0 0; text-align:center;">
+                        Automated message from LSPDMS. Please don't reply to this email.
+                    </p>
+
                 </td>
             </tr>
         </table>
