@@ -3,7 +3,7 @@
 @section('title', 'Dashboard')
 
 @section('content')
-<div class="dash">
+<div class="dash" id="dashboardApp" data-can-edit-registry="{{ $canEditRegistry ? 'true' : 'false' }}">
     <header class="dash-head">
         <div>
             <h1>Dashboard</h1>
@@ -33,7 +33,8 @@
     <div class="grid">
         <section class="panel span-7" aria-labelledby="purok-title">
             <h2 id="purok-title">Active records by purok</h2>
-            <div class="chart-box" style="height:250px"><canvas id="purok-chart" role="img" aria-label="Active records by purok"></canvas></div>
+            <div class="chart-box" id="purok-chart-box" style="height:250px"><canvas id="purok-chart" role="img" aria-label="Active records by purok"></canvas></div>
+            <p class="purok-chart-detail" id="purok-chart-detail" role="status" aria-live="polite">Hover over or click a Purok bar to see its MS, UWP, MK, and total counts.</p>
             <ul class="legend" id="status-legend"></ul>
         </section>
 
@@ -61,11 +62,11 @@
         <section class="panel span-4" aria-labelledby="gender-title">
             <h2 id="gender-title">Active records by gender</h2>
             <div class="gender-row">
-                <div class="gender-top"><span>Female</span><strong id="pct-female">0%</strong></div>
+                <div class="gender-top"><button type="button" class="gender-drill" data-gender="female">Female <span aria-hidden="true">↗</span></button><strong id="pct-female">0%</strong></div>
                 <div class="gbar" id="bar-female" role="img" aria-label="Female share of active records"></div>
             </div>
             <div class="gender-row">
-                <div class="gender-top"><span>Male</span><strong id="pct-male">0%</strong></div>
+                <div class="gender-top"><button type="button" class="gender-drill" data-gender="male">Male <span aria-hidden="true">↗</span></button><strong id="pct-male">0%</strong></div>
                 <div class="gbar" id="bar-male" role="img" aria-label="Male share of active records"></div>
             </div>
             <ul class="legend" id="gender-legend"></ul>
@@ -97,11 +98,20 @@
             <div class="modal-body" id="cfo-group-body"></div>
         </dialog>
 
+        <dialog class="modal" id="gender-records-modal" aria-labelledby="gender-records-title">
+            <div class="modal-head">
+                <div><h2 id="gender-records-title">Active records</h2><p id="gender-records-sub"></p></div>
+                <button type="button" class="modal-x" data-close aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="gender-records-body"></div>
+        </dialog>
+
         <section class="panel span-12" aria-labelledby="ot-title">
             <div class="panel-row">
-                <h2 id="ot-title">Records over time</h2>
+                <div><h2 id="ot-title">Records over time</h2><p class="ot-help">Monthly MS, UWP, and MK snapshots. Select a point to view its movement codes.</p></div>
                 <ul class="legend" id="ot-legend"></ul>
             </div>
+            <p class="ot-current" id="ot-current" role="status" aria-live="polite"></p>
             <div class="ot">
                 <div class="ot-chart">
                     <canvas id="ot-chart" role="img" aria-label="Records over time"></canvas>
@@ -123,6 +133,14 @@
                 </aside>
             </div>
         </section>
+
+        <dialog class="modal movement-code-modal" id="movement-code-modal" aria-labelledby="movement-code-title">
+            <div class="modal-head">
+                <div><h2 id="movement-code-title">Monthly movement codes</h2><p id="movement-code-sub"></p></div>
+                <button type="button" class="modal-x" data-close aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body" id="movement-code-body"></div>
+        </dialog>
     </div>
 
     <dialog class="modal" id="baptisee-modal" aria-labelledby="bap-title">
@@ -135,7 +153,7 @@
 
     <dialog class="modal modal-wide" id="registry-modal" aria-labelledby="reg-title">
         <div class="modal-head">
-            <div><h2 id="reg-title">Registry updating monitoring</h2><p>MS, UWP, and MK records only. Blank fields and Registry values of RFID are counted as missing. Click any count to view the records.</p></div>
+            <div><h2 id="reg-title">Registry updating monitoring</h2><p>MS, UWP, and MK records only. Blank fields and Registry values of RFID are counted as missing. Click any count to view the records.@unless ($canEditRegistry) Editing is disabled for this account.@endunless</p></div>
             <button type="button" class="modal-x" data-close aria-label="Close">&times;</button>
         </div>
         <div class="modal-body" id="reg-body"></div>
@@ -198,6 +216,21 @@
     /* Modals */
     .modal { width: min(900px, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); padding: 0; border: 0; border-radius: 14px; background: var(--card); color: var(--ink); box-shadow: 0 24px 60px rgba(16,35,58,.35); overflow: hidden; }
     .modal-wide { width: min(1140px, calc(100vw - 2rem)); }
+    .movement-code-modal { width: min(760px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); }
+    .movement-code-modal .modal-head { padding:.9rem 1.1rem; }
+    .movement-code-modal .modal-body { display:grid; gap:.8rem; padding:1rem 1.1rem; }
+    .movement-code-modal .empty { padding:.8rem; border:1px solid var(--line); border-radius:9px; background:var(--bg); }
+    .movement-count-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:.55rem; }
+    .movement-purok-card { padding:.7rem .8rem; border:1px solid var(--line); border-radius:9px; background:var(--bg); }
+    .movement-purok-card h3 { margin:0 0 .5rem; font-size:.82rem; font-weight:750; }
+    .movement-purok-counts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.35rem; }
+    .movement-purok-count { display:flex; justify-content:space-between; gap:.35rem; color:var(--muted); font-size:.76rem; }
+    .movement-purok-count strong { color:var(--ink); font-weight:750; }
+    @media(max-width:520px) {
+        .movement-code-modal .modal-head { padding:.75rem .85rem; }
+        .movement-code-modal .modal-body { padding:.8rem; }
+        .movement-count-grid { grid-template-columns:1fr; }
+    }
     .modal[open] { display: flex; flex-direction: column; }
     .modal::backdrop { background: rgba(16,35,58,.55); }
     .modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: 1.1rem 1.4rem; border-bottom: 1px solid var(--line); }
@@ -309,6 +342,10 @@
     .gender-row + .gender-row { margin-top: 1rem; }
     .gender-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .35rem; font-size: .9rem; }
     .gender-top strong { font-size: 1.5rem; letter-spacing: -.02em; }
+    .gender-drill { padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+    .gender-drill span { color: var(--ms); font-size: .75rem; opacity: 0; transition: opacity .15s ease; }
+    .gender-drill:hover span,.gender-drill:focus-visible span { opacity: 1; }
+    .gender-drill:hover { color: var(--ms); text-decoration: underline; }
     .gbar { display: flex; height: 16px; overflow: hidden; border-radius: 4px; background: var(--bg); }
     .gbar span { display: block; height: 100%; width: 0; transition: width .9s cubic-bezier(.2,.8,.2,1); }
 
@@ -319,6 +356,9 @@
     .seg button[aria-checked="true"] { background: var(--card); color: var(--ms); box-shadow: 0 1px 3px rgba(16,35,58,.16); }
 
     .ot { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 1.25rem; }
+    .ot-help { margin-top:.2rem; color:var(--muted); font-size:.78rem; }
+    .ot-current { margin:.2rem 0 .9rem; padding:.65rem .8rem; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font-size:.83rem; font-weight:700; }
+    .movement-count-summary { margin:0 0 .8rem; padding:.7rem .8rem; border-radius:8px; background:var(--bg); color:var(--ink); font-size:.83rem; line-height:1.6; }
     .ot-chart { position: relative; height: 340px; min-width: 0; }
     .ot-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: .9rem; }
     .ot-empty[hidden] { display: none; }
@@ -335,6 +375,8 @@
     .hint { margin: .5rem 0 1.1rem; color: var(--muted); font-size: .75rem; }
 
     .chart-error { padding: 1rem; color: var(--muted); font-size: .83rem; text-align: center; }
+    .chart-empty { display:grid; height:100%; place-items:center; padding:1rem; color:var(--muted); font-size:.9rem; text-align:center; }
+    .purok-chart-detail { min-height:1.25rem; margin:.5rem 0 0; color:var(--muted); font-size:.82rem; font-weight:600; }
     .dash a:focus-visible, .dash button:focus-visible { outline: 3px solid #5b9dff; outline-offset: 2px; }
     @media (prefers-reduced-motion: reduce) { .dash *, .dash *::before { transition: none !important; } }
 
@@ -357,7 +399,7 @@
 @endpush
 
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+@vite('resources/js/dashboard.js')
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -384,16 +426,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const inactive = DASHBOARD.inactiveCount;
     const puroks = DASHBOARD.puroks.map(p => ({
         id: p.id,
+        name: p.name,
         ...Object.fromEntries(KEYS.map(code => [code, p.counts[code] || 0])),
         total: p.total,
         recordTotal: p.recordTotal,
     }));
     const gender = DASHBOARD.gender;
+    const genderRecords = DASHBOARD.genderRecords;
     const locale = Object.fromEntries(KEYS.map(code => [code, DASHBOARD.groupLabels.map(label => DASHBOARD.groupCounts[code]?.[label] || 0)]));
     const LOCALE = DASHBOARD.groupLabels.map((label, index) => [label, ['#16a34a', '#3b82f6', '#ef4444'][index]]);
     const MONTHS = DASHBOARD.monthLabels;
     const DATA_MONTHS = MONTHS.length;
+    const MONTH_KEYS = DASHBOARD.monthKeys;
     const overtime = DASHBOARD.monthlyPurokCounts;
+    const overtimePuroks = DASHBOARD.movementPuroks;
     const REG_FIELDS = DASHBOARD.registryReport.map(field => [field.label, field.missing, field.details]);
     const add = a => a.reduce((x, y) => x + y, 0);
     const registryPuroks = DASHBOARD.registryPuroks;
@@ -474,24 +520,65 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.restore();
         },
     };
-    const purokChart = makeChart('purok-chart', {
+    if (!puroks.length) {
+        $('purok-chart-box').replaceChildren(el('p', 'chart-empty', 'No Puroks are configured yet. Add Puroks in Security Settings to see active records by Purok.'));
+        $('status-legend').replaceChildren();
+        $('purok-chart-detail').hidden = true;
+    }
+    function showPurokDetail(chart, event) {
+        const item = chart.getElementsAtEventForMode(
+            event,
+            'nearest',
+            { intersect: false, axis: 'y' },
+            true
+        )[0];
+        if (!item) return;
+
+        const purok = puroks[item.index];
+        if (!purok) return;
+        $('purok-chart-detail').textContent =
+            `${purok.name}: ${KEYS.map(status => `${NAMES[status]} ${purok[status]}`).join(' · ')} · Total ${purok.total}`;
+    }
+    const purokChart = puroks.length ? makeChart('purok-chart', {
         type: 'bar',
         data: {
-            labels: puroks.map(p => `${p.id === 'Unassigned' ? 'Unassigned' : `Purok ${p.id}`} · ${p.total}`),
+            labels: puroks.map(p => `${p.name} · ${p.total}`),
             datasets: KEYS.map(k => ({ label: NAMES[k], data: puroks.map(p => p[k]), backgroundColor: colorFor(k), barPercentage: .7, borderSkipped: false })),
         },
         options: {
             indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false, axis: 'y' },
+            events: ['mousemove', 'mouseout', 'click', 'touchstart', 'touchmove'],
+            onHover(event, _activeElements, chart) {
+                if (event.type === 'mousemove') showPurokDetail(chart, event);
+            },
+            onClick(event, _activeElements, chart) {
+                showPurokDetail(chart, event);
+            },
             scales: {
-                x: { stacked: true, display: false, min: 0, max: Math.max(1, ...puroks.map(p => p.total)) },
+                x: { stacked: true, display: false, min: 0, beginAtZero: true, offset: false, max: Math.max(1, ...puroks.map(p => p.total)) },
                 y: { stacked: true, grid: { display: false }, border: { display: false }, ticks: { color: INK, font: { size: 12, weight: '600' } } },
             },
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label(context) {
+                            return `${context.dataset.label}: ${context.parsed.x}`;
+                        },
+                        footer(items) {
+                            return `Total active records: ${items.reduce((total, item) => total + item.parsed.x, 0)}`;
+                        },
+                    },
+                },
+            },
         },
         plugins: [barLabels],
-    });
+    }) : null;
     if (purokChart) purokChart.canvas.setAttribute('aria-label',
-        'Active records by purok: ' + puroks.map(p => `${p.id === 'Unassigned' ? 'Unassigned' : `Purok ${p.id}`} ${p.total} (${KEYS.map(k => `${k} ${p[k]}`).join(', ')})`).join('; '));
+        'Active records by purok: ' + puroks.map(p => `${p.name} ${p.total} (${KEYS.map(k => `${k} ${p[k]}`).join(', ')})`).join('; '));
 
     /* ---------- Gauges ---------- */
     document.querySelectorAll('.gauge').forEach((g, i) => {
@@ -510,6 +597,38 @@ document.addEventListener('DOMContentLoaded', () => {
         animateNumber($(`pct-${key}`), pct, 2, '%');
     });
     legend('gender-legend', statusItems);
+    const genderRecordsModal = $('gender-records-modal');
+    function showGenderRecords(genderKey) {
+        const label = genderKey === 'female' ? 'Female' : 'Male';
+        const records = [...(genderRecords[genderKey] || [])]
+            .sort((left, right) => left.name.localeCompare(right.name));
+        $('gender-records-title').textContent = `${label} active records`;
+        $('gender-records-sub').textContent = `${records.length} record${records.length === 1 ? '' : 's'}`;
+        const body = $('gender-records-body');
+        if (!records.length) {
+            body.replaceChildren(el('div', 'empty', `No active ${label.toLowerCase()} records found.`));
+        } else {
+            const table = el('table', 'tbl'), head = el('tr');
+            ['Name', 'Kalagayan', 'Purok'].forEach(column => head.append(el('th', '', column)));
+            const thead = el('thead'); thead.append(head); table.append(thead);
+            const tbody = el('tbody');
+            records.forEach(record => {
+                const row = el('tr');
+                row.append(el('td', 'name', record.name), el('td', '', record.status), el('td', '', record.purok));
+                tbody.append(row);
+            });
+            table.append(tbody);
+            const wrap = el('div', 'tbl-wrap'); wrap.append(table);
+            body.replaceChildren(wrap);
+        }
+        genderRecordsModal.showModal();
+    }
+    document.querySelectorAll('.gender-drill').forEach(button => {
+        button.addEventListener('click', () => showGenderRecords(button.dataset.gender));
+    });
+    genderRecordsModal.addEventListener('click', event => {
+        if (event.target === genderRecordsModal || event.target.closest('[data-close]')) genderRecordsModal.close();
+    });
 
     /* ---------- Doughnuts ---------- */
     const doughnutCenter = {
@@ -632,21 +751,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* ---------- Over time ---------- */
-    legend('ot-legend', statusItems);
-    const state = { s: 0, e: 11, puroks: new Set() }; // empty set = all puroks
-    const allIds = puroks.map(p => p.id);
+    const historyStatuses = ['MS', 'UWP', 'MK'];
+    legend('ot-legend', historyStatuses.map(status => [status, colorFor(status)]));
+    const lastMonthIndex = Math.max(DATA_MONTHS - 1, 0);
+    const state = { s: 0, e: lastMonthIndex, puroks: new Set() };
+    const allIds = overtimePuroks.map(String);
+    let idxs = [];
+    let visiblePuroks = allIds;
     const dataset = k => ({
-        label: NAMES[k], data: [], borderColor: colorFor(k), backgroundColor: colorFor(k), borderWidth: 2.5, tension: .25,
+        label: k, data: [], borderColor: colorFor(k), backgroundColor: colorFor(k), borderWidth: 2.5, tension: .25,
         pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2,
     });
     const otChart = makeChart('ot-chart', {
         type: 'line',
-        data: { labels: [], datasets: KEYS.map(dataset) },
+        data: { labels: [], datasets: historyStatuses.map(dataset) },
         options: {
             responsive: true, maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
+            layout: { padding: { top: 14, bottom: 14 } },
+            onClick(event, elements, chart) {
+                const point = chart.getElementsAtEventForMode(
+                    event,
+                    'nearest',
+                    { intersect: false, axis: 'x' },
+                    true
+                )[0] || elements[0];
+                const monthIndex = point ? idxs[point.index] : undefined;
+                if (monthIndex !== undefined) showMovementCodes(MONTH_KEYS[monthIndex], visiblePuroks);
+            },
             scales: {
-                x: { grid: { display: false }, border: { color: LINE } },
+                x: { min: 0, max: Math.max(0, DATA_MONTHS - 1), grid: { display: false }, border: { color: LINE } },
                 y: { min: 0, grid: { color: LINE }, border: { display: false }, title: { display: true, text: 'Records' } },
             },
             plugins: { legend: { display: false }, tooltip: { padding: 10, boxPadding: 4 } },
@@ -655,28 +789,102 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderOvertime() {
         const ids = state.puroks.size ? [...state.puroks] : allIds;
-        const idxs = [];
-        for (let m = state.s; m <= Math.min(state.e, DATA_MONTHS - 1); m++) idxs.push(m);
+        const isAllPuroks = ids.length === allIds.length;
+        visiblePuroks = ids;
+        idxs = MONTH_KEYS
+            .map((_, monthIndex) => monthIndex)
+            .filter(monthIndex => monthIndex >= state.s && monthIndex <= state.e);
         $('ot-empty').hidden = idxs.length > 0;
+        const selectedPuroks = ids.length
+            ? ids.map(id => `Purok ${id}`).join(', ')
+            : 'No Puroks';
+        const selectedMonths = idxs.map(index => MONTHS[index]);
+        const period = selectedMonths.length === 0
+            ? 'no periods'
+            : state.s === 0 && state.e === lastMonthIndex
+                ? `All periods (${selectedMonths[0]}–${selectedMonths[selectedMonths.length - 1]})`
+            : selectedMonths.length === 1
+                ? selectedMonths[0]
+                : `${selectedMonths[0]}–${selectedMonths[selectedMonths.length - 1]}`;
+        $('ot-current').textContent = `Now showing trend graph for ${isAllPuroks ? 'All Puroks' : selectedPuroks} · ${period}`;
         if (!otChart) return;
         const series = k => idxs.map(m => ids.reduce((t, id) => t + (overtime[m]?.[id]?.[k] || 0), 0));
-        const s = Object.fromEntries(KEYS.map(k => [k, series(k)]));
-        otChart.data.labels = idxs.map(m => MONTHS[m]);
-        KEYS.forEach((k, i) => { otChart.data.datasets[i].data = s[k]; });
-        otChart.update();
+        const s = Object.fromEntries(historyStatuses.map(k => [k, series(k)]));
+        const labels = idxs.map(m => MONTHS[m]);
+        otChart.stop();
+        otChart.data.labels = labels;
+        historyStatuses.forEach((k, i) => { otChart.data.datasets[i].data = s[k]; });
+        otChart.options.scales.x.min = 0;
+        otChart.options.scales.x.max = Math.max(0, labels.length - 1);
+        otChart.update('none');
         otChart.canvas.setAttribute('aria-label',
             `Records over time for ${ids.length === allIds.length ? 'all puroks' : 'Purok ' + ids.join(', ')}: ` +
-            idxs.map((m, i) => `${MONTHS[m]} ${KEYS.map(k => `${k} ${s[k][i]}`).join(', ')}`).join('; '));
+            idxs.map((m, i) => `${MONTHS[m]} ${historyStatuses.map(k => `${k} ${s[k][i]}`).join(', ')}`).join('; '));
     }
+
+    const movementCodeModal = $('movement-code-modal');
+    function showMovementCodes(monthKey, selectedPuroks) {
+        const monthIndex = MONTH_KEYS.indexOf(monthKey);
+        const details = DASHBOARD.movementDetails
+            .filter(item => item.month === monthKey && selectedPuroks.includes(String(item.purok)))
+            .sort((left, right) => left.purok - right.purok
+                || left.status.localeCompare(right.status)
+                || left.code.localeCompare(right.code));
+        const monthLabel = MONTHS[monthIndex];
+        $('movement-code-title').textContent = `${monthLabel} movement codes`;
+        const selectedPurokLabel = selectedPuroks.length === allIds.length
+            ? 'All Puroks'
+            : selectedPuroks.map(id => `Purok ${id}`).join(', ');
+        $('movement-code-sub').textContent = `${selectedPurokLabel} · ${details.length} recorded movement entr${details.length === 1 ? 'y' : 'ies'}`;
+        const body = $('movement-code-body');
+        const summary = el('div', 'movement-count-grid');
+        selectedPuroks.forEach(purok => {
+            const counts = overtime[monthIndex]?.[purok] || {};
+            const card = el('section', 'movement-purok-card');
+            card.append(el('h3', '', `Purok ${purok}`));
+            const statusCounts = el('div', 'movement-purok-counts');
+            [['MS', counts.MS], ['UWP', counts.UWP], ['MK', counts.MK]].forEach(([status, count]) => {
+                const item = el('div', 'movement-purok-count');
+                item.append(el('span', '', status), el('strong', '', String(count || 0)));
+                statusCounts.append(item);
+            });
+            card.append(statusCounts);
+            summary.append(card);
+        });
+        if (!details.length) {
+            body.replaceChildren(
+                el('div', 'empty', `No movement codes were entered for ${monthLabel} in ${selectedPurokLabel}.`),
+                summary
+            );
+        } else {
+            body.replaceChildren(summary);
+            const table = el('table', 'tbl'), head = el('tr');
+            ['Purok', 'Kalagayan', 'Code', 'Count'].forEach(column => head.append(el('th', '', column)));
+            const thead = el('thead'); thead.append(head); table.append(thead);
+            const tbody = el('tbody');
+            details.forEach(item => {
+                const row = el('tr');
+                row.append(el('td', '', `Purok ${item.purok}`), el('td', '', item.status), el('td', '', item.code), el('td', '', String(item.count)));
+                tbody.append(row);
+            });
+            table.append(tbody);
+            const wrap = el('div', 'tbl-wrap'); wrap.append(table);
+            body.append(wrap);
+        }
+        movementCodeModal.showModal();
+    }
+    movementCodeModal.addEventListener('click', event => {
+        if (event.target === movementCodeModal || event.target.closest('[data-close]')) movementCodeModal.close();
+    });
 
     const monthsEl = $('tl-months');
     monthsEl.replaceChildren(...MONTHS.map((name, m) => {
         const b = el('button', 'chip', name); b.type = 'button';
         b.setAttribute('aria-label', name);
         b.addEventListener('click', () => {
-            const all = state.s === 0 && state.e === 11, single = state.s === state.e;
+            const all = state.s === 0 && state.e === lastMonthIndex, single = state.s === state.e;
             if (all) state.s = state.e = m;
-            else if (single && state.s === m) { state.s = 0; state.e = 11; }
+            else if (single && state.s === m) { state.s = 0; state.e = lastMonthIndex; }
             else if (single) { const a = state.s; state.s = Math.min(a, m); state.e = Math.max(a, m); }
             else state.s = state.e = m;
             renderMonths(); renderOvertime();
@@ -684,21 +892,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return b;
     }));
     function renderMonths() {
-        const all = state.s === 0 && state.e === 11;
+        const all = state.s === 0 && state.e === lastMonthIndex;
         monthsEl.querySelectorAll('.chip').forEach((b, m) => b.setAttribute('aria-pressed', String(!all && m >= state.s && m <= state.e)));
         $('month-hint').textContent = all ? 'Select a month, then another to pick a range.'
             : state.s === state.e ? `Showing ${MONTHS[state.s]}. Select another month to make a range.`
             : `Showing ${MONTHS[state.s]} to ${MONTHS[state.e]}.`;
     }
-    $('month-clear').addEventListener('click', () => { state.s = 0; state.e = 11; renderMonths(); renderOvertime(); });
+    $('month-clear').addEventListener('click', () => { state.s = 0; state.e = lastMonthIndex; renderMonths(); renderOvertime(); });
 
     function renderPuroks() {
-        $('purok-list').replaceChildren(...puroks.map(p => {
-            const label = p.id === 'Unassigned' ? 'Unassigned' : `Purok ${p.id}`;
-            const b = el('button', 'chip', label); b.type = 'button';
-            b.setAttribute('aria-pressed', String(state.puroks.has(p.id)));
+        $('purok-list').replaceChildren(...overtimePuroks.map(purokNumber => {
+            const id = String(purokNumber);
+            const b = el('button', 'chip', `Purok ${id}`); b.type = 'button';
+            b.setAttribute('aria-pressed', String(state.puroks.has(id)));
             b.addEventListener('click', () => {
-                if (state.puroks.has(p.id)) state.puroks.delete(p.id); else state.puroks.add(p.id);
+                if (state.puroks.has(id)) state.puroks.delete(id); else state.puroks.add(id);
                 renderPuroks(); renderOvertime();
             });
             return b;
@@ -757,9 +965,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const registryEditSave = $('registry-edit-save');
     const RECORD_UPDATE_URL = @json(route('records.update', ['record' => '__RECORD_ID__']));
     const CSRF_TOKEN = @json(csrf_token());
+    const CAN_EDIT_REGISTRY = $('dashboardApp').dataset.canEditRegistry === 'true';
     let registryEditTarget = null;
     const registryFieldConfig = {
-        registry: { label: 'Registry number', key: 'registry_number', type: 'text', hint: 'Enter the member’s registry number.' },
+        registry: { label: 'Registry number', key: 'registry_number', type: 'text', hint: 'Enter exactly 13 letters or numbers, or RFID.' },
         gender: { label: 'Gender', key: 'gender', type: 'select', options: ['Male', 'Female'] },
         purok: { label: 'Purok', key: 'purok', type: 'locked', hint: 'Purok assignments are not changed from Registry Updating.' },
         grupo: { label: 'Grupo', key: 'grupo', type: 'number', hint: 'Grupo can only be changed within this member’s current Purok.' },
@@ -771,7 +980,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openRegistryEdit(entry) {
         const config = registryFieldConfig[entry.field];
-        if (!config || config.type === 'locked' || (entry.field === 'grupo' && !entry.can_edit_grupo)) return;
+        if (!CAN_EDIT_REGISTRY || !config || config.type === 'locked' || (entry.field === 'grupo' && !entry.can_edit_grupo)) return;
         registryEditTarget = { entry, config };
         $('registry-edit-title').textContent = `Enter missing ${config.label.toLowerCase()}`;
         $('registry-edit-sub').textContent = `${entry.name} · ${entry.purok} · ${entry.status}`;
@@ -794,6 +1003,7 @@ document.addEventListener('DOMContentLoaded', () => {
             input.id = 'registry-edit-value';
             input.type = config.type;
             input.required = true;
+            if (entry.field === 'registry') input.maxLength = 13;
             if (entry.field === 'grupo') {
                 input.min = String(entry.grupo_min);
                 input.max = String(entry.grupo_max);
@@ -868,12 +1078,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.append(el('td', 'name', entry.name), el('td', '', entry.purok), el('td', '', entry.status));
                 const action = el('td');
                 const config = registryFieldConfig[entry.field];
-                const edit = el('button', 'reg-count', config?.type === 'locked' ? 'Monthly portal' : 'Enter data');
+                const edit = el('button', 'reg-count', !CAN_EDIT_REGISTRY ? 'No edit access' : (config?.type === 'locked' ? 'Monthly portal' : 'Enter data'));
                 edit.type = 'button';
-                edit.disabled = !config || config.type === 'locked' || (entry.field === 'grupo' && !entry.can_edit_grupo);
-                edit.title = entry.field === 'grupo' && !entry.can_edit_grupo
-                    ? 'Assign this member to a Purok before entering a Grupo.'
-                    : (config?.type === 'locked' ? config.hint : `Enter missing ${config?.label?.toLowerCase() || 'data'}`);
+                edit.disabled = !CAN_EDIT_REGISTRY || !config || config.type === 'locked' || (entry.field === 'grupo' && !entry.can_edit_grupo);
+                edit.title = !CAN_EDIT_REGISTRY
+                    ? 'Editing is disabled for this account.'
+                    : (entry.field === 'grupo' && !entry.can_edit_grupo
+                        ? 'Assign this member to a Purok before entering a Grupo.'
+                        : (config?.type === 'locked' ? config.hint : `Enter missing ${config?.label?.toLowerCase() || 'data'}`));
                 edit.addEventListener('click', () => openRegistryEdit(entry));
                 action.append(edit);
                 row.append(action);

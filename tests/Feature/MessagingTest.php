@@ -105,7 +105,7 @@ class MessagingTest extends TestCase
             ->assertJsonPath('message', "Can't message this user, this account has been suspended.");
     }
 
-    public function test_messages_are_opened_from_a_floating_launcher_not_the_sidebar_navigation(): void
+    public function test_messages_open_in_a_minimizable_floating_chat_not_the_sidebar_navigation(): void
     {
         $user = $this->makeUser('sender@example.test');
 
@@ -114,7 +114,90 @@ class MessagingTest extends TestCase
             ->assertOk()
             ->assertSee('class="chat-head-launcher"', false)
             ->assertSee('aria-label="Open messages"', false)
+            ->assertSee('id="chatUnreadBadge"', false)
+            ->assertSee('data-unread-url="'.route('messages.unread-count').'"', false)
+            ->assertSee('id="chatWindow"', false)
+            ->assertSee('aria-label="Minimize chat"', false)
+            ->assertSee('Direct messages', false)
             ->assertDontSee('<span class="label">Messages</span>', false);
+    }
+
+    public function test_unread_count_only_includes_unread_unexpired_messages_received_by_current_user(): void
+    {
+        $recipient = $this->makeUser('recipient@example.test');
+        $sender = $this->makeUser('sender@example.test');
+        $other = $this->makeUser('other@example.test');
+        $conversation = $this->conversation($recipient, $sender);
+        $otherConversation = $this->conversation($recipient, $other);
+
+        $unread = Message::query()->create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $sender->id,
+            'body' => 'Unread message',
+            'expires_at' => now()->addDay(),
+        ]);
+        $unreadChannels = (new MessageSent($unread))->broadcastOn();
+        $this->assertSame('private-user.'.$recipient->id, $unreadChannels[1]->name);
+
+        $reverseDirectionMessage = Message::query()->create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $recipient->id,
+            'body' => 'Reply',
+            'expires_at' => now()->addDay(),
+        ]);
+        $reverseDirectionChannels = (new MessageSent($reverseDirectionMessage))->broadcastOn();
+        $this->assertSame('private-user.'.$sender->id, $reverseDirectionChannels[1]->name);
+
+        Message::query()->create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $sender->id,
+            'body' => 'Read message',
+            'read_at' => now(),
+            'expires_at' => now()->addDay(),
+        ]);
+        Message::query()->create([
+            'conversation_id' => $conversation->id,
+            'sender_id' => $recipient->id,
+            'body' => 'Sent by me',
+            'expires_at' => now()->addDay(),
+        ]);
+        Message::query()->create([
+            'conversation_id' => $otherConversation->id,
+            'sender_id' => $other->id,
+            'body' => 'Expired message',
+            'expires_at' => now()->subSecond(),
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $recipient->id]])
+            ->getJson(route('messages.unread-count'))
+            ->assertOk()
+            ->assertExactJson(['unread_count' => 1]);
+
+        $this->withSession(['login_user' => ['id' => $sender->id]])
+            ->getJson(route('messages.unread-count'))
+            ->assertOk()
+            ->assertExactJson(['unread_count' => 2]);
+
+        $this->withSession(['login_user' => ['id' => $recipient->id]])
+            ->postJson(route('messages.read', $unread))
+            ->assertOk();
+
+        $this->withSession(['login_user' => ['id' => $recipient->id]])
+            ->getJson(route('messages.unread-count'))
+            ->assertOk()
+            ->assertExactJson(['unread_count' => 0]);
+    }
+
+    public function test_floating_chat_loads_messages_without_the_application_shell(): void
+    {
+        $user = $this->makeUser('sender@example.test');
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('messages.index', ['widget' => 1]))
+            ->assertOk()
+            ->assertSee('class="chat-frame-page"', false)
+            ->assertSee('id="messagesApp"', false)
+            ->assertDontSee('id="chatWidget"', false);
     }
 
     public function test_messages_support_private_images_receipts_and_participant_authorization(): void

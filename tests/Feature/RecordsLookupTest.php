@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Purok;
 use App\Models\Record;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -13,6 +14,8 @@ class RecordsLookupTest extends TestCase
 
     public function test_search_matches_full_name_or_registry_and_translates_kapisanan(): void
     {
+        $withoutDelistment = $this->makeInquireUser();
+        $withDelistment = $this->makeInquireUser(['Delistment_allow' => true]);
         Record::query()->create([
             'full_name' => 'Sample Buklod Person',
             'registry' => 'REG-2030-0001',
@@ -36,7 +39,7 @@ class RecordsLookupTest extends TestCase
             'kapisanan' => 'binhi',
         ]);
 
-        $this->withSession(['login_user' => ['id' => 1]])
+        $this->withSession(['login_user' => ['id' => $withoutDelistment->id]])
             ->getJson(route('records.search', ['q' => 'SAMPLE BUKLOD']))
             ->assertOk()
             ->assertJsonPath('data.0.name', 'Sample Buklod Person')
@@ -46,8 +49,13 @@ class RecordsLookupTest extends TestCase
             ->assertJsonPath('data.0.grupo', '3')
             ->assertJsonPath('data.0.date_of_baptism', '2020-02-03')
             ->assertJsonPath('data.0.date_of_entry', '2020-02-04')
-            ->assertJsonPath('data.0.r2_10_eligibility', 'ELIGIBLE')
+            ->assertJsonPath('data.0.r2_10_eligibility', null)
             ->assertJsonPath('data.0.status', 'MS');
+
+        $this->withSession(['login_user' => ['id' => $withDelistment->id]])
+            ->getJson(route('records.search', ['q' => 'SAMPLE BUKLOD']))
+            ->assertOk()
+            ->assertJsonPath('data.0.r2_10_eligibility', 'ELIGIBLE');
 
         $this->withSession(['login_user' => ['id' => 1]])
             ->getJson(route('records.search', ['q' => 'REG-2030-0002']))
@@ -62,7 +70,8 @@ class RecordsLookupTest extends TestCase
 
     public function test_inquire_modify_page_uses_the_database_search_routes(): void
     {
-        $this->withSession(['login_user' => ['id' => 1]])
+        $user = $this->makeInquireUser();
+        $this->withSession(['login_user' => ['id' => $user->id]])
             ->get(route('inquire-modify'))
             ->assertOk()
             ->assertSee('records\\/search', false)
@@ -80,8 +89,73 @@ class RecordsLookupTest extends TestCase
             ->assertDontSee('Naintindihan ko')
             ->assertSee('__RECORD_ID__', false)
             ->assertSee('<select id="rm-gender" required>', false)
+            ->assertDontSee('<select id="rm-purok">', false)
+            ->assertSee('id="rm-birthday"', false)
+            ->assertDontSee('id="rm-marital-known"', false)
+            ->assertSee('id="rm-married"', false)
+            ->assertDontSee('Monthly action is locked by code', false)
+            ->assertDontSee('Clear this previous monthly movement code', false)
+            ->assertDontSee('rm-clear-monthly-code', false)
+            ->assertSee('id="rm-purok-display"', false)
+            ->assertSee('id="rm-r210-toggle" class="reg-eye" disabled', false)
+            ->assertSee('maxlength="13" placeholder="13 letters/numbers or RFID"', false)
+            ->assertSee("date_of_birth: ['rm-birthday', 'Birthday']", false)
+            ->assertSee('id="reg-save-btn" disabled', false)
+            ->assertSee('Name match only — this is a warning, not a save error.', false)
+            ->assertSee('function normalizedValue(key, value)', false)
+            ->assertSee("if (key === 'registry_number') return normalized.toUpperCase();", false)
             ->assertDontSee('PUROK_SPLITS')
             ->assertDontSee('DEMO_MEMBERS');
+    }
+
+    public function test_authorized_delistment_user_can_open_r210_eligibility(): void
+    {
+        $user = $this->makeInquireUser(['Delistment_allow' => true]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('inquire-modify'))
+            ->assertOk()
+            ->assertSee('id="rm-r210-toggle" class="reg-eye" >Show</button>', false);
+    }
+
+    public function test_inquire_modify_grupo_range_and_purok_label_follow_the_member_split_range(): void
+    {
+        Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Purok 2A',
+            'grupo_start' => 1,
+            'grupo_end' => 7,
+        ]);
+        Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Purok 2B',
+            'grupo_start' => 8,
+            'grupo_end' => 10,
+        ]);
+        Record::query()->create([
+            'full_name' => 'Member in Purok 2A',
+            'purok' => '2',
+            'grupo' => '4',
+        ]);
+        Record::query()->create([
+            'full_name' => 'Member in Purok 2B',
+            'purok' => '2',
+            'grupo' => '9',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->getJson(route('records.search', ['q' => 'Member in Purok 2A']))
+            ->assertOk()
+            ->assertJsonPath('data.0.purok_name', 'Purok 2A')
+            ->assertJsonPath('data.0.grupo_min', 1)
+            ->assertJsonPath('data.0.grupo_max', 7);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->getJson(route('records.search', ['q' => 'Member in Purok 2B']))
+            ->assertOk()
+            ->assertJsonPath('data.0.purok_name', 'Purok 2B')
+            ->assertJsonPath('data.0.grupo_min', 8)
+            ->assertJsonPath('data.0.grupo_max', 10);
     }
 
     public function test_live_search_suggestions_narrow_as_name_or_registry_query_grows(): void
@@ -306,7 +380,9 @@ class RecordsLookupTest extends TestCase
         $this->withSession(['login_user' => ['id' => 1]])
             ->putJson(route('records.update', $record), ['grupo' => 7])
             ->assertOk()
-            ->assertJsonPath('data.grupo', '7');
+            ->assertJsonPath('data.grupo', '7')
+            ->assertJsonPath('data.grupo_min', 5)
+            ->assertJsonPath('data.grupo_max', 10);
 
         $this->withSession(['login_user' => ['id' => 1]])
             ->putJson(route('records.update', $record), ['grupo' => 4])
@@ -324,5 +400,245 @@ class RecordsLookupTest extends TestCase
             'grupo' => '7',
         ]);
         $this->assertSame('2000-05-10', $record->fresh()->date_of_birth->format('Y-m-d'));
+    }
+
+    public function test_inquire_modify_auto_selects_kapisanan_when_birthdate_and_marital_status_are_known(): void
+    {
+        $record = Record::query()->create([
+            'full_name' => 'Kapisanan Candidate',
+            'status' => 'MS',
+        ]);
+        $user = $this->makeInquireUser();
+        $birthday = now()->subYears(17)->toDateString();
+
+        $this->assertFalse($record->fresh()->is_married);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->putJson(route('records.update', $record), [
+                'date_of_birth' => $birthday,
+                'kapisanan' => 'Kadiwa',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.is_married', false)
+            ->assertJsonPath('data.kapisanan', 'binhi');
+
+        $this->assertDatabaseHas('records', [
+            'id' => $record->id,
+            'is_married' => 0,
+            'kapisanan' => 'binhi',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->putJson(route('records.update', $record), [
+                'is_married' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.is_married', true)
+            ->assertJsonPath('data.kapisanan', 'Buklod');
+
+        $this->assertDatabaseHas('records', [
+            'id' => $record->id,
+            'is_married' => 1,
+            'kapisanan' => 'B',
+        ]);
+
+        $nonMarriedBuklod = Record::query()->create([
+            'full_name' => 'Buklod Must Be Married',
+            'kapisanan' => 'K',
+            'is_married' => false,
+        ]);
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->putJson(route('records.update', $nonMarriedBuklod), ['kapisanan' => 'Buklod'])
+            ->assertOk()
+            ->assertJsonPath('data.is_married', true)
+            ->assertJsonPath('data.kapisanan', 'Buklod');
+        $this->assertDatabaseHas('records', [
+            'id' => $nonMarriedBuklod->id,
+            'kapisanan' => 'B',
+            'is_married' => 1,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->putJson(route('records.update', $record), [
+                'is_married' => 0,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.is_married', false)
+            ->assertJsonPath('data.kapisanan', 'binhi');
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->putJson(route('records.update', $record), ['is_married' => null])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('is_married');
+
+        $adult = Record::query()->create([
+            'full_name' => 'Adult Not Married Member',
+            'date_of_birth' => now()->subYears(18)->toDateString(),
+            'is_married' => 0,
+            'kapisanan' => 'binhi',
+        ]);
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->putJson(route('records.update', $adult), ['name' => 'Adult Updated'])
+            ->assertOk()
+            ->assertJsonPath('data.kapisanan', 'Kadiwa');
+
+        $manual = Record::query()->create([
+            'full_name' => 'Manual Kapisanan Member',
+            'is_married' => 0,
+            'kapisanan' => 'K',
+        ]);
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->putJson(route('records.update', $manual), ['kapisanan' => 'Suliranin'])
+            ->assertOk()
+            ->assertJsonPath('data.kapisanan', 'Suliranin');
+
+        $marriedWithoutBirthday = Record::query()->create([
+            'full_name' => 'Married Without Birthday',
+            'is_married' => 0,
+            'kapisanan' => 'K',
+        ]);
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->putJson(route('records.update', $marriedWithoutBirthday), [
+                'is_married' => 1,
+                'kapisanan' => 'Kadiwa',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.is_married', true)
+            ->assertJsonPath('data.kapisanan', 'Buklod');
+        $this->assertDatabaseHas('records', [
+            'id' => $marriedWithoutBirthday->id,
+            'is_married' => 1,
+            'kapisanan' => 'B',
+        ]);
+    }
+
+    public function test_monthly_code_is_preserved_while_all_record_fields_can_be_edited(): void
+    {
+        $record = Record::query()->create([
+            'full_name' => 'Locked Monthly Member',
+            'status' => 'MS',
+            'monthly_code' => 'MS: B',
+            'date_of_birth' => '2000-01-01',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $record), [
+                'name' => 'Changed Name',
+                'date_of_birth' => '1999-12-31',
+                'gender' => 'Female',
+                'grupo' => 2,
+                'kapisanan' => 'Suliranin',
+                'is_married' => 1,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Changed Name')
+            ->assertJsonPath('data.is_married', true)
+            ->assertJsonPath('data.kapisanan', 'Buklod')
+            ->assertJsonPath('data.date_of_birth', '1999-12-31')
+            ->assertJsonPath('data.monthly_code', 'MS: B');
+
+        $this->assertDatabaseHas('records', [
+            'id' => $record->id,
+            'full_name' => 'Changed Name',
+            'gender' => 'B',
+            'grupo' => '2',
+            'monthly_code' => 'MS: B',
+            'is_married' => 1,
+            'kapisanan' => 'B',
+        ]);
+        $this->assertSame('1999-12-31', $record->fresh()->date_of_birth->format('Y-m-d'));
+    }
+
+    public function test_inquire_modify_cannot_transfer_between_split_puroks_sharing_a_header(): void
+    {
+        Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Purok 2a',
+            'grupo_start' => 1,
+            'grupo_end' => 7,
+        ]);
+        Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Purok 2b',
+            'grupo_start' => 8,
+            'grupo_end' => 10,
+        ]);
+        $record = Record::query()->create([
+            'full_name' => 'Member in Split Purok',
+            'purok' => '2',
+            'grupo' => '3',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $record), ['grupo' => 8])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('grupo');
+
+        $this->assertDatabaseHas('records', [
+            'id' => $record->id,
+            'purok' => '2',
+            'grupo' => '3',
+        ]);
+    }
+
+    public function test_registry_edits_require_thirteen_alphanumeric_characters_and_explain_duplicates(): void
+    {
+        $record = Record::query()->create([
+            'full_name' => 'First Member',
+            'registry' => 'ABCDEFGHIJKLM',
+        ]);
+        Record::query()->create([
+            'full_name' => 'Existing Registry Owner',
+            'registry' => 'ZXCVBNMASDFGH',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $record), ['registry_number' => 'TOO-SHORT'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('registry_number')
+            ->assertJsonPath('errors.registry_number.0', 'Enter exactly 13 letters or numbers, or RFID.');
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $record), ['registry_number' => 'zxcvbnmasdfgh'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('registry_number')
+            ->assertJsonPath(
+                'errors.registry_number.0',
+                'This registry number is already assigned to: Existing Registry Owner (record #2, registry ZXCVBNMASDFGH).'
+            );
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->putJson(route('records.update', $record), ['registry_number' => 'qwertyuiop123'])
+            ->assertOk()
+            ->assertJsonPath('data.registry_number', 'QWERTYUIOP123');
+
+        $this->assertDatabaseHas('records', [
+            'id' => $record->id,
+            'registry' => 'QWERTYUIOP123',
+        ]);
+    }
+
+    public function test_rfid_can_be_used_by_multiple_records_during_registry_edits(): void
+    {
+        $first = Record::query()->create(['full_name' => 'First RFID Member', 'registry' => 'ABCDEFGHIJKLM']);
+        $second = Record::query()->create(['full_name' => 'Second RFID Member', 'registry' => 'ZXCVBNMASDFGH']);
+
+        foreach ([$first, $second] as $record) {
+            $this->withSession(['login_user' => ['id' => 1]])
+                ->putJson(route('records.update', $record), ['registry_number' => 'rfid'])
+                ->assertOk()
+                ->assertJsonPath('data.registry_number', 'RFID');
+        }
+    }
+
+    private function makeInquireUser(array $attributes = []): User
+    {
+        return User::query()->create($attributes + [
+            'gmail' => fake()->unique()->safeEmail(),
+            'password' => 'password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+            'Inquire_Allow' => true,
+        ]);
     }
 }

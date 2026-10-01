@@ -2,16 +2,20 @@
 
 namespace App\Http\Controllers;
 
+use Carbon\Carbon;
 use App\Models\Purok;
 use App\Models\Record;
+use App\Models\GlobalVariable;
+use App\Services\R210Eligibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class RecordsController extends Controller
 {
-    public function search(Request $request): JsonResponse
+    public function search(Request $request, R210Eligibility $eligibility): JsonResponse
     {
         $validated = $request->validate([
             'q' => ['required', 'string', 'max:255'],
@@ -38,8 +42,11 @@ class RecordsController extends Controller
             ->limit(50)
             ->get();
 
+        $requirements = GlobalVariable::query()->first();
+        $canViewEligibility = $this->canViewDelistmentEligibility($request);
+
         return response()->json([
-            'data' => $records->map(fn (Record $record): array => $this->present($record)),
+            'data' => $records->map(fn (Record $record): array => $this->present($record, $eligibility, $requirements, $canViewEligibility)),
         ]);
     }
 
@@ -135,66 +142,128 @@ class RecordsController extends Controller
         ]);
     }
 
-    public function update(Request $request, Record $record): JsonResponse
+    public function update(Request $request, Record $record, R210Eligibility $eligibility): JsonResponse
     {
         $validated = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:150'],
             'registry_number' => [
                 'sometimes',
-                'nullable',
+                'required',
                 'string',
-                'max:100',
-                Rule::unique('records', 'registry')->ignore($record->getKey()),
+                'regex:/\A(?:[A-Z0-9]{13}|RFID)\z/i',
             ],
             'gender' => ['sometimes', 'required', 'string', Rule::in(['Male', 'Female'])],
             'kapisanan' => ['sometimes', 'nullable', 'string', 'max:50'],
-            'grupo' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:24'],
             'purok' => ['prohibited'],
+            'grupo' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:999'],
             'date_of_baptism' => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
             'date_of_birth' => ['sometimes', 'nullable', 'date', 'before_or_equal:today'],
+            'is_married' => ['sometimes', 'required', 'boolean'],
             'evangelist' => ['sometimes', 'nullable', 'string', 'max:150'],
+        ], [
+            'registry_number.regex' => 'Enter exactly 13 letters or numbers, or RFID.',
         ]);
 
-        if (isset($validated['grupo']) && $validated['grupo'] !== '') {
-            preg_match('/\d+/', trim((string) $record->purok), $purokNumber);
-            $purokSetting = isset($purokNumber[0])
-                ? Purok::query()->where('purok_number', $purokNumber[0])->first()
-                : null;
-            $minimum = $purokSetting?->grupo_start ?? 1;
-            $maximum = $purokSetting?->grupo_end ?? 24;
-            if ((int) $validated['grupo'] < $minimum || (int) $validated['grupo'] > $maximum) {
-                throw ValidationException::withMessages([
-                    'grupo' => ["Grupo must stay between {$minimum} and {$maximum} for this Purok."],
-                ]);
-            }
-        }
-
         $attributes = [];
-        $fieldMap = [
-            'name' => 'full_name',
-            'registry_number' => 'registry',
-            'gender' => 'gender',
-            'kapisanan' => 'kapisanan',
-            'grupo' => 'grupo',
-            'date_of_baptism' => 'date_of_baptism',
-            'date_of_birth' => 'date_of_birth',
-            'evangelist' => 'evangelist',
-        ];
-
-        foreach ($fieldMap as $input => $column) {
-            if (array_key_exists($input, $validated)) {
-                $attributes[$column] = match ($input) {
-                    'kapisanan' => $this->storeKapisanan($validated[$input]),
-                    'gender' => $this->storeGender($validated[$input]),
-                    default => $validated[$input],
-                };
+            if (array_key_exists('registry_number', $validated)) {
+                $registry = mb_strtoupper(trim($validated['registry_number']));
+                if ($registry !== 'RFID') {
+                    $duplicates = Record::query()
+                        ->whereKeyNot($record->getKey())
+                        ->whereRaw('UPPER(TRIM(registry)) = ?', [$registry])
+                        ->orderBy('full_name')
+                        ->get(['id', 'full_name', 'registry']);
+                    if ($duplicates->isNotEmpty()) {
+                        $matches = $duplicates->map(fn (Record $duplicate): string => trim((string) $duplicate->full_name)
+                            .' (record #'.$duplicate->id.', registry '.trim((string) $duplicate->registry).')')->implode(', ');
+                        throw ValidationException::withMessages([
+                            'registry_number' => ["This registry number is already assigned to: {$matches}."],
+                        ]);
+                    }
+                }
+                $validated['registry_number'] = $registry;
             }
-        }
 
-        $record->fill($attributes)->save();
+            if (array_key_exists('grupo', $validated) && $validated['grupo'] !== null && $validated['grupo'] !== '') {
+                $purokNumber = $this->normalizePurokNumber($record->purok);
+                $matchingPuroks = Purok::query()
+                    ->where('purok_number', $purokNumber)
+                    ->orderBy('grupo_start')
+                    ->orderBy('id')
+                    ->get();
+                $currentPurok = $this->purokForGrupo($matchingPuroks, $record->grupo);
+                if ($matchingPuroks->isNotEmpty() && $currentPurok === null) {
+                    $ranges = $matchingPuroks
+                        ->filter(fn (Purok $purok): bool => ! $purok->full_purok)
+                        ->map(fn (Purok $purok): string => "{$purok->grupo_start}-{$purok->grupo_end}")
+                        ->implode(', ');
+                    throw ValidationException::withMessages([
+                        'grupo' => ["The current Grupo is not in a configured Purok range ({$ranges}); update it through Monthly Modify."],
+                    ]);
+                }
+                $grupoMin = $currentPurok ? ($currentPurok->full_purok ? 1 : (int) $currentPurok->grupo_start) : null;
+                $grupoMax = $currentPurok ? ($currentPurok->full_purok ? 24 : (int) $currentPurok->grupo_end) : null;
+                if ($currentPurok && ((int) $validated['grupo'] < $grupoMin || (int) $validated['grupo'] > $grupoMax)) {
+                    throw ValidationException::withMessages([
+                        'grupo' => ["Grupo must stay between {$grupoMin} and {$grupoMax} for this Purok. Use Monthly Modify to transfer to another Purok."],
+                    ]);
+                }
+            }
+
+            $fieldMap = [
+                'name' => 'full_name',
+                'registry_number' => 'registry',
+                'gender' => 'gender',
+                'kapisanan' => 'kapisanan',
+                'grupo' => 'grupo',
+                'date_of_baptism' => 'date_of_baptism',
+                'date_of_birth' => 'date_of_birth',
+                'evangelist' => 'evangelist',
+            ];
+
+            foreach ($fieldMap as $input => $column) {
+                if (array_key_exists($input, $validated)) {
+                    $attributes[$column] = match ($input) {
+                        'kapisanan' => $this->storeKapisanan($validated[$input]),
+                        'gender' => $this->storeGender($validated[$input]),
+                        default => $validated[$input],
+                    };
+                }
+            }
+
+            DB::transaction(function () use ($record, $attributes, $validated): void {
+                $lockedRecord = Record::query()->lockForUpdate()->findOrFail($record->getKey());
+                $maritalFieldsChanged = array_key_exists('is_married', $validated);
+                $isMarried = $maritalFieldsChanged
+                    ? (bool) $validated['is_married']
+                    : (bool) $lockedRecord->is_married;
+                if ($maritalFieldsChanged) {
+                    $attributes['is_married'] = $isMarried;
+                }
+
+                $birthday = array_key_exists('date_of_birth', $attributes)
+                    ? $attributes['date_of_birth']
+                    : $lockedRecord->date_of_birth?->format('Y-m-d');
+                if ($isMarried || $birthday) {
+                    $attributes['kapisanan'] = $isMarried
+                        ? 'B'
+                        : (Carbon::parse($birthday)->age < 18 ? 'binhi' : 'K');
+                } elseif (array_key_exists('kapisanan', $validated)) {
+                    $attributes['kapisanan'] = $this->storeKapisanan($validated['kapisanan']);
+                }
+
+                $kapisanan = $attributes['kapisanan'] ?? $lockedRecord->kapisanan;
+                if (in_array(mb_strtolower(trim((string) $kapisanan)), ['b', 'buklod'], true)) {
+                    $attributes['is_married'] = true;
+                }
+
+                $lockedRecord->fill($attributes)->save();
+            });
+        $requirements = GlobalVariable::query()->first();
+        $canViewEligibility = $this->canViewDelistmentEligibility($request);
 
         return response()->json([
-            'data' => $this->present($record->refresh()),
+            'data' => $this->present($record->refresh(), $eligibility, $requirements, $canViewEligibility),
         ]);
     }
 
@@ -211,8 +280,21 @@ class RecordsController extends Controller
         return response()->json(['message' => 'Inactive record deleted.']);
     }
 
-    private function present(Record $record): array
+    private function present(
+        Record $record,
+        R210Eligibility $eligibility,
+        ?GlobalVariable $requirements,
+        bool $canViewEligibility
+    ): array
     {
+        $purokSetting = $this->purokSettingForRecord($record);
+        $grupoMin = $purokSetting
+            ? ($purokSetting->full_purok ? 1 : (int) $purokSetting->grupo_start)
+            : 1;
+        $grupoMax = $purokSetting
+            ? ($purokSetting->full_purok ? 24 : (int) $purokSetting->grupo_end)
+            : 24;
+
         return [
             'id' => $record->id,
             'name' => $record->full_name ?? '',
@@ -223,12 +305,64 @@ class RecordsController extends Controller
             'grupo' => $record->grupo ?? '',
             'date_of_baptism' => $record->date_of_baptism?->format('Y-m-d') ?? '',
             'date_of_birth' => $record->date_of_birth?->format('Y-m-d') ?? '',
+            'is_married' => $record->is_married,
             'evangelist' => $record->evangelist ?? '',
             'date_of_entry' => $record->date_of_entry?->format('Y-m-d') ?? '',
-            'r2_10_eligibility' => $record->r2_10_eligibility ?? '',
+            'r2_10_eligibility' => $canViewEligibility
+                ? ($eligibility->forRecord($record, $requirements) ? 'ELIGIBLE' : 'NOT ELIGIBLE')
+                : null,
             'status' => $record->status ?? '',
+            'monthly_code' => $record->monthly_code ?? '',
+            'purok_name' => $purokSetting?->purok_name ?: ($record->purok ? 'Purok '.$record->purok : ''),
+            'grupo_min' => $grupoMin,
+            'grupo_max' => $grupoMax,
         ];
     }
+
+    private function canViewDelistmentEligibility(Request $request): bool
+    {
+        $user = $request->session()->get('login_user', []);
+        $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($user['tungkulin'] ?? '')) ?? ''));
+
+        return in_array($role, ['head secretary', 'secretary head'], true)
+            || (bool) ($user['Delistment_allow'] ?? false);
+    }
+
+    private function normalizePurokNumber(mixed $value): ?int
+    {
+        $value = trim((string) $value);
+        if (preg_match('/^(?:Purok\s*)?(\d+)$/i', $value, $matches) !== 1) {
+            return null;
+        }
+
+        return (int) $matches[1];
+    }
+
+    private function purokForGrupo(\Illuminate\Support\Collection $puroks, mixed $grupo): ?Purok
+    {
+        if ($grupo === null || $grupo === '') {
+            return $puroks->first(fn (Purok $purok): bool => ! $purok->full_purok)
+                ?? $puroks->first();
+        }
+
+        return $puroks->first(fn (Purok $purok): bool => ! $purok->full_purok
+                && (int) $grupo >= $purok->grupo_start
+                && (int) $grupo <= $purok->grupo_end)
+            ?? $puroks->first(fn (Purok $purok): bool => $purok->full_purok);
+    }
+
+    private function purokSettingForRecord(Record $record): ?Purok
+    {
+        $number = $this->normalizePurokNumber($record->purok);
+        $puroks = $number === null ? collect() : Purok::query()
+            ->where('purok_number', $number)
+            ->orderBy('grupo_start')
+            ->orderBy('id')
+            ->get();
+
+        return $this->purokForGrupo($puroks, $record->grupo);
+    }
+
 
     private function presentHelperRecords(array $records): array
     {

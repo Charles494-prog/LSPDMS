@@ -33,8 +33,8 @@ class SuperadminDashboardTest extends TestCase
             ->assertDontSee('secret-password')
             ->assertDontSee('name="password"')
             ->assertSee('id="saveSignatoriesBtn" disabled', false)
-            ->assertSee('id="signatoriesSuccessTitle">Signatories saved!', false)
-            ->assertSee('id="closeSignatoriesSuccess"', false);
+            ->assertSee('id="saToastContainer"', false)
+            ->assertDontSee('id="signatoriesSuccessModal"', false);
     }
 
     public function test_superadmin_layout_keeps_authenticated_head_secretary_identity_after_user_loops(): void
@@ -123,6 +123,8 @@ class SuperadminDashboardTest extends TestCase
                     'form_generator_allow' => 0,
                     'Delistment_allow' => 1,
                     'Inquire_Allow' => 0,
+                    'tarheta_status_allow' => 1,
+                    'filter_bnh_helper_allow' => 1,
                 ]],
             ])
             ->assertOk();
@@ -133,7 +135,17 @@ class SuperadminDashboardTest extends TestCase
             'form_generator_allow' => 0,
             'Delistment_allow' => 1,
             'Inquire_Allow' => 0,
+            'tarheta_status_allow' => 1,
+            'filter_bnh_helper_allow' => 1,
         ]);
+
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->get(route('superadmin-dashboard'))
+            ->assertOk()
+            ->assertSee('Allow Tarheta<br>Status Checker', false)
+            ->assertSee('data-permission="tarheta_status_allow" checked', false)
+            ->assertSee('Allow Filter &amp;<br>BNH Helper', false)
+            ->assertSee('data-permission="filter_bnh_helper_allow" checked', false);
 
         $this->withSession(['login_user' => ['id' => $admin->id]])
             ->putJson(route('superadmin.permissions.update'), [
@@ -143,6 +155,8 @@ class SuperadminDashboardTest extends TestCase
                     'form_generator_allow' => 1,
                     'Delistment_allow' => 1,
                     'Inquire_Allow' => 1,
+                    'tarheta_status_allow' => 1,
+                    'filter_bnh_helper_allow' => 1,
                 ]],
             ])
             ->assertUnprocessable();
@@ -195,6 +209,10 @@ class SuperadminDashboardTest extends TestCase
             ->assertSee('Purok Three')
             ->assertSee('secretary@example.test')
             ->assertSee('Worker Name')
+            ->assertSee('Minimum years since date of entry')
+            ->assertSee('Baptism cutoff date')
+            ->assertDontSee('delistEntryCheck')
+            ->assertSee('<select id="gvEntryYears" required>', false)
             ->assertSee('type="text" class="signatory-input manggagawa-input"', false)
             ->assertDontSee('<select class="signatory-input manggagawa-input">', false);
 
@@ -212,7 +230,6 @@ class SuperadminDashboardTest extends TestCase
                 'baptism_requirement' => '2026-01-01 00:00:00',
                 'entry_years_requirement' => 2,
                 'dateofbaptism_requirement_boolean' => 1,
-                'dateofentryrequirement_boolean' => 0,
             ])
             ->assertOk();
 
@@ -229,7 +246,6 @@ class SuperadminDashboardTest extends TestCase
             'baptism_requirement' => '2026-01-01 00:00:00',
             'entry_years_requirement' => 2,
             'dateofbaptism_requirement_boolean' => 1,
-            'dateofentryrequirement_boolean' => 0,
         ]);
 
         $this->assertInstanceOf(GlobalVariable::class, GlobalVariable::query()->first());
@@ -242,6 +258,134 @@ class SuperadminDashboardTest extends TestCase
             ->assertSee('Sample District')
             ->assertSee('D-456')
             ->assertSee('Pastor Person');
+    }
+
+    public function test_puroks_can_share_a_header_number(): void
+    {
+        $admin = User::query()->create([
+            'gmail' => 'admin@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->putJson(route('superadmin.signatories.update'), [
+                'puroks' => [
+                    [
+                        'purok_number' => 2,
+                        'purok_name' => 'Purok 2a',
+                        'grupo_start' => 1,
+                        'grupo_end' => 6,
+                        'full_purok' => 0,
+                    ],
+                    [
+                        'purok_number' => 2,
+                        'purok_name' => 'Purok 2b',
+                        'grupo_start' => 7,
+                        'grupo_end' => 10,
+                        'full_purok' => 0,
+                    ],
+                ],
+            ])
+            ->assertOk();
+
+        $this->assertSame(2, Purok::query()->where('purok_number', 2)->count());
+    }
+
+    public function test_purok_ranges_sharing_a_header_cannot_overlap(): void
+    {
+        $admin = User::query()->create([
+            'gmail' => 'admin@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->putJson(route('superadmin.signatories.update'), [
+                'puroks' => [
+                    [
+                        'purok_number' => 2,
+                        'purok_name' => 'Purok 2a',
+                        'grupo_start' => 1,
+                        'grupo_end' => 6,
+                        'full_purok' => 0,
+                    ],
+                    [
+                        'purok_number' => 2,
+                        'purok_name' => 'Purok 2b',
+                        'grupo_start' => 6,
+                        'grupo_end' => 10,
+                        'full_purok' => 0,
+                    ],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('puroks.1.grupo_start');
+
+        $this->assertSame(0, Purok::query()->count());
+    }
+
+    public function test_complete_purok_cannot_overlap_a_split_purok_with_the_same_header(): void
+    {
+        $admin = User::query()->create([
+            'gmail' => 'admin@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $purok2a = Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Purok 2a',
+            'grupo_start' => 1,
+            'grupo_end' => 6,
+            'full_purok' => false,
+        ]);
+        $purok2b = Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Purok 2b',
+            'grupo_start' => 7,
+            'grupo_end' => 11,
+            'full_purok' => false,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->putJson(route('superadmin.signatories.update'), [
+                'puroks' => [
+                    [
+                        'id' => $purok2a->id,
+                        'purok_number' => '2',
+                        'purok_name' => 'Purok 2a',
+                        'grupo_start' => 1,
+                        'grupo_end' => 6,
+                        'full_purok' => 1,
+                    ],
+                    [
+                        'id' => $purok2b->id,
+                        'purok_number' => 2,
+                        'purok_name' => 'Purok 2b',
+                        'grupo_start' => 7,
+                        'grupo_end' => 11,
+                        'full_purok' => 0,
+                    ],
+                ],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('puroks.0.full_purok');
+
+        $this->assertDatabaseHas('puroks', [
+            'id' => $purok2a->id,
+            'full_purok' => false,
+            'grupo_start' => 1,
+            'grupo_end' => 6,
+        ]);
+        $this->assertDatabaseHas('puroks', [
+            'id' => $purok2b->id,
+            'full_purok' => false,
+            'grupo_start' => 7,
+            'grupo_end' => 11,
+        ]);
     }
 
     public function test_security_settings_are_persisted_and_only_head_secretary_can_access_them(): void
@@ -339,5 +483,40 @@ class SuperadminDashboardTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.is_verified', false)
             ->assertJsonPath('data.revoked_current_session', true);
+    }
+
+    public function test_baptism_cutoff_is_required_when_enabled_and_entry_years_are_always_required(): void
+    {
+        $admin = User::query()->create([
+            'gmail' => 'requirements-admin@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $base = [
+            'dateofbaptism_requirement_boolean' => 1,
+            'entry_years_requirement' => 2,
+        ];
+
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->putJson(route('superadmin.global-variables.update'), $base)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('baptism_requirement');
+
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->putJson(route('superadmin.global-variables.update'), [
+                'dateofbaptism_requirement_boolean' => 0,
+                'entry_years_requirement' => null,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('entry_years_requirement');
+
+        $this->withSession(['login_user' => ['id' => $admin->id]])
+            ->putJson(route('superadmin.global-variables.update'), [
+                'dateofbaptism_requirement_boolean' => 0,
+                'entry_years_requirement' => 3,
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.entry_years_requirement', 3);
     }
 }

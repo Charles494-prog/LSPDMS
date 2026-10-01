@@ -66,7 +66,7 @@
         <div class="rem-body">
             <section class="rem-guide-card">
                 <span class="rem-guide-label">Inquire / Modify</span>
-                <p>Correct personal details, such as name, registry number, gender, baptism date, and evangelist. Update Binhi records and move a group within the same Purok.</p>
+                <p>Correct personal details, such as name, registry number, gender, baptism date, and evangelist. Update a member's Grupo within their current Purok.</p>
             </section>
             <section class="rem-guide-card rem-guide-monthly">
                 <span class="rem-guide-label">Form Generator &rsaquo; Monthly &rsaquo; Deliberation</span>
@@ -101,24 +101,31 @@
                     <h3>Edit here</h3>
                     <div class="reg-grid">
                         <div class="f span2"><label for="rm-name">Name</label><input type="text" id="rm-name"><p class="err" data-err="name"></p></div>
-                        <div class="f"><label for="rm-registry">Registry number</label><input type="text" id="rm-registry" placeholder="REG-2024-0001"><p class="err" data-err="registry_number"></p></div>
+                        <div class="f"><label for="rm-registry">Registry number</label><input type="text" id="rm-registry" maxlength="13" placeholder="13 letters/numbers or RFID"><p class="err" data-err="registry_number"></p></div>
                         <div class="f"><label for="rm-gender">Gender</label>
                             <select id="rm-gender" required><option value="" disabled>Select gender</option><option value="Male">Male</option><option value="Female">Female</option></select>
                             <p class="err" data-err="gender"></p></div>
-                        <div class="f"><label for="rm-kapisanan">Kapisanan</label><input type="text" id="rm-kapisanan"><p class="err" data-err="kapisanan"></p></div>
+                        <div class="f"><label for="rm-birthday">Birthday (Optional)</label><input type="date" id="rm-birthday" max="{{ now()->toDateString() }}"><p class="err" data-err="date_of_birth"></p></div>
+                        <div class="f"><label for="rm-married">Marital status</label>
+                            <label><input type="checkbox" id="rm-married"> Married <small>(0 = Not Married, default)</small></label>
+                        </div>
+                        <div class="f"><label for="rm-kapisanan">Kapisanan</label><input type="text" id="rm-kapisanan"><p class="hint" id="rm-kapisanan-hint"></p><p class="err" data-err="kapisanan"></p></div>
                         <div class="f"><label for="rm-grupo">Grupo</label><input type="number" id="rm-grupo" step="1"><p class="hint" id="rm-grupo-hint"></p><p class="err" data-err="grupo"></p></div>
                         <div class="f"><label for="rm-baptism">Date of baptism</label><input type="date" id="rm-baptism"><p class="err" data-err="date_of_baptism"></p></div>
                         <div class="f"><label for="rm-evangelist">Evangelist</label><input type="text" id="rm-evangelist"><p class="err" data-err="evangelist"></p></div>
                     </div>
-
                     <h3 class="reg-locked-title">Monthly portal only <small>Form Generator › Monthly › Deliberation</small></h3>
                     <div class="reg-locks">
-                        <div class="lock"><span class="lock-k">Purok</span><span class="lock-v" id="rm-purok-display">--</span></div>
                         <div class="lock"><span class="lock-k">Status</span><span class="lock-v" id="rm-status-text">--</span></div>
                         <div class="lock"><span class="lock-k">Date of entry</span><span class="lock-v" id="rm-entry-display">--</span></div>
+                        <div class="lock"><span class="lock-k">Purok</span><span class="lock-v" id="rm-purok-display">--</span></div>
                         <div class="lock"><span class="lock-k">R2-10 eligibility</span>
                             <span class="lock-v"><span id="rm-r210-display">••••••••••</span>
-                            <button type="button" id="rm-r210-toggle" class="reg-eye">Show</button></span></div>
+                            <button type="button" id="rm-r210-toggle" class="reg-eye" @disabled(! $canViewEligibility)>Show</button></span>
+                            @unless ($canViewEligibility)
+                                <span class="hint">De-Listment permission is required to view this information.</span>
+                            @endunless
+                        </div>
                     </div>
                 </div>
 
@@ -166,6 +173,7 @@
 .btn { padding: .65rem 1.15rem; border: 0; border-radius: 9px; font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: background .2s, transform .2s var(--ease), opacity .2s; }
 .btn:hover:not(:disabled) { transform: translateY(-1px); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+#reg-save-btn:disabled { background: #cbd5e1; color: #64748b; opacity: 1; }
 .btn-ink { background: var(--ink); color: #fff; } .btn-ink:hover:not(:disabled) { background: #1b3a5c; }
 .btn-gold { background: var(--gold); color: var(--ink); } .btn-gold:hover:not(:disabled) { background: #dcbc6a; }
 .btn-ghost { background: var(--bg); color: var(--ink); } .btn-ghost:hover:not(:disabled) { background: var(--line); }
@@ -246,6 +254,7 @@
 .f input, .f select { width: 100%; padding: .6rem .7rem; border: 1.5px solid var(--line); border-radius: 9px; background: #fff; color: var(--ink); font: inherit; font-size: .95rem; transition: border-color .2s, box-shadow .2s, background .2s; }
 .f input:hover, .f select:hover { border-color: #bcc6d1; }
 .f input:focus, .f select:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200,162,74,.25); }
+.f input[type="checkbox"] { width: auto; padding: 0; accent-color: var(--gold); }
 .f.is-changed input, .f.is-changed select { border-color: var(--gold); background: #fffaf0; }
 .f.has-error input, .f.has-error select { border-color: var(--danger); }
 .hint { margin-top: .25rem; color: var(--muted); font-size: .76rem; line-height: 1.4; }
@@ -333,10 +342,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const SMART_HELPER_URL = @json(route('records.smart-helper'));
     const DELETE_URL = @json(route('records.destroy', ['record' => '__RECORD_ID__']));
     const UPDATE_URL = @json(route('records.update', ['record' => '__RECORD_ID__']));
-
-    const GRUPO_MAX = 24;
-    const GRUPO_MIN = 1;
-
     async function saveMember(id, changes) {
         const response = await fetch(UPDATE_URL.replace('__RECORD_ID__', encodeURIComponent(id)), {
             method: 'PUT',
@@ -359,7 +364,9 @@ document.addEventListener('DOMContentLoaded', function () {
     /* ---------------- Elements + helpers ---------------- */
     const FIELDS = {
         name: ['rm-name', 'Name'], registry_number: ['rm-registry', 'Registry number'], gender: ['rm-gender', 'Gender'],
-        kapisanan: ['rm-kapisanan', 'Kapisanan'], grupo: ['rm-grupo', 'Grupo'], date_of_baptism: ['rm-baptism', 'Date of baptism'], evangelist: ['rm-evangelist', 'Evangelist'],
+        date_of_birth: ['rm-birthday', 'Birthday'], is_married: ['rm-married', 'Married'],
+        kapisanan: ['rm-kapisanan', 'Kapisanan'], grupo: ['rm-grupo', 'Grupo'],
+        date_of_baptism: ['rm-baptism', 'Date of baptism'], evangelist: ['rm-evangelist', 'Evangelist'],
     };
     const input = k => $(FIELDS[k][0]);
     const overlay = $('reg-modal-overlay'), modal = overlay.querySelector('.reg-modal'), form = $('reg-form');
@@ -373,7 +380,13 @@ document.addEventListener('DOMContentLoaded', function () {
         m.purok ? `Purok ${m.purok}` : '',
         m.grupo ? `Grupo ${m.grupo}` : '',
     ].filter(Boolean).join(', ') || 'Purok / Grupo unavailable';
-    const readVal = k => String(input(k).value).trim();
+    const readVal = k => input(k).type === 'checkbox'
+        ? (input(k).checked ? '1' : '0')
+        : String(input(k).value).trim();
+    const setVal = (k, value) => {
+        if (input(k).type === 'checkbox') input(k).checked = value === true || value === 1 || value === '1' || value === 'true';
+        else input(k).value = value ?? '';
+    };
     function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
     let snackTimer;
     function snack(text) { const s = $('snack'); s.textContent = text; s.classList.add('show'); clearTimeout(snackTimer); snackTimer = setTimeout(() => s.classList.remove('show'), 3600); }
@@ -633,26 +646,33 @@ document.addEventListener('DOMContentLoaded', function () {
     /* ---------------- Open / close ---------------- */
     function openMember(m) {
         lastTrigger = document.activeElement;
-        current = m; original = { ...m };
-        Object.keys(FIELDS).forEach(k => { input(k).value = m[k] ?? ''; });
+        current = m;
+        original = { ...m, is_married: m.is_married ? 1 : 0 };
+        Object.keys(FIELDS).forEach(k => setVal(k, original[k]));
+        refreshKapisanan();
         $('rm-id').value = m.id;
         $('rm-avatar').textContent = initials(m.name);
         $('rm-name-display').textContent = m.name;
         $('rm-registry-display').textContent = m.registry_number;
         const badge = $('rm-status-badge'); badge.textContent = m.status || 'Unknown'; badge.className = 'reg-badge ' + statusClass(m.status);
 
-        $('rm-purok-display').textContent = m.purok ? `Purok ${m.purok}` : '--';
         $('rm-status-text').textContent = m.status;
+        $('rm-purok-display').textContent = m.purok_name || (m.purok ? `Purok ${m.purok}` : '--');
         $('rm-entry-display').textContent = fmtDate(m.date_of_entry);
         r210 = m.r2_10_eligibility || '--'; r210Shown = false;
         $('rm-r210-display').textContent = '••••••••••'; $('rm-r210-toggle').textContent = 'Show';
-        input('grupo').min = GRUPO_MIN; input('grupo').max = GRUPO_MAX;
-        $('rm-grupo-hint').textContent = `Grupo must stay between ${GRUPO_MIN} and ${GRUPO_MAX}.`;
-
+        input('grupo').min = m.grupo_min ?? 1;
+        input('grupo').max = m.grupo_max ?? 24;
+        $('rm-grupo-hint').textContent = `Grupo must stay between ${input('grupo').min} and ${input('grupo').max}${m.purok_name ? ` in ${m.purok_name}` : ' in the current Purok'}.`;
         const twins = searchMatches.filter(x => x.id !== m.id && norm(x.name) === norm(m.name));
         const dup = $('rm-dup');
         dup.hidden = !twins.length;
-        if (twins.length) dup.textContent = `Another record has this same name (${twins.map(t => t.registry_number).join(', ')}). If it is a double entry, it can only be removed in the Monthly portal.`;
+        if (twins.length) {
+            const matches = twins.map(t =>
+                `${t.registry_number || 'no registry'} · ${t.status || 'status unavailable'}`
+            ).join('; ');
+            dup.textContent = `Name match only — this is a warning, not a save error. Other record${twins.length === 1 ? '' : 's'}: ${matches}. Verify the registry and status before treating it as a duplicate.`;
+        }
 
         clearErrors(); modal.classList.remove('is-review'); $('reg-save-msg').textContent = '';
         updateDirty();
@@ -676,9 +696,41 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     /* ---------------- Change tracking ---------------- */
+    function normalizedValue(key, value) {
+        const normalized = String(value ?? '').trim();
+        if (key === 'registry_number') return normalized.toUpperCase();
+        if (key === 'is_married') return normalized === '1' || normalized.toLowerCase() === 'true' ? '1' : '0';
+        if (key === 'grupo' && normalized !== '') {
+            const number = Number(normalized);
+            if (Number.isFinite(number)) return String(number);
+        }
+        return normalized;
+    }
+    function refreshKapisanan() {
+        const birthday = readVal('date_of_birth');
+        const kapisanan = input('kapisanan');
+        if ($('rm-married').checked) {
+            kapisanan.value = 'Buklod';
+            kapisanan.disabled = true;
+            $('rm-kapisanan-hint').textContent = 'Automatically selected: Buklod. Married is checked, so Kapisanan cannot be edited manually.';
+            return;
+        }
+        if (!birthday) {
+            kapisanan.disabled = false;
+            $('rm-kapisanan-hint').textContent = 'Enter a birthday or mark Married to auto-select Kapisanan; otherwise you can enter it manually.';
+            return;
+        }
+        const [year, month, day] = birthday.split('-').map(Number);
+        const today = new Date();
+        let age = today.getFullYear() - year;
+        if (today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day)) age--;
+        kapisanan.value = age < 18 ? 'Binhi' : 'Kadiwa';
+        kapisanan.disabled = true;
+        $('rm-kapisanan-hint').textContent = `Automatically selected: ${kapisanan.value}. Birthday is set, so Kapisanan cannot be edited manually.`;
+    }
     function changes() {
         if (!original) return [];
-        return Object.keys(FIELDS).filter(k => readVal(k) !== String(original[k] ?? ''))
+        return Object.keys(FIELDS).filter(k => normalizedValue(k, readVal(k)) !== normalizedValue(k, original[k]))
             .map(k => ({ key: k, label: FIELDS[k][1], from: String(original[k] ?? '') || '(empty)', to: readVal(k) || '(empty)' }));
     }
     function updateDirty() {
@@ -689,7 +741,21 @@ document.addEventListener('DOMContentLoaded', function () {
         $('reg-save-btn').textContent = list.length ? `Save changes (${list.length})` : 'Save changes';
     }
     form.addEventListener('input', () => { clearErrors(); updateDirty(); });
-    $('reg-reset-btn').addEventListener('click', () => { Object.keys(FIELDS).forEach(k => { input(k).value = original[k] ?? ''; }); clearErrors(); updateDirty(); });
+    form.addEventListener('change', () => { clearErrors(); updateDirty(); });
+    $('rm-married').addEventListener('change', () => {
+        refreshKapisanan();
+        updateDirty();
+    });
+    $('rm-birthday').addEventListener('change', () => {
+        refreshKapisanan();
+        updateDirty();
+    });
+    $('reg-reset-btn').addEventListener('click', () => {
+        Object.keys(FIELDS).forEach(k => setVal(k, original[k]));
+        refreshKapisanan();
+        clearErrors();
+        updateDirty();
+    });
 
     /* ---------------- Validation ---------------- */
     function clearErrors() { form.querySelectorAll('[data-err]').forEach(p => { p.textContent = ''; }); form.querySelectorAll('.f').forEach(f => f.classList.remove('has-error')); }
@@ -697,11 +763,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const errs = {};
         if (readVal('name').length < 2) errs.name = 'Enter the full name.';
         const g = Number(readVal('grupo'));
-        if (readVal('grupo') && (!Number.isInteger(g) || g < GRUPO_MIN || g > GRUPO_MAX))
-            errs.grupo = `Grupo must be ${GRUPO_MIN} to ${GRUPO_MAX}.`;
+        if (readVal('grupo') && (!Number.isInteger(g) || g < Number(input('grupo').min) || g > Number(input('grupo').max)))
+            errs.grupo = `Grupo must be ${input('grupo').min} to ${input('grupo').max} in the current Purok.`;
         if (!readVal('gender')) errs.gender = 'Choose a gender.';
         const d = readVal('date_of_baptism');
         if (d && new Date(d + 'T00:00:00') > new Date()) errs.date_of_baptism = 'The date cannot be in the future.';
+        const birthday = readVal('date_of_birth');
+        if (birthday && new Date(birthday + 'T00:00:00') > new Date()) errs.date_of_birth = 'The date cannot be in the future.';
         Object.entries(errs).forEach(([k, msg]) => {
             const p = form.querySelector(`[data-err="${k}"]`); p.textContent = msg; p.closest('.f').classList.add('has-error');
         });
@@ -726,7 +794,10 @@ document.addEventListener('DOMContentLoaded', function () {
     $('reg-back-btn').addEventListener('click', () => modal.classList.remove('is-review'));
     $('reg-confirm-btn').addEventListener('click', async () => {
         const list = changes(), payload = {};
-        list.forEach(c => { payload[c.key] = c.key === 'registry_number' ? readVal(c.key).toUpperCase() : readVal(c.key); });
+        list.forEach(c => {
+            payload[c.key] = c.key === 'is_married' ? Number(readVal(c.key))
+                : c.key === 'registry_number' ? readVal(c.key).toUpperCase() : readVal(c.key);
+        });
         const btn = $('reg-confirm-btn'); btn.disabled = true; btn.textContent = 'Saving...';
         try {
             const updated = await saveMember(current.id, payload);

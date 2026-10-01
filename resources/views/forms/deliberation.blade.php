@@ -33,10 +33,8 @@
     .duplicate-candidate { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.75rem; padding:.85rem; border:1px solid var(--border); border-radius:10px; background:var(--bg); }
     .duplicate-candidate strong,.duplicate-candidate span { display:block; }
     .duplicate-candidate span { margin-top:.25rem; color:var(--text-muted); font-size:.78rem; }
-    .reuse-controls { display:flex; align-items:center; gap:.45rem; }
-    .reuse-controls select { min-height:40px; padding:.4rem; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); font:inherit; }
-    .reuse-button,.delib-submit { min-height:44px; padding:.65rem 1rem; border:0; border-radius:9px; background:var(--accent); color:#fff; font:inherit; font-weight:750; cursor:pointer; }
-    .reuse-button:disabled,.delib-submit:disabled { opacity:.55; cursor:wait; }
+    .delib-submit { min-height:44px; padding:.65rem 1rem; border:0; border-radius:9px; background:var(--accent); color:#fff; font:inherit; font-weight:750; cursor:pointer; }
+    .delib-submit:disabled { opacity:.55; cursor:wait; }
     .delib-form-actions { display:flex; justify-content:flex-end; margin-top:1.2rem; padding-top:1rem; border-top:1px solid var(--border); }
     .delib-status { margin-top:.8rem; color:var(--text-muted); font-size:.84rem; }
     .delib-status.error { color:var(--danger); }
@@ -75,7 +73,6 @@
         .registry-inputs { gap:.17rem; }
         .registry-inputs input { height:40px; font-size:.83rem; }
         .duplicate-candidate { grid-template-columns:1fr; }
-        .reuse-controls { justify-content:flex-start; }
     }
 </style>
 
@@ -83,7 +80,7 @@
     <header class="deliberation-hero">
         <a href="{{ route('form-generator') }}">&larr; Back to Form Generator</a>
         <h1>Deliberation Form</h1>
-        <p>Enter a member's information. Asterisks mark required fields. If the member is already recorded, reuse the existing record rather than creating a duplicate.</p>
+        <p>Enter a member's information. Asterisks mark required fields. Existing records can be found, but cannot be changed or reused in Add.</p>
     </header>
 
     <nav class="deliberation-tabs" aria-label="Deliberation action">
@@ -97,7 +94,7 @@
         data-subtract-search-url="{{ route('forms.monthly.deliberation.subtract.search') }}"
         data-subtract-url="{{ route('forms.monthly.deliberation.subtract') }}"
         data-csrf="{{ csrf_token() }}"
-        data-puroks="{{ json_encode($puroks->map(fn ($purok): array => ['number' => (string) $purok->purok_number, 'name' => $purok->purok_name, 'grupo_start' => $purok->grupo_start, 'grupo_end' => $purok->grupo_end])->values()) }}">
+        data-puroks="{{ json_encode($puroks->map(fn ($purok): array => ['id' => (string) $purok->id, 'number' => (string) $purok->purok_number, 'name' => $purok->purok_name, 'grupo_start' => $purok->grupo_start, 'grupo_end' => $purok->grupo_end])->values()) }}">
         <div class="deliberation-grid">
             <div class="delib-field full">
                 <label for="delib-full-name">Full Name <span class="required-mark" aria-label="required">*</span></label>
@@ -132,10 +129,10 @@
 
             <div class="delib-field">
                 <label for="delib-purok">Purok <span class="required-mark" aria-label="required">*</span></label>
-                <select id="delib-purok" name="purok" required>
+                <select id="delib-purok" name="purok_id" required>
                     <option value="">Select Purok</option>
                     @foreach ($puroks as $purok)
-                        <option value="{{ $purok->purok_number }}">{{ $purok->purok_name ? $purok->purok_number.' - '.$purok->purok_name : 'Purok '.$purok->purok_number }}</option>
+                        <option value="{{ $purok->id }}">{{ $purok->purok_name ?: 'Purok '.$purok->purok_number }} ({{ $purok->grupo_start }}-{{ $purok->grupo_end }})</option>
                     @endforeach
                 </select>
                 <p class="delib-error" data-error="purok"></p>
@@ -154,7 +151,7 @@
                     <option value="Kadiwa">Kadiwa</option>
                     <option value="Binhi">Binhi</option>
                 </select>
-                <p class="delib-help" id="kapisananHint">Kapisanan is auto-selected when Date of Birth and Married? are both answered.</p>
+                <p class="delib-help" id="kapisananHint">Kapisanan is auto-selected from Date of Birth and marital status; Not Married (0) is the default.</p>
                 <p class="delib-error" data-error="kapisanan"></p>
             </div>
             <div class="delib-field">
@@ -183,13 +180,17 @@
                 <p class="delib-error" data-error="date_of_birth"></p>
             </div>
             <div class="delib-field">
-                <label for="delib-married">Married? <span style="color:var(--text-muted);font-weight:500">(Optional)</span></label>
-                <select id="delib-married" name="married">
-                    <option value="">Not specified</option>
-                    <option value="yes">Yes</option>
-                    <option value="no">No</option>
+                <label for="delib-married">Marital status (defaults to Not Married)</label>
+                <select id="delib-married" name="is_married">
+                    <option value="0" selected>Not Married</option>
+                    <option value="1">Married</option>
                 </select>
-                <p class="delib-error" data-error="married"></p>
+                <p class="delib-error" data-error="is_married"></p>
+            </div>
+            <div class="delib-field full">
+                <label for="delib-description">Brief Description <span style="color:var(--text-muted);font-weight:500">(Optional)</span></label>
+                <input id="delib-description" name="description" type="text" maxlength="500" placeholder="Optional note for the log">
+                <p class="delib-error" data-error="description"></p>
             </div>
         </div>
 
@@ -222,13 +223,13 @@
                 <div class="delib-field"><label for="subtractBaptism">Date of Baptism</label><input id="subtractBaptism" readonly></div>
                 <div class="delib-field"><label for="subtractEvangelist">Evangelist</label><input id="subtractEvangelist" readonly></div>
                 <div class="delib-field"><label for="subtractStatus">Current Status</label><input id="subtractStatus" readonly></div>
+                <div class="delib-field"><label for="subtractMonthlyCode">Current Monthly Code</label><input id="subtractMonthlyCode" readonly></div>
                 <div class="delib-field">
                     <label for="subtractCode">Removal Code</label>
                     <select id="subtractCode" required>
                         <option value="">Select code</option>
                         <option value="D">D</option>
                         <option value="DD">DD</option>
-                        <option value="E">E</option>
                         <option value="G">G</option>
                         <option value="H">H</option>
                     </select>
@@ -298,9 +299,12 @@
     const subtractMessage = document.getElementById('subtractStatusMessage');
     const subtractSearchStatus = document.getElementById('subtractSearchStatus');
     const subtractSubmit = document.getElementById('subtractSubmit');
+    const subtractCode = document.getElementById('subtractCode');
     const addConfirmDialog = document.getElementById('addConfirmDialog');
     const subtractConfirmDialog = document.getElementById('subtractConfirmDialog');
     let subtractSearchTimer;
+    let subtractSearchSequence = 0;
+    let activeSubtractSearch = null;
 
     function selectPanel(panel) {
         const isSubtract = panel === 'subtract';
@@ -361,7 +365,8 @@
             ['Date of Baptism', document.getElementById('delib-baptism').value || 'Not provided'],
             ['Evangelist', document.getElementById('delib-evangelist').value.trim() || 'Not provided'],
             ['Date of Birth', birthInput.value || 'Not provided'],
-            ['Married?', marriedInput.value === 'yes' ? 'Yes' : marriedInput.value === 'no' ? 'No' : 'Not provided'],
+            ['Marital status', marriedInput.value === '1' ? 'Married (1)' : 'Not Married (0)'],
+            ['Brief Description', document.getElementById('delib-description').value.trim() || 'Not provided'],
         ];
         const details = document.getElementById('addConfirmDetails');
         details.replaceChildren();
@@ -382,13 +387,13 @@
 
     function refreshKapisanan() {
         const birth = birthInput.value;
-        const married = marriedInput.value;
-        if (!birth || !married) {
+        const married = marriedInput.value === '1';
+        if (!birth) {
             kapisananInput.disabled = false;
-            document.getElementById('kapisananHint').textContent = 'Kapisanan is auto-selected when Date of Birth and Married? are both answered.';
+            document.getElementById('kapisananHint').textContent = 'Kapisanan is auto-selected from Date of Birth and marital status; Not Married (0) is the default.';
             return;
         }
-        if (married === 'yes') kapisananInput.value = 'Buklod';
+        if (married) kapisananInput.value = 'Buklod';
         else {
             const today = new Date();
             const birthDate = new Date(`${birth}T00:00:00`);
@@ -412,7 +417,7 @@
         submitButton.disabled = true;
         const alert = document.createElement('div');
         alert.className = 'duplicate-alert';
-        alert.textContent = 'This person is already in the system. Creating another record is disabled. Reuse a matching inactive record and change only its status to MS or UWP.';
+        alert.textContent = 'This person is already in the system. Creating a duplicate or changing an existing record in Add is not allowed.';
         duplicatePanel.append(alert);
 
         found.forEach(record => {
@@ -425,24 +430,11 @@
             details.textContent = `Registry: ${record.registry || '—'} · Current status: ${record.status || 'Unspecified'}`;
             identity.append(name, details);
             card.append(identity);
-            if (record.inactive) {
-                const controls = document.createElement('div');
-                controls.className = 'reuse-controls';
-                const select = document.createElement('select');
-                select.setAttribute('aria-label', `New status for ${record.name}`);
-                select.innerHTML = '<option value="MS">MS</option><option value="UWP">UWP</option>';
-                const reuse = document.createElement('button');
-                reuse.type = 'button';
-                reuse.className = 'reuse-button';
-                reuse.textContent = 'Reuse existing data';
-                reuse.addEventListener('click', () => submitRecord(record.id, select.value));
-                controls.append(select, reuse);
-                card.append(controls);
-            } else {
-                const blocked = document.createElement('span');
-                blocked.textContent = 'This record cannot be reused until its status is INACTIVE.';
-                card.append(blocked);
-            }
+            const blocked = document.createElement('span');
+            blocked.textContent = record.inactive
+                ? 'This Inactive record can be found but cannot be changed or reused here.'
+                : 'This existing record can be found but cannot be changed here.';
+            card.append(blocked);
             duplicatePanel.append(card);
         });
     }
@@ -477,6 +469,15 @@
     }
 
     function chooseSubtractRecord(record) {
+        clearTimeout(subtractSearchTimer);
+        subtractSearchSequence++;
+        activeSubtractSearch?.abort();
+        activeSubtractSearch = null;
+        subtractSearchButton.disabled = false;
+        subtractSearchInput.value = '';
+        subtractSuggestions.replaceChildren();
+        subtractSearchStatus.textContent = '';
+        subtractSearchStatus.className = 'delib-status';
         const fields = {
             subtractName: record.full_name,
             subtractRegistry: record.registry || '—',
@@ -488,18 +489,23 @@
             subtractBaptism: record.date_of_baptism || '—',
             subtractEvangelist: record.evangelist || '—',
             subtractStatus: record.status || 'Unspecified',
+            subtractMonthlyCode: record.monthly_code || '—',
         };
         Object.entries(fields).forEach(([id, value]) => {
             document.getElementById(id).value = value;
         });
         document.getElementById('subtractRecordId').value = record.id;
         subtractRecordForm.hidden = false;
-        const allowed = ['MS', 'UWP'].includes(record.status);
+        const normalizedStatus = (record.status || '').trim().toUpperCase();
+        const allowed = ['MS', 'UWP'].includes(normalizedStatus) && !record.monthly_code;
         subtractSubmit.disabled = !allowed;
-        if (record.status === 'INACTIVE') {
+        if (record.monthly_code) {
+            subtractMessage.textContent = `This record has pending monthly code "${record.monthly_code}". Clear it in Inquire / Modify before proceeding; Subtract will not overwrite it.`;
+            subtractMessage.className = 'delib-status error';
+        } else if (normalizedStatus === 'INACTIVE') {
             subtractMessage.textContent = 'Already Inactive.';
             subtractMessage.className = 'delib-status error';
-        } else if (record.status === 'MK') {
+        } else if (normalizedStatus === 'MK') {
             subtractMessage.textContent = 'MK is not removable.';
             subtractMessage.className = 'delib-status error';
         } else if (!allowed) {
@@ -512,11 +518,17 @@
     }
 
     async function searchSubtractRecords() {
+        clearTimeout(subtractSearchTimer);
+        const sequence = ++subtractSearchSequence;
+        activeSubtractSearch?.abort();
+        const controller = new AbortController();
+        activeSubtractSearch = controller;
         const query = subtractSearchInput.value.trim();
         clearSubtractSelection();
         subtractSuggestions.replaceChildren();
         if (query.length < 2) {
             subtractSearchStatus.textContent = 'Enter at least two characters to search.';
+            subtractSearchButton.disabled = false;
             return;
         }
         subtractSearchStatus.textContent = 'Searching…';
@@ -528,14 +540,17 @@
             const response = await fetch(url, {
                 credentials: 'same-origin',
                 headers: { Accept: 'application/json' },
+                signal: controller.signal,
             });
             const result = await response.json();
+            if (sequence !== subtractSearchSequence) return;
             if (!response.ok) throw new Error(result.message || 'Could not search records.');
-            if (!result.records.length) {
+            const uniqueRecords = [...new Map(result.records.map(record => [record.id, record])).values()];
+            if (!uniqueRecords.length) {
                 subtractSearchStatus.textContent = 'No matching records found.';
                 return;
             }
-            result.records.forEach(record => {
+            uniqueRecords.forEach(record => {
                 const button = document.createElement('button');
                 button.type = 'button';
                 button.className = 'subtract-suggestion';
@@ -543,17 +558,26 @@
                 const name = document.createElement('strong');
                 name.textContent = record.full_name || 'Unnamed record';
                 const details = document.createElement('span');
-                details.textContent = `Registry: ${record.registry || '—'} · Status: ${record.status || 'Unspecified'}`;
+                const location = [record.purok ? `Purok ${record.purok}` : '', record.grupo ? `Grupo ${record.grupo}` : '']
+                    .filter(Boolean)
+                    .join(' · ');
+                details.textContent = `Registry: ${record.registry || '—'} · Status: ${record.status || 'Unspecified'}`
+                    + (location ? ` · ${location}` : '')
+                    + (record.monthly_code ? ` · Pending code: ${record.monthly_code}` : '');
                 button.append(name, details);
                 button.addEventListener('click', () => chooseSubtractRecord(record));
                 subtractSuggestions.append(button);
             });
-            subtractSearchStatus.textContent = `${result.records.length} matching record${result.records.length === 1 ? '' : 's'} found. Select the correct member.`;
+            subtractSearchStatus.textContent = `${uniqueRecords.length} matching record${uniqueRecords.length === 1 ? '' : 's'} found. Select the correct member.`;
         } catch (error) {
+            if (error.name === 'AbortError' || sequence !== subtractSearchSequence) return;
             subtractSearchStatus.textContent = error.message;
             subtractSearchStatus.className = 'delib-status error';
         } finally {
-            subtractSearchButton.disabled = false;
+            if (sequence === subtractSearchSequence) {
+                activeSubtractSearch = null;
+                subtractSearchButton.disabled = false;
+            }
         }
     }
 
@@ -575,7 +599,7 @@
         }
     }
 
-    async function submitRecord(reuseRecordId = null, reuseStatus = null) {
+    async function submitRecord() {
         if (!form.reportValidity()) return;
         form.querySelectorAll('[data-error]').forEach(error => { error.textContent = ''; });
         syncRegistry();
@@ -589,12 +613,8 @@
         payload.is_rfid = rfid.checked;
         payload.registry = rfid.checked ? 'RFID' : registryValue.value;
         payload.kapisanan = kapisananInput.value;
-        if (reuseRecordId) {
-            payload.reuse_record_id = reuseRecordId;
-            payload.status = reuseStatus;
-        }
         submitButton.disabled = true;
-        setStatus(reuseRecordId ? 'Reusing the existing record…' : 'Checking for duplicates…');
+        setStatus('Checking for duplicates…');
         try {
             const duplicateCheck = await requestJson(form.dataset.duplicateUrl, 'POST', {
                 full_name: payload.full_name,
@@ -602,17 +622,15 @@
                 is_rfid: payload.is_rfid,
             });
             renderDuplicates(duplicateCheck.duplicates);
-            if (duplicateCheck.duplicates.length && !reuseRecordId) {
-                setStatus('Choose an inactive record to reuse; a duplicate cannot be added.', 'error');
+            if (duplicateCheck.duplicates.length) {
+                setStatus('This person already has a record; existing records cannot be changed or reused in Add.', 'error');
                 return;
             }
-            if (!reuseRecordId) {
-                populateAddConfirmation();
-                const confirmed = await confirmDialog(addConfirmDialog, document.getElementById('confirmAddButton'), 'add');
-                if (!confirmed) {
-                    setStatus('Adding the member was cancelled.');
-                    return;
-                }
+            populateAddConfirmation();
+            const confirmed = await confirmDialog(addConfirmDialog, document.getElementById('confirmAddButton'), 'add');
+            if (!confirmed) {
+                setStatus('Adding the member was cancelled.');
+                return;
             }
             const result = await requestJson(form.dataset.storeUrl, 'POST', payload);
             renderDuplicates([]);
@@ -623,7 +641,7 @@
             grupoInput.innerHTML = '<option value="">Select Purok first</option>';
             grupoInput.disabled = true;
             kapisananInput.disabled = false;
-            document.getElementById('kapisananHint').textContent = 'Kapisanan is auto-selected when Date of Birth and Married? are both answered.';
+            document.getElementById('kapisananHint').textContent = 'Kapisanan is auto-selected from Date of Birth and marital status; Not Married (0) is the default.';
         } catch (error) {
             setStatus(error.message, 'error');
             checkDuplicates();
@@ -671,8 +689,13 @@
     });
     birthInput.addEventListener('change', refreshKapisanan);
     marriedInput.addEventListener('change', refreshKapisanan);
+    kapisananInput.addEventListener('input', () => {
+        if (['b', 'buklod'].includes(kapisananInput.value.trim().toLowerCase())) {
+            marriedInput.value = '1';
+        }
+    });
     purokInput.addEventListener('change', () => {
-        const selected = puroks.find(purok => purok.number === purokInput.value);
+        const selected = puroks.find(purok => purok.id === purokInput.value);
         grupoInput.replaceChildren();
         if (!selected) {
             grupoInput.disabled = true;
@@ -695,6 +718,10 @@
     subtractSearchButton.addEventListener('click', searchSubtractRecords);
     subtractSearchInput.addEventListener('input', () => {
         clearTimeout(subtractSearchTimer);
+        subtractSearchSequence++;
+        activeSubtractSearch?.abort();
+        activeSubtractSearch = null;
+        subtractSearchButton.disabled = false;
         clearSubtractSelection();
         if (subtractSearchInput.value.trim().length >= 2) {
             subtractSearchTimer = window.setTimeout(searchSubtractRecords, 300);
@@ -713,6 +740,7 @@
         event.preventDefault();
         if (!subtractRecordForm.reportValidity()) return;
         const recordId = document.getElementById('subtractRecordId').value;
+        const selectedCode = subtractCode.value;
         if (!recordId) return;
         subtractSubmit.disabled = true;
         subtractMessage.textContent = 'Updating the record…';
@@ -729,12 +757,14 @@
             }
             const result = await requestJson(form.dataset.subtractUrl, 'POST', {
                 record_id: recordId,
-                code: document.getElementById('subtractCode').value,
+                code: selectedCode,
                 description: document.getElementById('subtractDescription').value,
             });
-            document.getElementById('subtractStatus').value = 'INACTIVE';
+            document.getElementById('subtractStatus').value = result.record.status;
+            document.getElementById('subtractMonthlyCode').value = result.record.monthly_code || '—';
             subtractMessage.textContent = result.message;
             subtractMessage.className = 'delib-status success';
+            subtractSubmit.disabled = true;
         } catch (error) {
             subtractMessage.textContent = error.message;
             subtractMessage.className = 'delib-status error';

@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliberationController;
 use App\Http\Controllers\DelistmentController;
 use App\Http\Controllers\FormGeneratorController;
+use App\Http\Controllers\FilterBnhHelperController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\PasswordResetController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecordsController;
 use App\Http\Controllers\SecretaryTodoController;
 use App\Http\Controllers\SuperadminController;
+use App\Http\Controllers\TarhetaStatusController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -40,6 +42,7 @@ Route::middleware('login.session')->group(function () {
     Route::post('/secretary-todos/{todo}/complete', [SecretaryTodoController::class, 'complete'])->middleware('throttle:60,1')->name('secretary-todos.complete');
     Route::post('/broadcasting/auth', BroadcastAuthController::class)->name('broadcasting.auth');
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
+    Route::get('/messages/unread-count', [MessageController::class, 'unreadCount'])->name('messages.unread-count');
     Route::get('/messages/accounts', [MessageController::class, 'accounts'])->name('messages.accounts');
     Route::get('/messages/conversations', [MessageController::class, 'conversations'])->name('messages.conversations');
     Route::post('/messages/conversations', [MessageController::class, 'createConversation'])->name('messages.conversations.create');
@@ -52,7 +55,22 @@ Route::middleware('login.session')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:dashboard_allow')->name('dashboard');
     Route::get('/de-listment', [DelistmentController::class, 'index'])->middleware('permission:Delistment_allow')->name('de-listment');
     Route::put('/de-listment/records/{record}/endorsement', [DelistmentController::class, 'endorse'])->middleware('permission:Delistment_allow')->name('de-listment.endorse');
+    Route::put('/de-listment/records/{record}/delist', [DelistmentController::class, 'delist'])->middleware('permission:Delistment_allow')->name('de-listment.delist');
     Route::put('/de-listment/records/dates', [DelistmentController::class, 'updateDates'])->middleware('permission:Delistment_allow')->name('de-listment.update-dates');
+    Route::middleware('permission:tarheta_status_allow')->group(function (): void {
+        Route::get('/tarheta-status', [TarhetaStatusController::class, 'index'])->name('tarheta-status');
+        Route::put('/tarheta-status/records/{record}', [TarhetaStatusController::class, 'update'])->name('tarheta-status.update');
+    });
+    Route::middleware('permission:filter_bnh_helper_allow')->group(function (): void {
+        Route::get('/filter-bnh-helper', [FilterBnhHelperController::class, 'index'])->name('filter-bnh-helper');
+        Route::get('/filter-bnh-helper/matrix', [FilterBnhHelperController::class, 'matrix'])->name('filter-bnh-helper.matrix');
+        Route::get('/filter-bnh-helper/members', [FilterBnhHelperController::class, 'members'])->name('filter-bnh-helper.members');
+        Route::get('/filter-bnh-helper/bnh-records', [FilterBnhHelperController::class, 'bnhRecords'])->name('filter-bnh-helper.bnh-records');
+        Route::get('/filter-bnh-helper/qualified-counts', [FilterBnhHelperController::class, 'qualifiedCounts'])->name('filter-bnh-helper.qualified-counts');
+        Route::get('/filter-bnh-helper/bnh-word', [FilterBnhHelperController::class, 'downloadBnhWord'])->name('filter-bnh-helper.bnh-word');
+        Route::get('/filter-bnh-helper/counts-word', [FilterBnhHelperController::class, 'downloadCountsWord'])->name('filter-bnh-helper.counts-word');
+        Route::put('/filter-bnh-helper/records/{record}/checks', [FilterBnhHelperController::class, 'updateChecks'])->name('filter-bnh-helper.checks.update');
+    });
     Route::middleware('permission:Inquire_Allow')->group(function (): void {
         Route::get('/records/search', [RecordsController::class, 'search'])->name('records.search');
         Route::get('/records/smart-helper', [RecordsController::class, 'smartHelper'])->name('records.smart-helper');
@@ -74,6 +92,9 @@ Route::middleware('login.session')->group(function () {
         Route::post('/forms/monthly/deliberation', [DeliberationController::class, 'store'])
             ->middleware('throttle:15,1')
             ->name('forms.monthly.deliberation.store');
+        Route::get('/forms/monthly/modify', [DeliberationController::class, 'modifyIndex'])->name('forms.monthly.modify');
+        Route::get('/forms/monthly/modify/search', [DeliberationController::class, 'modifySearch'])->name('forms.monthly.modify.search');
+        Route::post('/forms/monthly/modify', [DeliberationController::class, 'modify'])->middleware('throttle:15,1')->name('forms.monthly.modify.save');
         Route::get('/forms/notes', [FormGeneratorController::class, 'notes'])->name('forms.notes');
         Route::post('/forms/notes/records/{record}', [FormGeneratorController::class, 'appendNote'])->middleware('throttle:30,1')->name('forms.notes.append');
         Route::delete('/forms/notes/records/{record}/{noteIndex}', [FormGeneratorController::class, 'deleteNote'])
@@ -107,11 +128,23 @@ Route::middleware('login.session')->group(function () {
                 'form_generator_allow' => $isHeadSecretary || (bool) ($user['form_generator_allow'] ?? false),
                 'Delistment_allow' => $isHeadSecretary || (bool) ($user['Delistment_allow'] ?? false),
                 'Inquire_Allow' => $isHeadSecretary || (bool) ($user['Inquire_Allow'] ?? false),
+                'tarheta_status_allow' => $isHeadSecretary || (bool) ($user['tarheta_status_allow'] ?? false),
+                'filter_bnh_helper_allow' => $isHeadSecretary || (bool) ($user['filter_bnh_helper_allow'] ?? false),
             ],
         ]);
     })->name('session.status');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::view('/home', 'home', ['title' => 'Home'])->name('home');
-    Route::view('/inquire-modify', 'inquire-modify', ['title' => 'Inquire / Modify'])->middleware('permission:Inquire_Allow')->name('inquire-modify');
+    Route::get('/inquire-modify', function (Request $request) {
+        $user = $request->session()->get('login_user', []);
+        $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($user['tungkulin'] ?? '')) ?? ''));
+        $canViewEligibility = in_array($role, ['head secretary', 'secretary head'], true)
+            || (bool) ($user['Delistment_allow'] ?? false);
+
+        return view('inquire-modify', [
+            'title' => 'Inquire / Modify',
+            'canViewEligibility' => $canViewEligibility,
+        ]);
+    })->middleware('permission:Inquire_Allow')->name('inquire-modify');
 });

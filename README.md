@@ -89,3 +89,79 @@ the scheduler continuously. Images use Laravel's private local disk and are serv
 only through an authorized conversation route. Messaging and broadcast-channel
 authorization use the existing verified `login_user` session, not Laravel's
 standard authenticated-user guard.
+
+## R2-10 eligibility and MK delistment
+
+Run `php artisan migrate` to add the delistment history table, the R2-10
+endorsement reason column, and remove the obsolete date-of-entry requirement
+toggle. In the Superadmin dashboard, set the minimum years since date of entry
+(1–3 years) and choose whether the baptism cutoff applies. When enabled, an
+MS/UWP member's baptism date must be on or before the configured cutoff; the
+member must also meet the configured entry-age threshold. MK members are always
+eligible.
+
+An endorsed MK member can be delisted from the De-Listment page by entering a
+reason. The record is marked INACTIVE, and the date, reason, and delisting
+secretary are retained in `delistment_histories` and appended to the record's
+`log_section`.
+
+## Historical monthly movement chart
+
+The `2026_10_01_120200_create_and_import_monthly_record_snapshots` migration
+creates `monthly_record_snapshots` and imports the monthly MS, UWP, and MK
+counts by Purok, along with the visible movement-code counts from the supplied
+January–October 2025 history image. No separate seed command or manual import
+is needed. The Dashboard's Records Over Time chart reads every month currently
+in this table, so newly inserted months and Puroks appear without code changes.
+Select a chart point to inspect its movement codes. The graph bundles Chart.js
+locally rather than requiring a third-party CDN.
+
+## Monthly Modify movement history
+
+Run `php artisan migrate` to create the Monthly Modify history tables.
+`monthly_record_movement_histories` stores the prior Purok/Grupo and destination
+status for each event. `monthly_record_code_histories` stores a separate row for each generated
+monthly code, including member details and the deliberation date. An MS to UWP
+change creates `MS: G` and `UWP: B` rows; Purok transfers create `STATUS: C-`
+and `STATUS: C+` rows. A change to MK records the previous status with `E`;
+`records.monthly_code` remains empty for MK. The snapshots and record update
+are committed together.
+
+An MS/UWP-to-MK reason is stored in
+`records.reason_of_r2_10_endorsement` as `DD-MM-YYYY: (note)`. It is not added
+to `records.log_section`.
+
+Monthly Add and Subtract append the current dated monthly code to
+`records.log_section` using `DD-MM-YYYY: STATUS: CODE,`. If a brief description
+is provided, it is appended as a second dated entry.
+
+In Monthly Modify, changing an MS/UWP record to MK records the prior status's
+`E` code in the monthly history and requires an R2-10 reason. This does not
+mark the member as endorsed; the separate R2-10 endorsement step remains
+required. Subtract only marks eligible MS/UWP records INACTIVE and is blocked
+while a record has a pending `monthly_code`. Inquire / Modify can edit record
+details without clearing or changing that pending monthly code.
+
+Inquire / Modify can optionally update a member's birthday and marital status.
+`records.is_married` is a boolean: `1` means Married and `0` means Not Married,
+which is the default for new records and unanswered marital status. Inquire /
+Modify automatically sets and locks Kapisanan when the member is Married
+(Buklod), or when a birthday is known (under 18 = Binhi, 18 or older = Kadiwa).
+If neither is known, Kapisanan remains manually editable. Legacy
+`filing_status` values are migrated into this boolean; unknown values such as
+`NoInfo` become `0`.
+
+The **Filter & BNH Helper** is available to Head Secretaries and secretaries
+granted its dedicated permission. It filters active records by configured
+Purok/group and Kalagayan, provides clickable Male/Female group counts, and
+tracks Salaysay/Pakikipag-usap and Paghahanda checks. A member is qualified
+only when both checks are marked. The helper can download its member list and
+qualified gender counts as Word-compatible `.doc` files.
+Group matrices are ordered by Purok and group, show a subtotal after every
+configured Purok, and make each gender and total count clickable to open a
+member popup. The BNH list and BNH Helper Form Resumen, including their Word
+exports, use the active Purok and Kalagayan filters.
+The BNH list can be searched by member name, and the same search is applied to
+its Word download. The downloaded checklist uses the Wingdings Alt+0252 mark
+for checked items and leaves an unqualified verdict blank. The three helper
+sections are presented in separate tabs.

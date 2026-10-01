@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends(request()->boolean('widget') ? 'layouts.chat' : 'layouts.app')
 
 @section('title', 'Messages')
 
@@ -66,11 +66,27 @@
     .messages-compose button:disabled { opacity:.5; cursor:wait; }
     .messages-attach { width:42px; height:42px; padding:.6rem!important; background:var(--bg)!important; border:1px solid var(--border)!important; color:var(--text)!important; }
     .messages-alert { padding:.6rem 1rem; color:var(--danger); font-size:.85rem; }
-    .messages-count { min-width:20px; padding:.1rem .35rem; border-radius:12px; background:var(--accent); color:white; text-align:center; font-size:.7rem; }
+    .messages-count { display:grid; min-width:20px; height:20px; place-items:center; padding:0 .35rem; border-radius:999px; background:#e02424; color:#fff; text-align:center; font-size:.7rem; font-weight:750; line-height:1; }
+    .messages-back { display:none; flex:none; width:36px; height:36px; place-items:center; border:1px solid var(--border); border-radius:50%; background:var(--surface); color:var(--text); cursor:pointer; font-size:1.2rem; }
+    .chat-frame-page .messages-page { border:0; border-radius:0; }
+    .chat-frame-page .messages-sidebar-head { padding:.8rem; }
+    .chat-frame-page .messages-sidebar-head h2 { display:none; }
+    .chat-frame-page .messages-search { padding:.6rem .7rem; font-size:.88rem; }
+    .chat-frame-page .message-person { gap:.55rem; padding:.65rem .75rem; }
+    .chat-frame-page .message-avatar { width:34px; height:34px; }
+    .chat-frame-page .messages-heading { min-height:58px; padding:.55rem .8rem; }
+    .chat-frame-page .messages-feed { padding:.85rem; }
+    .chat-frame-page .messages-compose { gap:.45rem; padding:.6rem; }
+    .chat-frame-page .messages-compose textarea { min-height:42px; max-height:90px; resize:none; padding:.6rem .7rem; font-size:.88rem; }
+    .chat-frame-page .messages-compose button { padding:.65rem .8rem; }
+    .chat-frame-page .messages-attach { width:40px; height:40px; }
     @media(max-width:760px) {
-        .messages-page { grid-template-columns:1fr; grid-template-rows:minmax(150px, 32%) minmax(0, 1fr); }
-        .messages-sidebar { border-right:0; border-bottom:1px solid var(--border); }
-        .messages-main { min-height:0; }
+        .messages-page { grid-template-columns:1fr; grid-template-rows:minmax(0, 1fr); }
+        .messages-page:not(.conversation-open) .messages-main,
+        .messages-page.conversation-open .messages-sidebar { display:none; }
+        .messages-page:not(.conversation-open) .messages-sidebar { border:0; }
+        .messages-page.conversation-open .messages-main { min-height:0; }
+        .messages-back { display:grid; }
         .message-bubble { max-width:88%; }
     }
 </style>

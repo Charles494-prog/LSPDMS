@@ -25,6 +25,7 @@ class FormGeneratorTest extends TestCase
             ->assertSee('id="monthly-forms-tab"', false)
             ->assertDontSee('data-panel="deliberation"', false)
             ->assertSee('Deliberation')
+            ->assertSee(route('forms.monthly.modify'), false)
             ->assertSee('R4-01 Generator')
             ->assertSee('Resumen Generator')
             ->assertSee('Notes Checker')

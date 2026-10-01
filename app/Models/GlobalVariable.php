@@ -21,7 +21,6 @@ class GlobalVariable extends Model
         'baptism_requirement',
         'entry_years_requirement',
         'dateofbaptism_requirement_boolean',
-        'dateofentryrequirement_boolean',
         'require_otp',
         'allow_forgot_password',
     ];
@@ -32,7 +31,6 @@ class GlobalVariable extends Model
             'baptism_requirement' => 'date',
             'entry_years_requirement' => 'integer',
             'dateofbaptism_requirement_boolean' => 'boolean',
-            'dateofentryrequirement_boolean' => 'boolean',
             'require_otp' => 'boolean',
             'allow_forgot_password' => 'boolean',
         ];

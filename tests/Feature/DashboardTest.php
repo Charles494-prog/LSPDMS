@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\GlobalVariable;
+use App\Models\MonthlyRecordSnapshot;
 use App\Models\Purok;
 use App\Models\Record;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -14,6 +15,13 @@ class DashboardTest extends TestCase
 
     public function test_dashboard_metrics_and_recent_baptisees_come_from_database_records(): void
     {
+        $this->travelTo(now()->setDate(2026, 10, 1)->startOfDay());
+        Purok::query()->create([
+            'purok_number' => 1,
+            'purok_name' => 'Purok 1',
+            'grupo_start' => 1,
+            'grupo_end' => 24,
+        ]);
         Record::query()->create([
             'full_name' => 'Active Member',
             'registry' => 'REG-1001',
@@ -23,7 +31,7 @@ class DashboardTest extends TestCase
             'kapisanan' => 'K',
             'date_of_baptism' => now()->subDays(20)->toDateString(),
             'evangelist' => 'Evangelist One',
-            'date_of_entry' => now()->subDays(5)->toDateString(),
+            'date_of_entry' => now()->toDateString(),
             'r2_10_eligibility' => 'ELIGIBLE',
             'r2_10_endorsement' => 'ENDORSED',
             'status' => 'MS',
@@ -31,12 +39,14 @@ class DashboardTest extends TestCase
         Record::query()->create([
             'full_name' => 'Eligible Without Endorsement',
             'registry' => 'REG-1003',
+            'date_of_entry' => now()->subYears(2)->toDateString(),
             'r2_10_eligibility' => 'ELIGIBLE',
             'status' => 'MS',
         ]);
         Record::query()->create([
             'full_name' => 'No Check Needed',
             'registry' => 'REG-1004',
+            'date_of_entry' => now()->subYears(2)->toDateString(),
             'r2_10_eligibility' => 'NO NEED TO CHECK',
             'r2_10_endorsement' => 'ENDORSED',
             'status' => 'MS',
@@ -44,6 +54,7 @@ class DashboardTest extends TestCase
         Record::query()->create([
             'full_name' => 'Not Eligible but Endorsed',
             'registry' => 'REG-1005',
+            'date_of_entry' => now()->subYears(2)->toDateString(),
             'r2_10_eligibility' => 'NOT ELIGIBLE',
             'r2_10_endorsement' => 'ENDORSED',
             'status' => 'MS',
@@ -71,12 +82,15 @@ class DashboardTest extends TestCase
                 $this->assertSame(4, $metrics['activeCount']);
                 $this->assertSame(1, $metrics['inactiveCount']);
                 $this->assertSame(['MS'], $metrics['activeStatuses']);
-                $this->assertSame('1', $metrics['puroks'][0]['id']);
+                $this->assertSame(1, $metrics['puroks'][0]['id']);
+                $this->assertSame('Purok 1', $metrics['puroks'][0]['name']);
                 $this->assertSame(1, $metrics['puroks'][0]['counts']['MS']);
                 $this->assertSame(1, $metrics['gender']['female']['MS']);
                 $this->assertSame(1, $metrics['groupCounts']['MS']['Kadiwa']);
-                $this->assertSame(1, $metrics['monthlyCounts'][11]['MS']);
-                $this->assertSame(1, $metrics['monthlyPurokCounts'][11]['1']['MS']);
+                $this->assertCount(10, $metrics['monthLabels']);
+                $this->assertSame('Oct 2025', $metrics['monthLabels'][9]);
+                $this->assertSame(331, $metrics['monthlyCounts'][9]['MS']);
+                $this->assertSame(51, $metrics['monthlyPurokCounts'][9]['1']['MS']);
                 $this->assertSame(10, $metrics['registryEncoded']);
                 $this->assertEqualsWithDelta(66.66666666666666, $metrics['r210Updating'], 0.000001);
                 $this->assertSame(8.0, $metrics['localeSNumberTarget']);
@@ -183,6 +197,234 @@ class DashboardTest extends TestCase
             });
     }
 
+    public function test_active_records_by_purok_uses_configured_puroks_and_includes_empty_puroks(): void
+    {
+        Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Riverside',
+            'grupo_start' => 1,
+            'grupo_end' => 12,
+        ]);
+        Purok::query()->create([
+            'purok_number' => 5,
+            'purok_name' => 'Upland',
+            'grupo_start' => 1,
+            'grupo_end' => 12,
+        ]);
+        Record::query()->create([
+            'full_name' => 'Riverside Member',
+            'purok' => '2',
+            'status' => 'MS',
+        ]);
+        Record::query()->create([
+            'full_name' => 'Unconfigured Purok Member',
+            'purok' => '7',
+            'status' => 'MK',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
+                $this->assertSame([
+                    ['id' => 1, 'number' => '2', 'name' => 'Riverside', 'counts' => ['MS' => 1, 'MK' => 0], 'total' => 1, 'recordTotal' => 1],
+                    ['id' => 2, 'number' => '5', 'name' => 'Upland', 'counts' => ['MS' => 0, 'MK' => 0], 'total' => 0, 'recordTotal' => 0],
+                ], $metrics['puroks']);
+
+                return true;
+            });
+    }
+
+    public function test_active_records_by_purok_splits_shared_header_by_grupo_range(): void
+    {
+        Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Purok 2a',
+            'grupo_start' => 1,
+            'grupo_end' => 6,
+        ]);
+        Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Purok 2b',
+            'grupo_start' => 7,
+            'grupo_end' => 10,
+        ]);
+        Record::query()->create(['full_name' => 'A Member', 'purok' => '2', 'grupo' => '3', 'status' => 'MS']);
+        Record::query()->create(['full_name' => 'B Member', 'purok' => '2', 'grupo' => '8', 'status' => 'UWP']);
+        Record::query()->create(['full_name' => 'No Grupo', 'purok' => '2', 'status' => 'MK']);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
+                $this->assertSame([
+                    ['id' => 1, 'number' => '2', 'name' => 'Purok 2a', 'counts' => ['MS' => 1, 'UWP' => 0, 'MK' => 0], 'total' => 1, 'recordTotal' => 1],
+                    ['id' => 2, 'number' => '2', 'name' => 'Purok 2b', 'counts' => ['MS' => 0, 'UWP' => 1, 'MK' => 0], 'total' => 1, 'recordTotal' => 1],
+                ], $metrics['puroks']);
+
+                return true;
+            });
+    }
+
+    public function test_active_records_by_purok_is_empty_when_no_puroks_are_configured(): void
+    {
+        Record::query()->create([
+            'full_name' => 'Member in Unconfigured Purok',
+            'purok' => '1',
+            'status' => 'MS',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('No Puroks are configured yet.', false)
+            ->assertViewHas('dashboardMetrics', fn (array $metrics): bool => $metrics['puroks'] === []);
+    }
+
+    public function test_active_gender_dashboard_drilldown_lists_matching_records_only(): void
+    {
+        $sister = Record::query()->create([
+            'full_name' => 'Active Sister',
+            'gender' => 'B',
+            'status' => 'MS',
+            'purok' => '2',
+        ]);
+        $brother = Record::query()->create([
+            'full_name' => 'Active Brother',
+            'gender' => 'L',
+            'status' => 'MK',
+            'purok' => '3',
+        ]);
+        Record::query()->create([
+            'full_name' => 'Inactive Sister',
+            'gender' => 'B',
+            'status' => 'INACTIVE',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('class="gender-drill" data-gender="female"', false)
+            ->assertSee('id="gender-records-modal"', false)
+            ->assertViewHas('dashboardMetrics', function (array $metrics) use ($sister, $brother): bool {
+                $this->assertSame([
+                    ['id' => $sister->id, 'name' => 'Active Sister', 'status' => 'MS', 'purok' => '2'],
+                ], $metrics['genderRecords']['female']);
+                $this->assertSame([
+                    ['id' => $brother->id, 'name' => 'Active Brother', 'status' => 'MK', 'purok' => '3'],
+                ], $metrics['genderRecords']['male']);
+
+                return true;
+            });
+    }
+
+    public function test_records_over_time_includes_imported_monthly_counts_and_movement_codes(): void
+    {
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Monthly MS, UWP, and MK snapshots.', false)
+            ->assertSee('id="ot-current"', false)
+            ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
+                $this->assertSame('Jan 2025', $metrics['monthLabels'][0]);
+                $this->assertSame('Oct 2025', $metrics['monthLabels'][9]);
+                $this->assertCount(6, $metrics['monthlyPurokCounts'][0]);
+                $this->assertSame(['MS', 'UWP', 'MK'], array_keys($metrics['monthlyCounts'][0]));
+                $this->assertSame(67 + 27 + 84 + 92 + 39 + 114, $metrics['monthlyCounts'][0]['MS']);
+                $this->assertContains([
+                    'month' => '2025-10',
+                    'purok' => 2,
+                    'status' => 'MS',
+                    'code' => 'DD',
+                    'count' => 1,
+                ], $metrics['movementDetails']);
+                $this->assertContains([
+                    'month' => '2025-09',
+                    'purok' => 5,
+                    'status' => 'UWP',
+                    'code' => 'DD',
+                    'count' => 1,
+                ], $metrics['movementDetails']);
+                $this->assertSame([], array_values(array_filter(
+                    $metrics['movementDetails'],
+                    fn (array $movement): bool => $movement['month'] === '2025-04'
+                )));
+
+                return true;
+            });
+    }
+
+    public function test_records_over_time_picks_up_later_months_inserted_into_snapshot_table(): void
+    {
+        MonthlyRecordSnapshot::query()->create([
+            'month' => '2025-11-01',
+            'purok_number' => 2,
+            'ms_count' => 25,
+            'uwp_count' => 4,
+            'mk_count' => 3,
+            'movement_counts' => ['MS' => ['B' => 2]],
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('Nov 2025')
+            ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
+                $this->assertSame('Nov 2025', $metrics['monthLabels'][10]);
+                $this->assertSame(25, $metrics['monthlyCounts'][10]['MS']);
+                $this->assertSame(25, $metrics['monthlyPurokCounts'][10]['2']['MS']);
+                $this->assertContains([
+                    'month' => '2025-11',
+                    'purok' => 2,
+                    'status' => 'MS',
+                    'code' => 'B',
+                    'count' => 2,
+                ], $metrics['movementDetails']);
+
+                return true;
+            });
+    }
+
+    public function test_monthly_snapshot_migration_consolidates_legacy_movement_codes(): void
+    {
+        $snapshot = MonthlyRecordSnapshot::query()->create([
+            'month' => '2025-11-01',
+            'purok_number' => 2,
+            'ms_count' => 25,
+            'uwp_count' => 4,
+            'mk_count' => 3,
+            'movement_counts' => [
+                'MS' => ['B' => 4, 'B-1' => 2, 'B-2' => 3, 'D-1' => 1, 'D-2' => 2, 'DD' => 3],
+            ],
+        ]);
+
+        $migration = require database_path('migrations/2026_10_01_120300_normalize_monthly_snapshot_movement_codes.php');
+        $migration->up();
+
+        $this->assertSame([
+            'MS' => ['B' => 9, 'D' => 1, 'DD' => 5],
+        ], $snapshot->fresh()->movement_counts);
+    }
+
+    public function test_legacy_e_movement_codes_are_consolidated_and_counts_are_added(): void
+    {
+        $snapshot = MonthlyRecordSnapshot::query()->create([
+            'month' => '2025-11-01',
+            'purok_number' => 2,
+            'ms_count' => 25,
+            'uwp_count' => 4,
+            'mk_count' => 3,
+            'movement_counts' => [
+                'MS' => ['E' => 2, 'E-1' => 1, 'E-2' => 3, 'E-3' => 4],
+            ],
+        ]);
+
+        $migration = require database_path('migrations/2026_10_01_120400_normalize_legacy_e_movement_codes.php');
+        $migration->up();
+
+        $this->assertSame(['MS' => ['E' => 10]], $snapshot->fresh()->movement_counts);
+    }
+
     public function test_registry_details_include_field_actions_and_the_current_puroks_grupo_range(): void
     {
         Purok::query()->create([
@@ -221,6 +463,32 @@ class DashboardTest extends TestCase
 
                 return true;
             });
+    }
+
+    public function test_registry_monitoring_is_view_only_without_inquire_modify_permission(): void
+    {
+        $user = \App\Models\User::query()->create([
+            'gmail' => 'dashboard-only@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+            'dashboard_allow' => true,
+            'Inquire_Allow' => false,
+        ]);
+        $record = Record::query()->create([
+            'full_name' => 'Missing Registry Member',
+            'registry' => null,
+            'status' => 'MS',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertSee('data-can-edit-registry="false"', false);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->putJson(route('records.update', $record), ['registry_number' => 'ABCDEFGHIJKLM'])
+            ->assertForbidden();
     }
 
     public function test_dashboard_renders_without_records_and_does_not_use_demo_members(): void

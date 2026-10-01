@@ -26,6 +26,7 @@ if (root) {
     const typingStatus = document.getElementById('typingStatus');
     const realtimeStatus = document.getElementById('realtimeStatus');
     const messageNotice = document.getElementById('messageNotice');
+    const messagesPage = document.querySelector('.messages-page');
     const conversations = new Map();
     const subscribedConversations = new Set();
     const processedIncomingIds = new Set();
@@ -156,6 +157,8 @@ if (root) {
                 const count = document.createElement('span');
                 count.className = 'messages-count';
                 count.textContent = item.unread_count;
+                count.setAttribute('aria-label', `${item.unread_count} unread messages`);
+                count.title = `${item.unread_count} unread messages`;
                 button.append(count);
             }
             listElement.append(button);
@@ -233,6 +236,18 @@ if (root) {
         attachmentButton.disabled = !enabled;
     }
 
+    function refreshParentUnreadCount() {
+        if (window.parent !== window) {
+            window.parent.postMessage({ type: 'chat:unread-refresh' }, window.location.origin);
+        }
+    }
+
+    function isMessagesViewVisible() {
+        if (window.parent === window) return true;
+        const chatWindow = window.parent.document.getElementById('chatWindow');
+        return Boolean(chatWindow && !chatWindow.hidden);
+    }
+
     function subscribeConversation(conversationId) {
         const id = Number(conversationId);
         if (!echo || subscribedConversations.has(id)) return;
@@ -268,7 +283,10 @@ if (root) {
 
         try {
             await request(endpoint(root.dataset.deliveredUrl, message.id), { method: 'POST', body: '{}' });
-            if (selected === Number(message.conversation_id) && document.visibilityState === 'visible' && document.hasFocus()) {
+            if (selected === Number(message.conversation_id)
+                && isMessagesViewVisible()
+                && document.visibilityState === 'visible'
+                && document.hasFocus()) {
                 await request(endpoint(root.dataset.readUrl, message.id), { method: 'POST', body: '{}' });
             }
         } catch (error) {
@@ -280,6 +298,7 @@ if (root) {
             .then(items => {
                 const conversation = items.find(item => Number(item.id) === Number(message.conversation_id));
                 if (conversation) subscribeConversation(conversation.id);
+                refreshParentUnreadCount();
             })
             .catch(error => showError(error.message));
     }
@@ -291,9 +310,16 @@ if (root) {
             return;
         }
         selected = Number(id);
+        messagesPage.classList.add('conversation-open');
         showError();
         subscribeConversation(selected);
         setComposerEnabled(true);
+        const backButton = document.createElement('button');
+        backButton.type = 'button';
+        backButton.className = 'messages-back';
+        backButton.setAttribute('aria-label', 'Back to conversations');
+        backButton.textContent = '‹';
+        backButton.addEventListener('click', () => messagesPage.classList.remove('conversation-open'));
         heading.replaceChildren(makeAvatar(displayName(account), account.avatar_url));
         const info = document.createElement('div');
         const name = document.createElement('h2');
@@ -301,11 +327,15 @@ if (root) {
         const email = document.createElement('p');
         email.textContent = account.email || '';
         info.append(name, email);
+        heading.prepend(backButton);
         heading.append(info);
         feed.replaceChildren(typingStatus);
         try {
             const items = await request(endpoint(root.dataset.messagesUrl, selected));
-            if (selected === Number(id)) renderMessages(items);
+            if (selected === Number(id)) {
+                renderMessages(items);
+                refreshParentUnreadCount();
+            }
             await loadConversations();
         } catch (error) {
             showError(error.message);
@@ -473,6 +503,19 @@ if (root) {
     });
 
     removeImage.addEventListener('click', clearSelectedImage);
+    window.addEventListener('message', async event => {
+        if (event.origin !== window.location.origin || event.source !== window.parent) return;
+        if (event.data?.type !== 'chat:panel-opened' || !selected) return;
+
+        try {
+            const items = await request(endpoint(root.dataset.messagesUrl, selected));
+            renderMessages(items);
+            await loadConversations();
+            refreshParentUnreadCount();
+        } catch (error) {
+            showError(error.message);
+        }
+    });
     if (echo) {
         echo.private(`user.${userId}`).listen('.message.sent', payload => handleIncomingMessage(payload.message));
     }

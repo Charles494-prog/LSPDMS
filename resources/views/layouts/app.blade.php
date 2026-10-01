@@ -229,38 +229,99 @@
             .user-dropdown button.logout-item svg { color: var(--danger); }
 
             .content { padding: 1.6rem; flex: 1; }
-            .chat-head-launcher {
+            .chat-widget {
                 position: fixed;
                 right: 24px;
                 bottom: 24px;
                 z-index: 60;
                 display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 0.8rem;
+            }
+            .chat-window {
+                display: flex;
+                width: min(390px, calc(100vw - 32px));
+                height: min(560px, calc(100dvh - 112px));
+                min-height: min(360px, calc(100dvh - 112px));
+                flex-direction: column;
+                overflow: hidden;
+                border: 1px solid var(--border);
+                border-radius: 16px;
+                background: var(--surface);
+                box-shadow: 0 18px 55px rgba(15, 23, 42, 0.25);
+            }
+            .chat-window[hidden] { display: none; }
+            .chat-window-header {
+                display: flex;
+                flex: none;
                 align-items: center;
-                gap: 0.65rem;
-                min-height: 56px;
-                padding: 0.55rem 1.1rem 0.55rem 0.65rem;
-                border: 1px solid rgba(255,255,255,0.25);
-                border-radius: 999px;
-                background: linear-gradient(135deg, #1687f8, #0754b8);
-                box-shadow: 0 10px 28px rgba(10, 107, 214, 0.35);
-                color: #fff;
-                font-size: 0.92rem;
+                justify-content: space-between;
+                min-height: 52px;
+                padding: 0.5rem 0.75rem 0.5rem 1rem;
+                border-bottom: 1px solid var(--border);
+                color: var(--text);
+                font-size: 0.9rem;
                 font-weight: 700;
-                text-decoration: none;
-                transition: transform 0.18s ease, box-shadow 0.18s ease;
+            }
+            .chat-window-minimize {
+                display: grid;
+                width: 34px;
+                height: 34px;
+                place-items: center;
+                border: 0;
+                border-radius: 50%;
+                background: transparent;
+                color: var(--text-muted);
+                cursor: pointer;
+                font: inherit;
+                font-size: 1.3rem;
+            }
+            .chat-window-minimize:hover { background: var(--bg); color: var(--text); }
+            .chat-window iframe { width: 100%; height: 0; min-height: 0; flex: 1; border: 0; background: var(--bg); }
+            .chat-head-launcher {
+                display: grid;
+                width: 60px;
+                height: 60px;
+                place-items: center;
+                border: 2px solid var(--surface);
+                border-radius: 50%;
+                background: linear-gradient(135deg, #1687f8, #0754b8);
+                box-shadow: 0 8px 24px rgba(10, 107, 214, 0.4);
+                color: #fff;
+                cursor: pointer;
+                transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
             }
             .chat-head-launcher:hover {
-                transform: translateY(-3px);
+                transform: translateY(-2px);
                 box-shadow: 0 14px 32px rgba(10, 107, 214, 0.42);
             }
             .chat-head-launcher svg {
-                width: 42px;
-                height: 42px;
-                padding: 9px;
-                border-radius: 50%;
-                background: rgba(255,255,255,0.18);
+                width: 30px;
+                height: 30px;
             }
-            .has-smart-helper .chat-head-launcher { bottom: 94px; }
+            .chat-head-launcher[aria-expanded="true"] { opacity: 0.86; }
+            .chat-unread-badge {
+                position: absolute;
+                top: -3px;
+                right: -3px;
+                display: grid;
+                min-width: 23px;
+                height: 23px;
+                place-items: center;
+                padding: 0 5px;
+                border: 2px solid var(--bg);
+                border-radius: 999px;
+                background: #e02424;
+                color: #fff;
+                font-size: 0.68rem;
+                font-weight: 800;
+                line-height: 1;
+                box-shadow: 0 2px 6px rgba(127, 29, 29, 0.35);
+            }
+            .chat-unread-badge[hidden] { display: none; }
+            .has-smart-helper .chat-widget { bottom: 94px; }
+            .has-smart-helper .chat-window { height: min(560px, calc(100dvh - 190px)); }
 
             .overlay {
                 display: none;
@@ -281,9 +342,11 @@
                 .sidebar.collapsed .sidebar-brand { display: block; }
             }
             @media (max-width: 600px) {
-                .chat-head-launcher { right: 16px; bottom: 16px; min-height: 52px; }
-                .has-smart-helper .chat-head-launcher { bottom: 84px; }
-                .chat-head-launcher svg { width: 38px; height: 38px; }
+                .chat-widget { right: 12px; bottom: 16px; }
+                .has-smart-helper .chat-widget { bottom: 84px; }
+                .chat-window { width: calc(100vw - 24px); height: min(560px, calc(100dvh - 112px)); }
+                .has-smart-helper .chat-window { height: min(560px, calc(100dvh - 190px)); }
+                .chat-head-launcher { width: 56px; height: 56px; }
             }
         </style>
         @stack('styles')
@@ -309,6 +372,7 @@
                     'profile' => '<circle cx="10" cy="7" r="3.2"/><path d="M3.5 17c1-3.2 3.6-5 6.5-5s5.5 1.8 6.5 5"/>',
                     'logout' => '<path d="M8 17H4V3h4"/><path d="M13 13l4-3-4-3"/><path d="M17 10H8"/>',
                     'search-edit' => '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5 17 17"/><path d="M12 15.5l2-2 1.5 1.5-2 2H12v-1.5z"/>',
+                    'filter' => '<path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z"/>',
                 ];
                 $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($authenticatedUser['tungkulin'] ?? '')) ?? ''));
                 $isHeadSecretary = in_array($role, ['head secretary', 'secretary head'], true);
@@ -346,6 +410,18 @@
                     <a data-feature="Inquire_Allow" href="{{ route('inquire-modify') }}" class="{{ request()->routeIs('inquire-modify') ? 'active' : '' }}">
                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['search-edit'] !!}</svg>
                         <span class="label">Inquire / Modify</span>
+                    </a>
+                @endif
+                @if ($isHeadSecretary || ($authenticatedUser['tarheta_status_allow'] ?? false))
+                    <a data-feature="tarheta_status_allow" href="{{ route('tarheta-status') }}" class="{{ request()->routeIs('tarheta-status*') ? 'active' : '' }}">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['search-edit'] !!}</svg>
+                        <span class="label">Tarheta Status Checker</span>
+                    </a>
+                @endif
+                @if ($isHeadSecretary || ($authenticatedUser['filter_bnh_helper_allow'] ?? false))
+                    <a data-feature="filter_bnh_helper_allow" href="{{ route('filter-bnh-helper') }}" class="{{ request()->routeIs('filter-bnh-helper*') ? 'active' : '' }}">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['filter'] !!}</svg>
+                        <span class="label">Filter &amp; BNH Helper</span>
                     </a>
                 @endif
             </nav>
@@ -413,13 +489,28 @@
         </div>
 
         @unless (request()->routeIs('messages.*'))
-            <a class="chat-head-launcher" href="{{ route('messages.index') }}" aria-label="Open messages">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l1.8-3.2A7.5 7.5 0 1 1 20 11.5Z"/>
-                    <path d="M8.5 11.5h7M8.5 14.5h4"/>
-                </svg>
-                <span>Chat</span>
-            </a>
+            <section class="chat-widget" id="chatWidget"
+                data-unread-url="{{ route('messages.unread-count') }}"
+                data-user-id="{{ $authenticatedUser['id'] }}"
+                data-auth-url="{{ route('broadcasting.auth') }}"
+                data-csrf="{{ csrf_token() }}"
+                data-reverb-configured="{{ config('broadcasting.default') === 'reverb' && filled(config('broadcasting.connections.reverb.key')) && filled(config('broadcasting.connections.reverb.secret')) && filled(config('broadcasting.connections.reverb.app_id')) ? 'true' : 'false' }}"
+                aria-label="Direct messages">
+                <div class="chat-window" id="chatWindow" role="dialog" aria-label="Direct messages" hidden>
+                    <header class="chat-window-header">
+                        <span>Chats</span>
+                        <button class="chat-window-minimize" id="chatMinimize" type="button" aria-label="Minimize chat" title="Minimize">&minus;</button>
+                    </header>
+                    <iframe title="Direct messages" data-src="{{ route('messages.index', ['widget' => 1]) }}" loading="lazy"></iframe>
+                </div>
+                <button class="chat-head-launcher" id="chatLauncher" type="button" aria-label="Open messages" aria-controls="chatWindow" aria-expanded="false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l1.8-3.2A7.5 7.5 0 1 1 20 11.5Z"/>
+                        <path d="M8.5 11.5h7M8.5 14.5h4"/>
+                    </svg>
+                    <span class="chat-unread-badge" id="chatUnreadBadge" aria-live="polite" aria-atomic="true" hidden></span>
+                </button>
+            </section>
         @endunless
 
         <script>
@@ -430,6 +521,34 @@
             const collapseToggle = document.getElementById('collapseToggle');
             const userChipBtn = document.getElementById('userChipBtn');
             const userDropdown = document.getElementById('userDropdown');
+            const chatLauncher = document.getElementById('chatLauncher');
+            const chatWindow = document.getElementById('chatWindow');
+            const chatMinimize = document.getElementById('chatMinimize');
+            const chatFrame = chatWindow?.querySelector('iframe');
+
+            function notifyChatPanelOpened() {
+                if (!chatWindow || chatWindow.hidden || !chatFrame?.contentWindow) return;
+                chatFrame.contentWindow.postMessage({ type: 'chat:panel-opened' }, window.location.origin);
+            }
+
+            function setChatOpen(isOpen) {
+                if (!chatWindow || !chatLauncher) return;
+                chatWindow.hidden = !isOpen;
+                chatLauncher.setAttribute('aria-expanded', String(isOpen));
+                chatLauncher.setAttribute('aria-label', isOpen ? 'Minimize messages' : 'Open messages');
+                if (isOpen && chatFrame && !chatFrame.hasAttribute('src')) chatFrame.src = chatFrame.dataset.src;
+                else if (isOpen) notifyChatPanelOpened();
+            }
+
+            chatFrame?.addEventListener('load', notifyChatPanelOpened);
+            chatLauncher?.addEventListener('click', () => setChatOpen(chatWindow.hidden));
+            chatMinimize?.addEventListener('click', () => {
+                setChatOpen(false);
+                chatLauncher?.focus();
+            });
+            document.addEventListener('keydown', event => {
+                if (event.key === 'Escape' && chatWindow && !chatWindow.hidden) setChatOpen(false);
+            });
 
             function openSidebar() {
                 sidebar.classList.add('open');
@@ -492,6 +611,8 @@
                                 '/forms/monthly': 'form_generator_allow',
                                 '/forms/weekly': 'form_generator_allow',
                                 '/inquire-modify': 'Inquire_Allow',
+                                '/tarheta-status': 'tarheta_status_allow',
+                                '/filter-bnh-helper': 'filter_bnh_helper_allow',
                                 '/superadmin-dashboard': 'head_secretary',
                             }).find(([path]) => window.location.pathname === path)?.[1];
                             if (currentFeature && !permissions[currentFeature]) window.location.assign('/home');
@@ -506,5 +627,8 @@
             })();
         </script>
         @stack('scripts')
+        @unless (request()->routeIs('messages.*'))
+            @vite('resources/js/chat-notifications.js')
+        @endunless
     </body>
 </html>

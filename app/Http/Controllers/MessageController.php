@@ -77,9 +77,24 @@ class MessageController extends Controller
                 'user' => $this->userPayload($conversation->otherParticipant((int) $user->id)),
                 'last_message' => $lastMessage ? $this->messagePayload($lastMessage) : null,
                 'unread_count' => $conversation->messages()->where('sender_id', '!=', $user->id)
-                    ->whereNull('read_at')->count(),
+                    ->whereNull('read_at')->where('expires_at', '>', now())->count(),
             ];
         }));
+    }
+
+    public function unreadCount(Request $request): JsonResponse
+    {
+        $user = $this->currentUser($request);
+        $unreadCount = Message::query()
+            ->where('sender_id', '!=', $user->id)
+            ->whereNull('read_at')
+            ->where('expires_at', '>', now())
+            ->whereHas('conversation', fn ($query) => $query
+                ->where('user_one_id', $user->id)
+                ->orWhere('user_two_id', $user->id))
+            ->count();
+
+        return response()->json(['unread_count' => $unreadCount]);
     }
 
     public function createConversation(Request $request): JsonResponse

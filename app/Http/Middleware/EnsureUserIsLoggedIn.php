@@ -40,6 +40,8 @@ class EnsureUserIsLoggedIn
                 'form_generator_allow' => (bool) $user->form_generator_allow,
                 'Delistment_allow' => (bool) $user->Delistment_allow,
                 'Inquire_Allow' => (bool) $user->Inquire_Allow,
+                'tarheta_status_allow' => (bool) $user->tarheta_status_allow,
+                'filter_bnh_helper_allow' => (bool) $user->filter_bnh_helper_allow,
                 'is_verified' => (bool) $user->is_verified,
             ];
             $request->session()->put('login_user', $freshUser);
@@ -95,6 +97,8 @@ class EnsureUserIsLoggedIn
             'form_generator_allow' => (bool) $user->form_generator_allow,
             'Delistment_allow' => (bool) $user->Delistment_allow,
             'Inquire_Allow' => (bool) $user->Inquire_Allow,
+            'tarheta_status_allow' => (bool) $user->tarheta_status_allow,
+            'filter_bnh_helper_allow' => (bool) $user->filter_bnh_helper_allow,
             'is_verified' => (bool) $user->is_verified,
         ]);
 

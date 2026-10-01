@@ -269,14 +269,6 @@
     }
     .purok-name-input:focus { outline: none; border-color: var(--sa-accent); }
     .purok-name-input.invalid { border-color: var(--sa-danger); }
-    .purok-name-error {
-        display: none;
-        margin-top: 0.35rem;
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: var(--sa-danger);
-    }
-    .purok-name-error.active { display: block; }
     .purok-body { padding: 1.1rem; display: flex; flex-direction: column; gap: 0.9rem; }
 
     .signatory-row {
@@ -497,6 +489,64 @@
         margin-bottom: 1.2rem;
     }
 
+    .sa-toast-container {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 100100;
+        display: grid;
+        gap: 0.65rem;
+        width: min(420px, calc(100vw - 2rem));
+        pointer-events: none;
+    }
+    .sa-toast {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.9rem 1rem;
+        border: 1px solid var(--sa-border);
+        border-left: 4px solid var(--sa-accent);
+        border-radius: 10px;
+        background: var(--sa-surface);
+        color: var(--sa-navy);
+        box-shadow: 0 12px 32px rgba(16, 24, 40, 0.18);
+        pointer-events: auto;
+        animation: sa-toast-in 220ms ease-out both;
+    }
+    .sa-toast[data-type="success"] { border-left-color: var(--sa-success); }
+    .sa-toast[data-type="error"] { border-left-color: var(--sa-danger); }
+    .sa-toast-icon {
+        display: grid;
+        place-items: center;
+        width: 1.35rem;
+        height: 1.35rem;
+        flex: 0 0 1.35rem;
+        border-radius: 50%;
+        background: var(--sa-bg);
+        color: var(--sa-accent);
+        font-weight: 700;
+    }
+    .sa-toast[data-type="success"] .sa-toast-icon { color: var(--sa-success); }
+    .sa-toast[data-type="error"] .sa-toast-icon { color: var(--sa-danger); }
+    .sa-toast-message { flex: 1; font-size: 0.9rem; line-height: 1.45; overflow-wrap: anywhere; }
+    .sa-toast-close {
+        border: 0;
+        padding: 0;
+        background: transparent;
+        color: var(--sa-ink-soft);
+        font-size: 1.2rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .sa-toast.sa-toast-leaving { animation: sa-toast-out 180ms ease-in both; }
+    @keyframes sa-toast-in {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes sa-toast-out {
+        to { opacity: 0; transform: translateY(-6px); }
+    }
+
     /* ===== Modal (Edit Permissions of Secretaries) ===== */
     /* Rendered as a direct child of <body> by JS on load, so position:fixed is
        always relative to the viewport and can't be broken by a transformed
@@ -520,48 +570,6 @@
         box-sizing: border-box;
     }
     .sa-modal-overlay.active { display: flex !important; }
-    .sa-success-overlay {
-        align-items: center;
-        padding: 1rem;
-        background: rgba(16, 24, 40, 0.62) !important;
-        backdrop-filter: blur(4px);
-    }
-    .sa-success-modal {
-        max-width: 420px;
-        padding: 2.2rem 2rem;
-        text-align: center;
-        animation: success-modal-in 280ms cubic-bezier(.2,.8,.2,1) both;
-    }
-    .sa-success-icon {
-        width: 76px;
-        height: 76px;
-        margin: 0 auto 1rem;
-        border-radius: 50%;
-        display: grid;
-        place-items: center;
-        background: #e8f8ee;
-        color: #16a34a;
-    }
-    .sa-success-icon svg { width: 42px; height: 42px; overflow: visible; }
-    .sa-success-icon circle {
-        stroke-dasharray: 150;
-        stroke-dashoffset: 150;
-        animation: success-circle 500ms ease-out 100ms forwards;
-    }
-    .sa-success-icon path {
-        stroke-dasharray: 36;
-        stroke-dashoffset: 36;
-        animation: success-check 300ms ease-out 500ms forwards;
-    }
-    .sa-success-modal h2 { margin: 0; color: var(--sa-navy); font-size: 1.35rem; }
-    .sa-success-modal p { margin: 0.5rem 0 1.4rem; color: var(--sa-ink-soft); font-size: 0.92rem; }
-    .sa-success-modal .sa-btn { min-width: 130px; justify-content: center; }
-    @keyframes success-modal-in {
-        from { opacity: 0; transform: translateY(12px) scale(.96); }
-        to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    @keyframes success-circle { to { stroke-dashoffset: 0; } }
-    @keyframes success-check { to { stroke-dashoffset: 0; } }
     .sa-modal {
         background: var(--sa-surface);
         border-radius: 14px;
@@ -719,12 +727,12 @@
             <div class="sa-card-head">
                 <div>
                     <h2>Purok Signatories</h2>
-                    <p>Add a Purok, assign its Secretary and Manggagawa, and define its Sakop na Grupo range.</p>
+                    <p>Add Puroks, assign their header number, Secretary and Manggagawa, and define each Sakop na Grupo range.</p>
                 </div>
             </div>
 
             <div class="sa-note">
-                Set the Assigned Number for each Purok. Tick "Complete Purok" if every group starting with that number belongs to it (e.g. 1-1, 1-2, 1-3 ...). Leave it unticked when a number is split between Puroks, such as "Purok 2a" with range 1–6 (2-1 to 2-6) and "Purok 2b" with range 7–10 (2-7 to 2-10).
+                The Assigned Number is the shared Purok header, not a unique ID. Multiple Puroks may use the same number when a header is split. Set each Purok's Sakop na Grupo range to distinguish its groups; tick "Complete Purok" only when it includes every group under that header.
             </div>
 
             <div class="purok-list" id="purokList">
@@ -743,14 +751,13 @@
                                         <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
                                         <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
                                     </div>
-                                    <div class="purok-name-error"></div>
                                 </div>
                             </div>
                             <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
                         </div>
                         <div class="purok-body">
                             <div class="signatory-row">
-                                <span class="signatory-role-badge">Assigned Number</span>
+                                <span class="signatory-role-badge">Header Number</span>
                                 <input type="number" class="signatory-input purok-number-input" placeholder="e.g. 1" min="1" value="{{ $purok->purok_number }}">
                             </div>
                             <div class="signatory-row">
@@ -810,7 +817,6 @@
                                     <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
                                     <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
                                 </div>
-                                <div class="purok-name-error"></div>
                             </div>
                         </div>
                         <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
@@ -867,7 +873,6 @@
                                     <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
                                     <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
                                 </div>
-                                <div class="purok-name-error"></div>
                             </div>
                         </div>
                         <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
@@ -924,7 +929,6 @@
                                     <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
                                     <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
                                 </div>
-                                <div class="purok-name-error"></div>
                             </div>
                         </div>
                         <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
@@ -976,7 +980,6 @@
             <div class="sa-save-bar">
                 <button type="button" class="sa-btn sa-btn-ghost" id="discardSignatoriesBtn">Discard</button>
                 <button type="button" class="sa-btn sa-btn-primary" id="saveSignatoriesBtn" disabled>Save Signatories</button>
-                <span class="sa-save-feedback" id="signatoriesFeedback" role="status"></span>
             </div>
         </div>
     </div>
@@ -1015,7 +1018,6 @@
             </div>
 
             <div class="sa-save-bar">
-                <span class="sa-feedback" id="securitySettingsFeedback" role="status"></span>
                 <button type="button" class="sa-btn sa-btn-ghost" id="discardSecuritySettingsBtn">Discard</button>
                 <button type="button" class="sa-btn sa-btn-primary" id="saveSecuritySettingsBtn">Save Security Settings</button>
             </div>
@@ -1072,30 +1074,26 @@
                 </div>
 
                 <div class="gv-field {{ $globalVariables?->dateofbaptism_requirement_boolean ? '' : 'disabled' }}" id="gvBaptismField">
-                    <label for="gvBaptismDate">Date of Baptism Requirement</label>
+                    <label for="gvBaptismDate">Baptism cutoff date</label>
                     <input type="date" id="gvBaptismDate" value="{{ $globalVariables?->baptism_requirement?->format('Y-m-d') }}" @disabled(!$globalVariables?->dateofbaptism_requirement_boolean)>
-                    <div class="gv-hint">Enable "Date of Baptism Requirement" below to edit this field.</div>
+                    <div class="gv-hint">When enabled, members must have a baptism date on or before this cutoff.</div>
                 </div>
 
-                <div class="gv-field {{ $globalVariables?->dateofentryrequirement_boolean ? '' : 'disabled' }}" id="gvEntryYearsField">
-                    <label for="gvEntryYears">Years Upon Date of Entry Requirement</label>
-                    <select id="gvEntryYears" @disabled(!$globalVariables?->dateofentryrequirement_boolean)>
-                        <option value="">Select years</option>
-                        <option value="1" @selected($globalVariables?->entry_years_requirement === 1)>1 year</option>
+                <div class="gv-field" id="gvEntryYearsField">
+                    <label for="gvEntryYears">Minimum years since date of entry</label>
+                    <select id="gvEntryYears" required>
+                        <option value="1" @selected(($globalVariables?->entry_years_requirement ?? 1) === 1)>1 year</option>
                         <option value="2" @selected($globalVariables?->entry_years_requirement === 2)>2 years</option>
                         <option value="3" @selected($globalVariables?->entry_years_requirement === 3)>3 years</option>
-                        @if ($globalVariables?->entry_years_requirement && !in_array($globalVariables->entry_years_requirement, [1, 2, 3], true))
-                            <option value="{{ $globalVariables->entry_years_requirement }}" selected>{{ $globalVariables->entry_years_requirement }} years</option>
-                        @endif
                     </select>
-                    <div class="gv-hint">Enable "Date of Entry Requirement" below to edit this field.</div>
+                    <div class="gv-hint">MS and UWP records must have been in the system for this long. MK is always eligible.</div>
                 </div>
             </div>
 
             <!-- Requirements for De-Listment (controls the two fields above) -->
             <div class="gv-subsection">
                 <p class="gv-subsection-title">Requirements for De-Listment</p>
-                <p class="gv-subsection-sub">Check a requirement to enable its matching field above.</p>
+                <p class="gv-subsection-sub">Configure whether baptism cutoff applies to R2-10 eligibility.</p>
 
                 <div class="delist-checks">
                     <div class="delist-check-row">
@@ -1105,39 +1103,19 @@
                             <span>Require a recorded date of baptism before de-listment.</span>
                         </div>
                     </div>
-                    <div class="delist-check-row">
-                        <input type="checkbox" id="delistEntryCheck" data-controls="gvEntryYearsField" @checked($globalVariables?->dateofentryrequirement_boolean)>
-                        <div class="delist-check-text">
-                            <label for="delistEntryCheck">Date of Entry Requirement</label>
-                            <span>Require a minimum number of years since date of entry.</span>
-                        </div>
-                    </div>
                 </div>
             </div>
 
             <div class="sa-save-bar">
                 <button type="button" class="sa-btn sa-btn-ghost" id="discardGlobalVariablesBtn">Discard</button>
                 <button type="button" class="sa-btn sa-btn-primary" id="saveGlobalVariablesBtn">Save Global Variables</button>
-                <span class="sa-save-feedback" id="globalVariablesFeedback" role="status"></span>
             </div>
         </div>
     </div>
 
 </div>
 
-<div class="sa-modal-overlay sa-success-overlay" id="signatoriesSuccessModal" role="dialog" aria-modal="true" aria-labelledby="signatoriesSuccessTitle" aria-hidden="true">
-    <div class="sa-modal sa-success-modal">
-        <div class="sa-success-icon" aria-hidden="true">
-            <svg viewBox="0 0 48 48" fill="none">
-                <circle cx="24" cy="24" r="21" stroke="currentColor" stroke-width="3"></circle>
-                <path d="m14 24 7 7 14-15" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
-        </div>
-        <h2 id="signatoriesSuccessTitle">Signatories saved!</h2>
-        <p>Your Purok signatory changes have been saved successfully.</p>
-        <button type="button" class="sa-btn sa-btn-primary" id="closeSignatoriesSuccess">Continue</button>
-    </div>
-</div>
+<div class="sa-toast-container" id="saToastContainer" aria-live="polite" aria-atomic="false"></div>
 
 <!-- ============ EDIT PERMISSIONS OF SECRETARIES (modal, launched from User Management) ============ -->
 <div class="sa-modal-overlay" id="permissionsModalOverlay">
@@ -1163,6 +1141,8 @@
                         <th class="center">Allow Form<br>Generator Portal</th>
                         <th class="center">Allow<br>De-Listment</th>
                         <th class="center">Allow Inquire<br>/ Modify</th>
+                        <th class="center">Allow Tarheta<br>Status Checker</th>
+                        <th class="center">Allow Filter &amp;<br>BNH Helper</th>
                     </tr>
                 </thead>
                 <tbody id="permissionsTableBody">
@@ -1182,9 +1162,11 @@
                             <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="form_generator_allow" @checked($user->form_generator_allow)></td>
                             <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="Delistment_allow" @checked($user->Delistment_allow)></td>
                             <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="Inquire_Allow" @checked($user->Inquire_Allow)></td>
+                            <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="tarheta_status_allow" @checked($user->tarheta_status_allow)></td>
+                            <td class="center"><input type="checkbox" class="sa-checkbox" data-permission="filter_bnh_helper_allow" @checked($user->filter_bnh_helper_allow)></td>
                         </tr>
                     @empty
-                        <tr><td colspan="5" class="sa-empty">No verified users found.</td></tr>
+                        <tr><td colspan="7" class="sa-empty">No verified users found.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -1254,6 +1236,48 @@
             globalVariables: @json(route('superadmin.global-variables.update')),
             securitySettings: @json(route('superadmin.security-settings.update')),
         };
+        const toastContainer = document.getElementById('saToastContainer');
+        if (toastContainer && toastContainer.parentElement !== document.body) {
+            document.body.appendChild(toastContainer);
+        }
+
+        function showToast(message, type = 'success') {
+            if (!toastContainer || !message) return;
+
+            const toast = document.createElement('div');
+            toast.className = 'sa-toast';
+            toast.dataset.type = type;
+            toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+
+            const icon = document.createElement('span');
+            icon.className = 'sa-toast-icon';
+            icon.setAttribute('aria-hidden', 'true');
+            icon.textContent = type === 'success' ? '✓' : (type === 'error' ? '!' : 'i');
+
+            const text = document.createElement('span');
+            text.className = 'sa-toast-message';
+            text.textContent = message;
+
+            const close = document.createElement('button');
+            close.className = 'sa-toast-close';
+            close.type = 'button';
+            close.setAttribute('aria-label', 'Dismiss notification');
+            close.textContent = '×';
+
+            let removed = false;
+            const dismiss = () => {
+                if (removed) return;
+                removed = true;
+                window.clearTimeout(timer);
+                toast.classList.add('sa-toast-leaving');
+                window.setTimeout(() => toast.remove(), 180);
+            };
+            close.addEventListener('click', dismiss);
+            toast.append(icon, text, close);
+            toastContainer.appendChild(toast);
+            const timer = window.setTimeout(dismiss, type === 'error' ? 7000 : 4500);
+        }
+
         async function sendUpdate(url, payload) {
             const response = await fetch(url, {
                 method: 'PUT',
@@ -1311,11 +1335,12 @@
                         }
                         if (data.is_verified && !permissionRow) window.location.reload();
                     }
+                    showToast('User settings saved.');
                 })
                 .catch(error => {
                     if (control.type === 'checkbox') control.checked = previousValue;
                     else control.value = previousValue ?? '';
-                    window.alert(error.message);
+                    showToast(error.message, 'error');
                 })
                 .finally(() => { control.disabled = false; });
         });
@@ -1385,9 +1410,9 @@
             try {
                 await sendUpdate(superadminUrls.permissions, { permissions });
                 closePermissionsModalFn();
-                window.alert('Permissions saved.');
+                showToast('Permissions saved.');
             } catch (error) {
-                window.alert(error.message);
+                showToast(error.message, 'error');
             } finally {
                 button.disabled = false;
             }
@@ -1405,11 +1430,6 @@
         const purokList = document.getElementById('purokList');
         const addPurokBtn = document.getElementById('addPurokBtn');
         const saveSignatoriesBtn = document.getElementById('saveSignatoriesBtn');
-        const signatoriesSuccessModal = document.getElementById('signatoriesSuccessModal');
-        const closeSignatoriesSuccess = document.getElementById('closeSignatoriesSuccess');
-        if (signatoriesSuccessModal.parentElement !== document.body) {
-            document.body.appendChild(signatoriesSuccessModal);
-        }
         let purokCounter = purokList.querySelectorAll('.purok-card').length;
         const signatoryUsers = @json($users->map(fn ($user) => [
             'id' => $user->id,
@@ -1437,12 +1457,45 @@
         }
 
         let savedSignatoriesSnapshot = JSON.stringify(collectSignatories());
-        function updateSignatoriesSaveState() {
-            saveSignatoriesBtn.disabled = JSON.stringify(collectSignatories()) === savedSignatoriesSnapshot;
+        function getSakopOverlap(signatories = collectSignatories()) {
+            for (let i = 0; i < signatories.length; i++) {
+                const current = signatories[i];
+                for (let j = i + 1; j < signatories.length; j++) {
+                    const other = signatories[j];
+                    if (Number(current.purok_number) !== Number(other.purok_number)) continue;
+
+                    const complete = current.full_purok || other.full_purok;
+                    const overlaps = current.grupo_start <= other.grupo_end
+                        && other.grupo_start <= current.grupo_end;
+                    if (complete) {
+                        const completeName = current.full_purok
+                            ? current.purok_name
+                            : other.purok_name;
+                        return `${completeName || `Purok ${current.purok_number}`} cannot be marked Complete Purok while another Purok shares header ${current.purok_number}. Use non-overlapping Sakop na Grupo ranges instead.`;
+                    }
+                    if (overlaps) {
+                        const currentName = current.purok_name || `Purok ${current.purok_number}`;
+                        const otherName = other.purok_name || `Purok ${other.purok_number}`;
+                        return `${currentName} and ${otherName} use overlapping Sakop na Grupo ranges under header ${current.purok_number}.`;
+                    }
+                }
+            }
+            return '';
         }
 
-        purokList.addEventListener('input', updateSignatoriesSaveState);
-        purokList.addEventListener('change', updateSignatoriesSaveState);
+        let lastSignatoryOverlap = '';
+        function updateSignatoriesSaveState(notify = false) {
+            const signatories = collectSignatories();
+            const overlap = getSakopOverlap(signatories);
+            saveSignatoriesBtn.disabled = Boolean(overlap) || JSON.stringify(signatories) === savedSignatoriesSnapshot;
+            if (notify && overlap && overlap !== lastSignatoryOverlap) {
+                showToast(overlap, 'error');
+            }
+            lastSignatoryOverlap = overlap;
+        }
+
+        purokList.addEventListener('input', () => updateSignatoriesSaveState(true));
+        purokList.addEventListener('change', () => updateSignatoriesSaveState(true));
         updateSignatoriesSaveState();
 
         function updateSakopPreview(card) {
@@ -1496,7 +1549,6 @@
                                 <button type="button" class="sa-btn sa-btn-primary sa-btn-sm purok-name-save">Save</button>
                                 <button type="button" class="sa-btn sa-btn-ghost sa-btn-sm purok-name-cancel">Cancel</button>
                             </div>
-                            <div class="purok-name-error"></div>
                         </div>
                     </div>
                     <button type="button" class="sa-btn sa-btn-danger sa-btn-sm remove-purok-btn">Remove</button>
@@ -1555,27 +1607,25 @@
 
         saveSignatoriesBtn?.addEventListener('click', async (e) => {
             const button = e.currentTarget;
-            const feedback = document.getElementById('signatoriesFeedback');
             if (button.disabled) return;
             const puroks = collectSignatories();
+            const overlap = getSakopOverlap(puroks);
+            if (overlap) {
+                showToast(overlap, 'error');
+                return;
+            }
 
             button.disabled = true;
-            feedback.textContent = 'Saving...';
             try {
                 await sendUpdate(superadminUrls.signatories, { puroks });
                 savedSignatoriesSnapshot = JSON.stringify(puroks);
-                feedback.textContent = '';
-                signatoriesSuccessModal.classList.add('active');
-                signatoriesSuccessModal.setAttribute('aria-hidden', 'false');
-                closeSignatoriesSuccess.focus();
+                showToast('Purok signatories saved.');
             } catch (error) {
-                feedback.textContent = error.message;
-                window.alert(error.message);
+                showToast(error.message, 'error');
             } finally {
                 updateSignatoriesSaveState();
             }
         });
-        closeSignatoriesSuccess?.addEventListener('click', () => window.location.reload());
         document.getElementById('discardSignatoriesBtn')?.addEventListener('click', () => window.location.reload());
 
         purokList?.addEventListener('click', (e) => {
@@ -1618,7 +1668,6 @@
 
         function validatePurokName(card) {
             const input = card.querySelector('.purok-name-input');
-            const errorEl = card.querySelector('.purok-name-error');
             const value = normalizeName(input.value);
             let message = '';
 
@@ -1629,9 +1678,7 @@
             }
 
             input.classList.toggle('invalid', message !== '');
-            errorEl.textContent = message;
-            errorEl.classList.toggle('active', message !== '');
-            return message === '';
+            return message;
         }
 
         function openNameEditor(card) {
@@ -1647,16 +1694,17 @@
 
         function closeNameEditor(card) {
             const input = card.querySelector('.purok-name-input');
-            const errorEl = card.querySelector('.purok-name-error');
             input.classList.remove('invalid');
-            errorEl.classList.remove('active');
-            errorEl.textContent = '';
             card.querySelector('.purok-name-edit').classList.remove('active');
             card.querySelector('.purok-name-view').style.display = '';
         }
 
         function saveName(card) {
-            if (!validatePurokName(card)) return;
+            const validationMessage = validatePurokName(card);
+            if (validationMessage) {
+                showToast(validationMessage, 'error');
+                return;
+            }
             const input = card.querySelector('.purok-name-input');
             card.querySelector('.purok-name-display').textContent = normalizeName(input.value);
             closeNameEditor(card);
@@ -1713,22 +1761,17 @@
         };
         document.getElementById('saveGlobalVariablesBtn')?.addEventListener('click', async (e) => {
             const button = e.currentTarget;
-            const feedback = document.getElementById('globalVariablesFeedback');
             const values = Object.fromEntries(Object.entries(globalVariableFields).map(([column, id]) => {
                 const value = document.getElementById(id).value;
                 return [column, value === '' ? null : value];
             }));
             values.dateofbaptism_requirement_boolean = document.getElementById('delistBaptismCheck').checked ? 1 : 0;
-            values.dateofentryrequirement_boolean = document.getElementById('delistEntryCheck').checked ? 1 : 0;
-
             button.disabled = true;
-            feedback.textContent = 'Saving...';
             try {
                 await sendUpdate(superadminUrls.globalVariables, values);
-                feedback.textContent = 'Global variables saved.';
+                showToast('Global variables saved.');
             } catch (error) {
-                feedback.textContent = error.message;
-                window.alert(error.message);
+                showToast(error.message, 'error');
             } finally {
                 button.disabled = false;
             }
@@ -1739,25 +1782,21 @@
         const securityDefaults = Object.fromEntries(securityInputs.map(id => [id, document.getElementById(id).checked]));
         document.getElementById('saveSecuritySettingsBtn')?.addEventListener('click', async event => {
             const button = event.currentTarget;
-            const feedback = document.getElementById('securitySettingsFeedback');
             button.disabled = true;
-            feedback.textContent = 'Saving...';
             try {
                 await sendUpdate(superadminUrls.securitySettings, {
                     require_otp: document.getElementById('requireOtpSetting').checked ? 1 : 0,
                     allow_forgot_password: document.getElementById('allowForgotPasswordSetting').checked ? 1 : 0,
                 });
-                feedback.textContent = 'Security settings saved.';
+                showToast('Security settings saved.');
             } catch (error) {
-                feedback.textContent = error.message;
-                window.alert(error.message);
+                showToast(error.message, 'error');
             } finally {
                 button.disabled = false;
             }
         });
         document.getElementById('discardSecuritySettingsBtn')?.addEventListener('click', () => {
             securityInputs.forEach(id => { document.getElementById(id).checked = securityDefaults[id]; });
-            document.getElementById('securitySettingsFeedback').textContent = '';
         });
     })();
 </script>

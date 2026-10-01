@@ -57,6 +57,7 @@ class AuthenticationPolicyTest extends TestCase
             ->assertSee('Dashboard')
             ->assertDontSee('De-Listment')
             ->assertDontSee('Inquire / Modify')
+            ->assertDontSee('Tarheta Status Checker')
             ->assertDontSee('Form Generator');
 
         $this->withSession(['login_user' => ['id' => $secretary->id]])
@@ -67,6 +68,9 @@ class AuthenticationPolicyTest extends TestCase
             ->assertSee('Back to Home');
         $this->withSession(['login_user' => ['id' => $secretary->id]])
             ->get(route('inquire-modify'))
+            ->assertForbidden();
+        $this->withSession(['login_user' => ['id' => $secretary->id]])
+            ->get(route('tarheta-status'))
             ->assertForbidden();
         $this->withSession(['login_user' => ['id' => $secretary->id]])
             ->get(route('form-generator'))
@@ -88,6 +92,9 @@ class AuthenticationPolicyTest extends TestCase
             ->assertOk();
         $this->withSession(['login_user' => ['id' => $headSecretary->id]])
             ->get(route('dashboard'))
+            ->assertOk();
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->get(route('tarheta-status'))
             ->assertOk();
     }
 

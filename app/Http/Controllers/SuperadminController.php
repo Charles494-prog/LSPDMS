@@ -28,6 +28,8 @@ class SuperadminController extends Controller
                 'form_generator_allow',
                 'Delistment_allow',
                 'Inquire_Allow',
+                'tarheta_status_allow',
+                'filter_bnh_helper_allow',
             ])
             ->orderBy('id')
             ->get();
@@ -84,6 +86,8 @@ class SuperadminController extends Controller
             'permissions.*.form_generator_allow' => ['required', 'boolean'],
             'permissions.*.Delistment_allow' => ['required', 'boolean'],
             'permissions.*.Inquire_Allow' => ['required', 'boolean'],
+            'permissions.*.tarheta_status_allow' => ['required', 'boolean'],
+            'permissions.*.filter_bnh_helper_allow' => ['required', 'boolean'],
         ]);
 
         DB::transaction(function () use ($validated): void {
@@ -104,6 +108,8 @@ class SuperadminController extends Controller
                     'form_generator_allow' => $permission['form_generator_allow'],
                     'Delistment_allow' => $permission['Delistment_allow'],
                     'Inquire_Allow' => $permission['Inquire_Allow'],
+                    'tarheta_status_allow' => $permission['tarheta_status_allow'],
+                    'filter_bnh_helper_allow' => $permission['filter_bnh_helper_allow'],
                 ])->save();
             }
         });
@@ -126,35 +132,36 @@ class SuperadminController extends Controller
             'puroks.*.full_purok' => ['required', 'boolean'],
         ]);
 
-        $numbers = array_map(
-            static fn (array $purok): int => (int) $purok['purok_number'],
-            $validated['puroks']
-        );
-
-        if (count($numbers) !== count(array_unique($numbers))) {
-            throw ValidationException::withMessages([
-                'puroks' => 'Each Purok must have a unique assigned number.',
-            ]);
-        }
-
-        $submittedIds = array_filter(array_column($validated['puroks'], 'id'));
-        foreach ($validated['puroks'] as $purok) {
-            $existing = DB::table('puroks')
-                ->where('purok_number', $purok['purok_number'])
-                ->first();
-            if ($existing && (int) $existing->id !== (int) ($purok['id'] ?? 0)
-                && ! in_array($existing->id, $submittedIds)) {
+        foreach ($validated['puroks'] as $index => $purok) {
+            if ($purok['grupo_end'] < $purok['grupo_start']) {
                 throw ValidationException::withMessages([
-                    'puroks' => 'The assigned Purok number is already in use.',
+                    "puroks.{$index}.grupo_end" => 'The end of the Sakop na Grupo range must not be less than its start.',
                 ]);
             }
         }
 
-        foreach ($validated['puroks'] as $purok) {
-            if ($purok['grupo_end'] < $purok['grupo_start']) {
-                throw ValidationException::withMessages([
-                    'puroks' => 'The end of the Sakop na Grupo range must not be less than its start.',
-                ]);
+        foreach ($validated['puroks'] as $index => $purok) {
+            foreach ($validated['puroks'] as $otherIndex => $other) {
+                if ($otherIndex <= $index
+                    || (int) $purok['purok_number'] !== (int) $other['purok_number']) {
+                    continue;
+                }
+
+                $completeIndex = $purok['full_purok']
+                    ? $index
+                    : ($other['full_purok'] ? $otherIndex : null);
+                if ($completeIndex !== null) {
+                    throw ValidationException::withMessages([
+                        "puroks.{$completeIndex}.full_purok" => 'Complete Purok cannot be enabled when another configured Purok shares the same header number. Use non-overlapping Sakop na Grupo ranges instead.',
+                    ]);
+                }
+
+                if ((int) $purok['grupo_start'] <= (int) $other['grupo_end']
+                    && (int) $other['grupo_start'] <= (int) $purok['grupo_end']) {
+                    throw ValidationException::withMessages([
+                        "puroks.{$otherIndex}.grupo_start" => 'Sakop na Grupo ranges cannot overlap for Puroks sharing the same header number.',
+                    ]);
+                }
             }
         }
 
@@ -197,10 +204,9 @@ class SuperadminController extends Controller
             'ksp_pd' => ['nullable', 'string', 'max:255'],
             'kalihim_ms' => ['nullable', 'string', 'max:255'],
             'kalihim_uwp' => ['nullable', 'string', 'max:255'],
-            'baptism_requirement' => ['nullable', 'date'],
-            'entry_years_requirement' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'baptism_requirement' => ['required_if:dateofbaptism_requirement_boolean,1', 'nullable', 'date'],
+            'entry_years_requirement' => ['required', 'integer', 'in:1,2,3'],
             'dateofbaptism_requirement_boolean' => ['required', 'boolean'],
-            'dateofentryrequirement_boolean' => ['required', 'boolean'],
         ]);
 
         $globalVariables = GlobalVariable::query()->first() ?? new GlobalVariable;

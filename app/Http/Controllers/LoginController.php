@@ -161,6 +161,8 @@ class LoginController extends Controller
             'form_generator_allow' => (bool) $freshUser->form_generator_allow,
             'Delistment_allow' => (bool) $freshUser->Delistment_allow,
             'Inquire_Allow' => (bool) $freshUser->Inquire_Allow,
+            'tarheta_status_allow' => (bool) $freshUser->tarheta_status_allow,
+            'filter_bnh_helper_allow' => (bool) $freshUser->filter_bnh_helper_allow,
             'is_verified' => (bool) $freshUser->is_verified,
         ]);
 

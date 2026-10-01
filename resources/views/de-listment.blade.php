@@ -6,7 +6,10 @@
 <div class="delist-page">
     <span id="delist-config"
         data-require-baptism="{{ $requireBaptismDate ? '1' : '0' }}"
+        data-baptism-cutoff="{{ $baptismCutoff ?? '' }}"
+        data-entry-years="{{ $entryYearsRequirement }}"
         data-endorse-url="{{ route('de-listment.endorse', ['record' => '__RECORD__']) }}"
+        data-delist-url="{{ route('de-listment.delist', ['record' => '__RECORD__']) }}"
         data-update-dates-url="{{ route('de-listment.update-dates') }}"
         data-csrf="{{ csrf_token() }}"
         hidden></span>
@@ -16,12 +19,58 @@
             <h1>De-Listment</h1>
             <p class="delist-subtitle">Review R2-10 eligibility and report progress at a glance.</p>
         </div>
-        <button type="button" class="missing-btn" id="missing-btn" aria-haspopup="dialog">
-            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2 14.3 13H1.7L8 2.2Z"/><path d="M8 6.6v3M8 11.6v.1"/></svg>
-            See entries with missing data
-            <span class="missing-count" id="missing-count">0</span>
-        </button>
+        <div class="delist-tools">
+            <button type="button" class="missing-btn" id="missing-btn" aria-haspopup="dialog" aria-controls="missing-dialog">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.2 14.3 13H1.7L8 2.2Z"/><path d="M8 6.6v3M8 11.6v.1"/></svg>
+                See entries with missing data
+                <span class="missing-count" id="missing-count">0</span>
+            </button>
+            <button type="button" class="history-btn" id="delisted-history-btn" aria-haspopup="dialog" aria-controls="delisted-history-dialog">
+                View delistment history
+            </button>
+        </div>
     </div>
+
+    <dialog class="modal modal-wide" id="delisted-history-dialog" aria-labelledby="delisted-records-heading">
+        <div class="modal-body">
+            <div class="modal-head">
+                <div>
+                    <h3 id="delisted-records-heading">Delistment history</h3>
+                    <p class="modal-sub">Sensitive, read-only history of delisted members and reasons.</p>
+                </div>
+                <button type="button" class="modal-close" data-close aria-label="Close">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+                </button>
+            </div>
+            <div class="table-scroll history-scroll">
+                <table class="member-table history-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Name</th>
+                            <th scope="col">Registry</th>
+                            <th scope="col">Date of delistment</th>
+                            <th scope="col">Reason</th>
+                            <th scope="col">Delisted by</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($delistedRecords as $history)
+                            <tr>
+                                <td>{{ $history->record?->full_name ?: 'Deleted record' }}</td>
+                                <td>{{ $history->record?->registry ?: '—' }}</td>
+                                <td>{{ $history->delisted_at?->timezone('Asia/Manila')->format('M d, Y h:i A') ?: '—' }}</td>
+                                <td>{{ $history->reason }}</td>
+                                <td>{{ $history->delisted_by }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="5">No delistment history has been recorded yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-actions"><button type="button" class="btn" data-close>Close</button></div>
+        </div>
+    </dialog>
 
     <section class="delist-stats" aria-label="Summary">
         <button type="button" class="delist-stat stat-button" id="total-card" aria-haspopup="dialog">
@@ -125,6 +174,7 @@
                         <th scope="col" aria-sort="none"><button type="button" class="sort-btn" data-sort="eligible">R2-10 eligibility <i></i></button></th>
                         <th scope="col" aria-sort="none"><button type="button" class="sort-btn" data-sort="reported">Status <i></i></button></th>
                         <th scope="col" aria-sort="none"><button type="button" class="sort-btn" data-sort="age">Age in system <i></i></button></th>
+                        <th scope="col">Delist MK</th>
                     </tr>
                 </thead>
                 <tbody id="member-rows"></tbody>
@@ -145,6 +195,28 @@
             </div>
         </div>
     </section>
+
+    <dialog class="modal" id="delist-dialog" aria-labelledby="delist-title">
+        <form class="modal-body" id="delist-form">
+            <div class="modal-head">
+                <div>
+                    <h3 id="delist-title">Delist MK member</h3>
+                    <p class="modal-sub" id="delist-member"></p>
+                </div>
+                <button type="button" class="modal-close" data-close aria-label="Close">
+                    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
+                </button>
+            </div>
+            <p class="modal-lead">This changes the member's status to INACTIVE and records who delisted them, the date, and the reason.</p>
+            <label class="field-label" for="delist-reason">Reason for delistment</label>
+            <textarea id="delist-reason" rows="4" maxlength="2000" required></textarea>
+            <p class="modal-warn" id="delist-error" role="alert"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn" data-close>Cancel</button>
+                <button type="submit" class="btn btn-primary" id="delist-submit">Confirm delistment</button>
+            </div>
+        </form>
+    </dialog>
 
     <!-- Entry breakdown popup -->
     <dialog class="modal" id="breakdown-dialog" aria-labelledby="breakdown-title">
@@ -237,7 +309,7 @@
                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
                 </button>
             </div>
-            <p class="modal-lead">A baptism date may be required for the system to determine eligibility. An administrator can configure whether the baptism date affects deliberation.</p>
+            <p class="modal-lead">When enabled by the administrator, the baptism date must be on or before the configured cutoff. MS and UWP records must also meet the configured years-in-system threshold; MK is always eligible.</p>
 
             <div class="table-scroll missing-scroll">
                 <table class="member-table missing-table" id="missing-table">
@@ -465,6 +537,9 @@
     .status-btn.is-locked:hover { border-style: dashed; border-color: var(--delist-border); background: var(--delist-surface); color: var(--delist-muted); }
     .status-btn.is-locked:active { transform: none; }
     .status-btn svg { width: 13px; height: 13px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .delist-action { padding: .42rem .7rem; border: 1px solid var(--bad); border-radius: 8px; background: var(--bad-soft); color: var(--bad); font: inherit; font-size: .8rem; font-weight: 750; cursor: pointer; }
+    .delist-action:hover { background: color-mix(in srgb, var(--bad) 14%, var(--delist-surface)); }
+    .delist-action:focus-visible { outline: 3px solid color-mix(in srgb, var(--bad) 35%, transparent); outline-offset: 2px; }
 
     .status-done {
         display: inline-flex; align-items: center; gap: .45rem; min-width: 172px; padding: .4rem .75rem;
@@ -548,7 +623,8 @@
     }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
-    /* Missing-data button + dialog */
+    /* Viewer and missing-data actions */
+    .delist-tools { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .6rem; }
     .missing-btn {
         display: inline-flex; align-items: center; gap: .55rem; flex: 0 0 auto; padding: .6rem .85rem;
         border: 1px solid var(--delist-border); border-radius: 10px; background: var(--delist-surface);
@@ -558,12 +634,23 @@
     .missing-btn:hover { border-color: var(--warn); background: var(--warn-soft); }
     .missing-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 2px; }
     .missing-btn svg { width: 16px; height: 16px; fill: none; stroke: var(--warn); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+    .history-btn {
+        padding: .6rem .85rem; border: 1px solid var(--delist-border); border-radius: 10px; background: transparent;
+        color: var(--delist-muted); font: inherit; font-size: .82rem; font-weight: 600; cursor: pointer;
+        transition: border-color .15s ease, color .15s ease, background .15s ease;
+    }
+    .history-btn:hover { border-color: var(--accent); background: var(--delist-surface); color: var(--delist-ink); }
+    .history-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 2px; }
     .missing-count {
         min-width: 1.35rem; padding: .05rem .42rem; border-radius: 99px; background: var(--warn-soft); color: var(--warn);
         font-size: .72rem; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums;
     }
     .missing-count[hidden] { display: none; }
     .modal-wide { width: min(96vw, 760px); }
+    #delisted-history-dialog .modal-body { max-height: min(86vh, 780px); overflow: auto; }
+    #delisted-history-dialog .history-scroll { max-height: min(58vh, 520px); overflow: auto; }
+    #delisted-history-dialog .history-table { min-width: 720px; }
+    #delisted-history-dialog .history-table thead th { position: sticky; top: 0; z-index: 2; background: var(--delist-surface); }
     #chart-members-dialog { max-height: min(86vh, 780px); }
     #chart-members-dialog .modal-body { max-height: min(86vh, 780px); overflow: auto; }
     #chart-members-dialog .table-scroll { max-height: min(58vh, 520px); overflow: auto; }
@@ -626,6 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const members = @json($members);
     const missingRecords = @json($missingRecords);
     const requireBaptismDate = config.dataset.requireBaptism === '1';
+    const baptismCutoff = config.dataset.baptismCutoff;
     const PAGE_SIZE = 20;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -669,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mk: kColors.MK, done: '#17875b', pending: '#dc4c4c',
     };
     const avatarColors = ['#1677d2', '#17875b', '#7856b5', '#e47a5f', '#c2851a', '#0f8a9d'];
-    const total = members.length;
+    let total = members.length;
 
     const toast = document.getElementById('toast');
     let toastTimer;
@@ -708,6 +796,9 @@ document.addEventListener('DOMContentLoaded', () => {
         dialog.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', () => dialog.close()));
         dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); }); // backdrop click
     });
+
+    const delistedHistoryDialog = document.getElementById('delisted-history-dialog');
+    document.getElementById('delisted-history-btn').addEventListener('click', () => delistedHistoryDialog.showModal());
 
     const chartMembersDialog = document.getElementById('chart-members-dialog');
     function showChartMembers(title, subtitle, matchingMembers) {
@@ -1149,11 +1240,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!member.eligible) {
             btn.classList.add('is-locked');
             btn.setAttribute('aria-disabled', 'true');
-            btn.title = "Not eligible for R2-10, so it can't be marked as created & reported";
-            btn.setAttribute('aria-label', `Not yet done. ${member.name} is not eligible, so R2-10 can't be reported.`);
+            btn.title = member.endorsed
+                ? 'Endorsed, but the member does not currently meet the R2-10 eligibility rules.'
+                : "Not eligible for R2-10, so it can't be marked as created & reported";
+            btn.setAttribute('aria-label', member.endorsed
+                ? `${member.name} is endorsed but does not currently meet the R2-10 eligibility rules.`
+                : `Not yet done. ${member.name} is not eligible, so R2-10 can't be reported.`);
             btn.innerHTML = lockSvg;
-            btn.append(document.createTextNode('Not yet done'));
-            btn.addEventListener('click', () => showToast(`${member.name} is not eligible, so R2-10 can't be reported.`));
+            btn.append(document.createTextNode(member.endorsed ? 'Endorsed · Not eligible' : 'Not yet done'));
+            btn.addEventListener('click', () => showToast(member.endorsed
+                ? `${member.name} is endorsed, but does not currently meet the R2-10 eligibility rules.`
+                : `${member.name} is not eligible, so R2-10 can't be reported.`));
             return btn;
         }
 
@@ -1193,6 +1290,66 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`${member.name}: R2-10 marked as created & reported`);
         setTimeout(() => { justDoneId = null; }, 600);
     }
+
+    const delistDialog = document.getElementById('delist-dialog');
+    const delistForm = document.getElementById('delist-form');
+    const delistReason = document.getElementById('delist-reason');
+    const delistSubmit = document.getElementById('delist-submit');
+    let pendingDelistMember = null;
+    let delistSaving = false;
+
+    function openDelist(member) {
+        pendingDelistMember = member;
+        delistForm.reset();
+        document.getElementById('delist-member').textContent = `${member.name} · MK`;
+        document.getElementById('delist-error').textContent = '';
+        delistDialog.showModal();
+        delistReason.focus();
+    }
+
+    delistForm.addEventListener('submit', async event => {
+        event.preventDefault();
+        if (delistSaving || !pendingDelistMember || !delistForm.reportValidity()) return;
+
+        const member = pendingDelistMember;
+        delistSaving = true;
+        delistSubmit.disabled = true;
+        delistSubmit.textContent = 'Saving...';
+        document.getElementById('delist-error').textContent = '';
+        try {
+            const response = await fetch(config.dataset.delistUrl.replace('__RECORD__', encodeURIComponent(member.id)), {
+                method: 'PUT',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': config.dataset.csrf,
+                },
+                body: JSON.stringify({ reason: delistReason.value.trim() }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || 'Unable to delist this MK member.');
+
+            members.splice(members.indexOf(member), 1);
+            total = members.length;
+            const missingIndex = missingRecords.findIndex(record => record.id === member.id);
+            if (missingIndex !== -1) missingRecords.splice(missingIndex, 1);
+            delistDialog.close();
+            renderStats();
+            renderEligibility();
+            renderProgress();
+            renderTable();
+            renderMissingCount();
+            showToast(`${member.name} was delisted and marked INACTIVE.`);
+        } catch (error) {
+            console.error('MK delistment could not be saved:', error);
+            document.getElementById('delist-error').textContent = error.message || 'Unable to delist this MK member.';
+        } finally {
+            delistSaving = false;
+            delistSubmit.disabled = false;
+            delistSubmit.textContent = 'Confirm delistment';
+        }
+    });
+    delistDialog.addEventListener('close', () => { pendingDelistMember = null; });
 
     function renderTable() {
         const list = filtered();
@@ -1243,6 +1400,19 @@ document.addEventListener('DOMContentLoaded', () => {
             age.append(ageEl);
 
             row.append(name, kalagayan, eligibility, status, age);
+            const delistCell = document.createElement('td');
+            if (member.kalagayan === 'MK' && member.reported) {
+                const delistButton = document.createElement('button');
+                delistButton.type = 'button';
+                delistButton.className = 'delist-action';
+                delistButton.textContent = 'Delist';
+                delistButton.setAttribute('aria-label', `Delist MK member ${member.name}`);
+                delistButton.addEventListener('click', () => openDelist(member));
+                delistCell.append(delistButton);
+            } else {
+                delistCell.textContent = member.kalagayan === 'MK' ? 'Endorse first' : '—';
+            }
+            row.append(delistCell);
             return row;
         }));
 
@@ -1311,7 +1481,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const missingRowsEl = document.getElementById('missing-rows');
     const missingSave = document.getElementById('missing-save');
     const missingHint = document.getElementById('missing-hint');
-    const isComplete = r => !requireBaptismDate || Boolean(r.baptism);
+    const isComplete = r => !requireBaptismDate
+        || Boolean(r.baptism && (!baptismCutoff || r.baptism <= baptismCutoff));
     const stillMissing = () => missingRecords.filter(r => !isComplete(r));
     let drafts = {}; // record id -> baptism date while editing
 
@@ -1416,13 +1587,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (record) {
                     record.baptism = saved.baptism;
                 }
+                const member = members.find(item => item.id === saved.id);
+                if (member) {
+                    member.eligible = saved.eligible;
+                    member.reported = saved.reported;
+                }
             });
             drafts = {};
             renderMissingCount();
             renderMissingRows();
             updateSaveState();
             renderTable();
-            showToast('Record dates saved. Eligibility remains as recorded in the Records table.');
+            renderStats();
+            renderEligibility();
+            renderProgress();
+            showToast('Record dates saved. R2-10 eligibility has been recalculated.');
         } catch (error) {
             console.error('Record dates could not be saved:', error);
             showToast(error.message || 'Unable to save record dates.');

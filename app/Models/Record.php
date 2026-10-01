@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Record extends Model
 {
@@ -18,14 +19,15 @@ class Record extends Model
         'date_of_baptism',
         'evangelist',
         'date_of_entry',
-        'r2_10_eligibility',
         'status',
         'tarheta_status',
         'monthly_code',
         'date_of_birth',
-        'filing_status',
+        'is_married',
+        'is_valid1',
+        'is_valid2',
         'r2_10_endorsement',
-        'reason_of_delistment',
+        'reason_of_r2_10_endorsement',
         'log_section',
     ];
 
@@ -35,6 +37,19 @@ class Record extends Model
             'date_of_baptism' => 'date',
             'date_of_entry' => 'date',
             'date_of_birth' => 'date',
+            'is_married' => 'boolean',
+            'is_valid1' => 'boolean',
+            'is_valid2' => 'boolean',
         ];
+    }
+
+    public function delistmentHistories(): HasMany
+    {
+        return $this->hasMany(DelistmentHistory::class);
+    }
+
+    public function monthlyRecordMovementHistories(): HasMany
+    {
+        return $this->hasMany(MonthlyRecordMovementHistory::class);
     }
 }

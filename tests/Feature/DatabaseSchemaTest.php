@@ -41,6 +41,7 @@ class DatabaseSchemaTest extends TestCase
             'form_generator_allow',
             'Delistment_allow',
             'Inquire_Allow',
+            'filter_bnh_helper_allow',
         ]));
         $this->assertTrue(Schema::hasColumns('puroks', [
             'id',
@@ -49,7 +50,7 @@ class DatabaseSchemaTest extends TestCase
         ]));
         $purokColumns = Schema::getColumnListing('puroks');
         $this->assertSame(['id', 'purok_number', 'purok_name'], array_slice($purokColumns, 0, 3));
-        $this->assertTrue(collect(Schema::getIndexes('puroks'))->contains(
+        $this->assertFalse(collect(Schema::getIndexes('puroks'))->contains(
             fn (array $index): bool => $index['unique']
                 && ! $index['primary']
                 && $index['columns'] === ['purok_number']
@@ -71,13 +72,28 @@ class DatabaseSchemaTest extends TestCase
             'tarheta_status',
             'monthly_code',
             'date_of_birth',
-            'filing_status',
+            'is_married',
+            'is_valid1',
+            'is_valid2',
             'r2_10_endorsement',
-            'reason_of_delistment',
+            'reason_of_r2_10_endorsement',
             'log_section',
         ]));
+        $this->assertFalse(Schema::hasColumn('records', 'filing_status'));
         $this->assertFalse(Schema::hasColumn('puroks', 'created_at'));
         $this->assertFalse(Schema::hasColumn('puroks', 'updated_at'));
+        $this->assertTrue(Schema::hasColumns('monthly_record_movement_histories', [
+            'previous_purok',
+            'previous_grupo',
+            'destination_status',
+        ]));
+        $this->assertFalse(Schema::hasColumn('monthly_record_movement_histories', 'purok'));
+        $this->assertFalse(Schema::hasColumn('monthly_record_movement_histories', 'grupo'));
+        $this->assertFalse(Schema::hasColumn('monthly_record_movement_histories', 'destination_purok'));
+        $this->assertFalse(Schema::hasColumn('monthly_record_movement_histories', 'destination_grupo'));
+        $this->assertFalse(Schema::hasTable('monthly_record_movement_notes'));
+        $this->assertFalse(Schema::hasColumn('records', 'reason_of_delistment'));
+        $this->assertFalse(Schema::hasColumn('records', 'r2_10_endorsement_reason'));
         $this->assertSame('varchar', Schema::getColumnType('puroks', 'manggagawa'));
         $this->assertTrue(Schema::hasColumns('global_variables', [
             'id',
@@ -93,12 +109,32 @@ class DatabaseSchemaTest extends TestCase
             'baptism_requirement',
             'entry_years_requirement',
             'dateofbaptism_requirement_boolean',
-            'dateofentryrequirement_boolean',
         ]));
         $this->assertSame('date', Schema::getColumnType('global_variables', 'baptism_requirement'));
         $this->assertSame('integer', Schema::getColumnType('global_variables', 'entry_years_requirement'));
         $this->assertContains(Schema::getColumnType('global_variables', 'dateofbaptism_requirement_boolean'), ['boolean', 'tinyint']);
-        $this->assertContains(Schema::getColumnType('global_variables', 'dateofentryrequirement_boolean'), ['boolean', 'tinyint']);
+        $this->assertFalse(Schema::hasColumn('global_variables', 'dateofentryrequirement_boolean'));
+        $this->assertTrue(Schema::hasTable('delistment_histories'));
+        $this->assertEqualsCanonicalizing([
+            'id',
+            'record_id',
+            'delisted_by_user_id',
+            'delisted_by',
+            'reason',
+            'delisted_at',
+        ], Schema::getColumnListing('delistment_histories'));
+        $this->assertTrue(Schema::hasColumns('monthly_record_snapshots', [
+            'id',
+            'month',
+            'purok_number',
+            'ms_count',
+            'uwp_count',
+            'mk_count',
+            'movement_counts',
+            'created_at',
+            'updated_at',
+        ]));
+        $this->assertDatabaseCount('monthly_record_snapshots', 60);
 
         $user = new User;
         $purok = new Purok;

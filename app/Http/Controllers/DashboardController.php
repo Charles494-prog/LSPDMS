@@ -3,16 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\GlobalVariable;
+use App\Models\MonthlyRecordSnapshot;
 use App\Models\Purok;
 use App\Models\Record;
+use App\Services\R210Eligibility;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class DashboardController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, R210Eligibility $eligibility)
     {
         $user = $request->session()->get('login_user');
+        $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($user['tungkulin'] ?? '')) ?? ''));
+        $canEditRegistry = in_array($role, ['head secretary', 'secretary head'], true)
+            || (bool) ($user['Inquire_Allow'] ?? false);
         $records = Record::query()
             ->select([
                 'id',
@@ -26,7 +31,6 @@ class DashboardController extends Controller
                 'evangelist',
                 'date_of_entry',
                 'date_of_birth',
-                'r2_10_eligibility',
                 'r2_10_endorsement',
                 'status',
             ])
@@ -74,35 +78,71 @@ class DashboardController extends Controller
         $activeTotal = $activeRecords->count();
         $inactiveTotal = $statusCounts['INACTIVE'] ?? 0;
 
-        $purokKeys = $records
-            ->map(fn (Record $record): string => trim((string) $record->purok) ?: 'Unassigned')
-            ->unique()
-            ->sort(fn (string $left, string $right): int => $left === 'Unassigned'
-                ? 1
-                : ($right === 'Unassigned' ? -1 : strnatcasecmp($left, $right)))
-            ->values();
-        $puroks = $purokKeys->map(function (string $purok) use ($activeRecords, $activeStatuses, $records): array {
-            $members = $activeRecords->filter(fn (Record $record): bool => (trim((string) $record->purok) ?: 'Unassigned') === $purok);
+        $purokSettings = Purok::query()
+            ->orderBy('purok_number')
+            ->orderBy('id')
+            ->get(['id', 'purok_number', 'purok_name', 'grupo_start', 'grupo_end', 'full_purok']);
+        $purokSettingsByNumber = $purokSettings->groupBy(
+            fn (Purok $purok): string => (string) $purok->purok_number
+        );
+        $normalizePurok = static function (mixed $value): string {
+            $value = trim((string) $value);
+            if ($value === '') {
+                return 'Unassigned';
+            }
+            if (preg_match('/^(?:Purok\s*)?(\d+)$/i', $value, $matches)) {
+                return (string) (int) $matches[1];
+            }
+
+            return $value;
+        };
+        $puroks = $purokSettings->map(function (Purok $purok) use (
+            $activeRecords,
+            $activeStatuses,
+            $normalizePurok,
+            $purokSettingsByNumber
+        ): array {
+            $purokNumber = (string) $purok->purok_number;
+            $isSplitHeader = $purokSettingsByNumber->get($purokNumber)->count() > 1;
+            $members = $activeRecords->filter(
+                fn (Record $record): bool => $normalizePurok($record->purok) === $purokNumber
+                    && (! $isSplitHeader || $purok->full_purok || (
+                        is_numeric($record->grupo)
+                        && (int) $record->grupo >= $purok->grupo_start
+                        && (int) $record->grupo <= $purok->grupo_end
+                    ))
+            );
+            $name = trim((string) $purok->purok_name) ?: 'Purok '.$purokNumber;
             $counts = [];
             foreach ($activeStatuses as $status) {
                 $counts[$status] = $members->filter(fn (Record $record): bool => mb_strtoupper(trim((string) $record->status)) === $status)->count();
             }
 
             return [
-                'id' => $purok,
+                'id' => $purok->id,
+                'number' => $purokNumber,
+                'name' => $name,
                 'counts' => $counts,
                 'total' => array_sum($counts),
-                'recordTotal' => $records->filter(fn (Record $record): bool => (trim((string) $record->purok) ?: 'Unassigned') === $purok)->count(),
+                'recordTotal' => $members->count(),
             ];
         })->all();
 
         $genderCounts = [];
+        $genderRecords = [];
         foreach (['female' => 'B', 'male' => 'L'] as $gender => $code) {
             $genderCounts[$gender] = array_fill_keys($activeStatuses, 0);
+            $genderRecords[$gender] = [];
             foreach ($activeRecords as $record) {
                 if (mb_strtoupper(trim((string) $record->gender)) === $code) {
                     $status = mb_strtoupper(trim((string) $record->status));
                     $genderCounts[$gender][$status]++;
+                    $genderRecords[$gender][] = [
+                        'id' => $record->id,
+                        'name' => trim((string) $record->full_name) ?: 'Unnamed record',
+                        'status' => $status,
+                        'purok' => trim((string) $record->purok) ?: 'Unassigned',
+                    ];
                 }
             }
         }
@@ -133,30 +173,53 @@ class DashboardController extends Controller
             }
         }
 
-        $monthStart = Carbon::now()->startOfMonth()->subMonths(11);
-        $monthLabels = [];
+        $monthlySnapshots = MonthlyRecordSnapshot::query()
+            ->orderBy('month')
+            ->orderBy('purok_number')
+            ->get(['month', 'purok_number', 'ms_count', 'uwp_count', 'mk_count', 'movement_counts']);
+        $monthKeys = $monthlySnapshots
+            ->map(fn (MonthlyRecordSnapshot $snapshot): string => $snapshot->month->format('Y-m'))
+            ->unique()
+            ->values();
+        $monthLabels = $monthKeys
+            ->map(fn (string $monthKey): string => Carbon::createFromFormat('Y-m', $monthKey)->format('M Y'))
+            ->all();
         $monthlyCounts = [];
         $monthlyPurokCounts = [];
-        for ($offset = 0; $offset < 12; $offset++) {
-            $month = $monthStart->copy()->addMonths($offset);
-            $monthKey = $month->format('Y-m');
-            $monthLabels[] = $month->format('M Y');
-            $monthlyCounts[$monthKey] = array_fill_keys($activeStatuses, 0);
+        $movementDetails = [];
+        foreach ($monthKeys as $monthKey) {
+            $monthlyCounts[$monthKey] = ['MS' => 0, 'UWP' => 0, 'MK' => 0];
             $monthlyPurokCounts[$monthKey] = [];
         }
-        foreach ($activeRecords as $record) {
-            if (! $record->date_of_entry) {
-                continue;
+        foreach ($monthlySnapshots as $snapshot) {
+            $monthKey = $snapshot->month->format('Y-m');
+            $purok = (string) $snapshot->purok_number;
+            $monthlyPurokCounts[$monthKey][$purok] = [
+                'MS' => (int) $snapshot->ms_count,
+                'UWP' => (int) $snapshot->uwp_count,
+                'MK' => (int) $snapshot->mk_count,
+            ];
+            foreach (['MS' => 'ms_count', 'UWP' => 'uwp_count', 'MK' => 'mk_count'] as $status => $column) {
+                $monthlyCounts[$monthKey][$status] += (int) $snapshot->{$column};
             }
-            $monthKey = $record->date_of_entry->format('Y-m');
-            if (isset($monthlyCounts[$monthKey])) {
-                $status = mb_strtoupper(trim((string) $record->status));
-                $purok = trim((string) $record->purok) ?: 'Unassigned';
-                $monthlyCounts[$monthKey][$status]++;
-                $monthlyPurokCounts[$monthKey][$purok] ??= array_fill_keys($activeStatuses, 0);
-                $monthlyPurokCounts[$monthKey][$purok][$status]++;
+            foreach (($snapshot->movement_counts ?? []) as $status => $codes) {
+                foreach ($codes as $code => $count) {
+                    $movementDetails[] = [
+                        'month' => $monthKey,
+                        'purok' => (int) $snapshot->purok_number,
+                        'status' => $status,
+                        'code' => $code,
+                        'count' => (int) $count,
+                    ];
+                }
             }
         }
+        $movementPuroks = $monthlySnapshots
+            ->pluck('purok_number')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
 
         $registryStatuses = ['MS', 'UWP', 'MK'];
         $registryRecords = $records->filter(fn (Record $record): bool => in_array(
@@ -187,9 +250,6 @@ class DashboardController extends Controller
             'Evangelist' => 'evangelist',
             'Birthday' => 'date_of_birth',
         ];
-        $purokSettings = Purok::query()
-            ->get(['purok_number', 'grupo_start', 'grupo_end'])
-            ->keyBy(fn (Purok $purok): string => (string) $purok->purok_number);
         $registryReport = [];
         foreach ($registryFields as $label => $column) {
             $isMissing = fn (Record $record): bool => $column === 'registry'
@@ -198,10 +258,18 @@ class DashboardController extends Controller
             $fieldDetails = $registryPurokKeys->map(fn (string $purok): array => $registryRecords
                 ->filter(fn (Record $record): bool => (trim((string) $record->purok) ?: 'Unassigned') === $purok
                     && $isMissing($record))
-                ->map(function (Record $record) use ($column, $purokSettings): array {
+                ->map(function (Record $record) use ($column, $purokSettingsByNumber): array {
                     $recordPurok = trim((string) $record->purok);
                     preg_match('/\d+/', $recordPurok, $purokNumber);
-                    $purokSettingsForRecord = isset($purokNumber[0]) ? $purokSettings->get($purokNumber[0]) : null;
+                    $matchingPurokSettings = isset($purokNumber[0])
+                        ? $purokSettingsByNumber->get((string) (int) $purokNumber[0])
+                        : null;
+                    $purokSettingsForRecord = $matchingPurokSettings?->first(
+                        fn (Purok $setting): bool => $setting->full_purok
+                            || (is_numeric($record->grupo)
+                                && (int) $record->grupo >= $setting->grupo_start
+                                && (int) $record->grupo <= $setting->grupo_end)
+                    ) ?? $matchingPurokSettings?->first();
 
                     return [
                         'id' => $record->id,
@@ -233,17 +301,15 @@ class DashboardController extends Controller
             ? 0
             : (($registryRecordCount * $reportFieldsCount - $missingFieldsCount) / ($registryRecordCount * $reportFieldsCount)) * 100;
 
-        $r210EligibleRecords = $activeRecords->filter(fn (Record $record): bool => in_array(
-            mb_strtoupper(trim((string) $record->r2_10_eligibility)),
-            ['ELIGIBLE', 'NO NEED TO CHECK'],
-            true
-        ));
+        $globalVariables = GlobalVariable::query()->first();
+        $r210EligibleRecords = $activeRecords->filter(
+            fn (Record $record): bool => $eligibility->forRecord($record, $globalVariables)
+        );
         $eligibleR210Count = $r210EligibleRecords->count();
         $endorsedR210Count = $r210EligibleRecords
             ->filter(fn (Record $record): bool => mb_strtoupper(trim((string) $record->r2_10_endorsement)) === 'ENDORSED')
             ->count();
         $r210Updating = $eligibleR210Count === 0 ? 0 : $endorsedR210Count / $eligibleR210Count * 100;
-        $globalVariables = GlobalVariable::query()->first();
         $localeSNumber = trim((string) ($globalVariables?->s_number ?? ''));
         $localeSNumberTarget = is_numeric($localeSNumber) ? (float) $localeSNumber : 0.0;
         $localeActivePercentage = $localeSNumberTarget > 0
@@ -269,6 +335,7 @@ class DashboardController extends Controller
 
         return view('dashboard', [
             'user' => $user,
+            'canEditRegistry' => $canEditRegistry,
             'dashboardMetrics' => [
                 'recordCount' => $records->count(),
                 'activeCount' => $activeTotal,
@@ -281,12 +348,16 @@ class DashboardController extends Controller
                 'activeStatuses' => $activeStatuses,
                 'puroks' => $puroks,
                 'gender' => $genderCounts,
+                'genderRecords' => $genderRecords,
                 'groupLabels' => $groupLabels,
                 'groupCounts' => $groupCounts,
                 'groupRecords' => $groupRecords,
                 'monthLabels' => $monthLabels,
+                'monthKeys' => $monthKeys->all(),
                 'monthlyCounts' => array_values($monthlyCounts),
                 'monthlyPurokCounts' => array_values($monthlyPurokCounts),
+                'movementDetails' => $movementDetails,
+                'movementPuroks' => $movementPuroks,
                 'registryPuroks' => $registryPuroks,
                 'registryReport' => $registryReport,
                 'registryCompletion' => $registryCompletion,
