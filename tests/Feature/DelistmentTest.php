@@ -154,6 +154,56 @@ class DelistmentTest extends TestCase
             });
     }
 
+    public function test_chart_category_can_be_exported_as_docx_with_wrong_endorsements_flagged(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 1)->startOfDay());
+        GlobalVariable::query()->create(['entry_years_requirement' => 2]);
+        $wronglyEndorsed = $this->record([
+            'full_name' => 'Recently Entered Endorsed Member',
+            'registry' => 'RECENT1234567',
+            'status' => 'MS',
+            'date_of_entry' => '2026-09-01',
+            'r2_10_endorsement' => 'ENDORSED',
+        ]);
+        $this->record([
+            'full_name' => 'Eligible Reported Member',
+            'status' => 'MS',
+            'date_of_entry' => '2020-01-01',
+            'r2_10_endorsement' => 'ENDORSED',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('de-listment'))
+            ->assertOk()
+            ->assertSee('id="chart-members-export"', false)
+            ->assertSee('Endorsed · Not eligible — review required');
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('de-listment.export', ['category' => 'not-eligible-endorsed']))
+            ->assertOk()
+            ->assertDownload('R2-10 - Not eligible - Endorsed (review required).docx');
+
+        $exportPath = app(\App\Services\DelistmentDocxExporter::class)->generate('Not eligible - Endorsed', [[
+            'name' => $wronglyEndorsed->full_name,
+            'registry' => $wronglyEndorsed->registry,
+            'kalagayan' => 'MS',
+            'eligible' => false,
+            'endorsed' => true,
+            'reported' => false,
+        ]]);
+        try {
+            $document = new \PharData($exportPath);
+            $xml = $document['word/document.xml']->getContent();
+            $this->assertStringContainsString('Recently Entered Endorsed Member', $xml);
+            $this->assertStringContainsString('RECENT1234567', $xml);
+            $this->assertStringContainsString('Endorsed · Not eligible — review required', $xml);
+            $this->assertStringNotContainsString('Eligible Reported Member', $xml);
+        } finally {
+            unset($document);
+            @unlink($exportPath);
+        }
+    }
+
     public function test_endorsement_uses_dynamic_eligibility_instead_of_imported_eligibility_text(): void
     {
         $this->travelTo(now()->setDate(2026, 10, 1)->startOfDay());
@@ -172,7 +222,7 @@ class DelistmentTest extends TestCase
             'date_of_entry' => '2024-10-01',
             'date_of_baptism' => '2025-12-25',
         ]);
-        $user = ['id' => 1, 'first_name' => 'Charles', 'last_name' => 'Galvan'];
+        $user = ['id' => 1, 'gmail' => 'formalcharlesandreigalvan@gmail.com', 'first_name' => 'Charles', 'last_name' => 'Galvan'];
 
         $this->withSession(['login_user' => $user])
             ->putJson(route('de-listment.endorse', $notQualified), [
@@ -228,7 +278,7 @@ class DelistmentTest extends TestCase
         $this->assertDatabaseHas('delistment_histories', [
             'record_id' => $mk->id,
             'delisted_by_user_id' => $user->id,
-            'delisted_by' => 'Test Secretary',
+            'delisted_by' => 'delister@example.test',
             'reason' => 'Member requested removal',
             'delisted_at' => now('Asia/Manila')->format('Y-m-d H:i:s'),
         ]);
@@ -244,7 +294,7 @@ class DelistmentTest extends TestCase
             'log_section' => 'Existing log history.',
         ]);
 
-        $this->withSession(['login_user' => ['id' => 1, 'first_name' => 'Charles Andrei', 'last_name' => 'Galvan']])
+        $this->withSession(['login_user' => ['id' => 1, 'gmail' => 'formalcharlesandreigalvan@gmail.com', 'first_name' => 'Charles Andrei', 'last_name' => 'Galvan']])
             ->putJson(route('de-listment.endorse', ['record' => $record->id]), [
                 'note' => 'Reviewed and submitted with no changes.',
                 'assurance' => true,
@@ -258,7 +308,7 @@ class DelistmentTest extends TestCase
         ]);
         $this->assertStringContainsString('Existing reason.', $record->fresh()->reason_of_r2_10_endorsement);
         $this->assertMatchesRegularExpression(
-            '/Charles Andrei Galvan \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\): due to Reviewed and submitted with no changes\./',
+            '/formalcharlesandreigalvan@gmail\.com \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\): due to Reviewed and submitted with no changes\./',
             $record->fresh()->reason_of_r2_10_endorsement
         );
         $this->assertSame('Existing log history.', $record->fresh()->log_section);
@@ -266,7 +316,7 @@ class DelistmentTest extends TestCase
 
     public function test_ms_and_uwp_can_use_one_year_confirmation_but_mk_requires_a_description(): void
     {
-        $user = ['id' => 1, 'first_name' => 'Charles Andrei', 'last_name' => 'Galvan'];
+        $user = ['id' => 1, 'gmail' => 'formalcharlesandreigalvan@gmail.com', 'first_name' => 'Charles Andrei', 'last_name' => 'Galvan'];
         $ms = $this->record([
             'status' => 'MS',
         ]);
@@ -278,7 +328,7 @@ class DelistmentTest extends TestCase
             ])
             ->assertOk();
         $this->assertMatchesRegularExpression(
-            '/Charles Andrei Galvan \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\): 1 year MS or UWP\./',
+            '/formalcharlesandreigalvan@gmail\.com \(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\): 1 year MS or UWP\./',
             $ms->fresh()->reason_of_r2_10_endorsement
         );
 
@@ -325,7 +375,7 @@ class DelistmentTest extends TestCase
         ]);
 
         foreach ([$notEligible, $inactive] as $record) {
-            $this->withSession(['login_user' => ['id' => 1, 'first_name' => 'Charles', 'last_name' => 'Galvan']])
+            $this->withSession(['login_user' => ['id' => 1, 'gmail' => 'formalcharlesandreigalvan@gmail.com', 'first_name' => 'Charles', 'last_name' => 'Galvan']])
                 ->putJson(route('de-listment.endorse', ['record' => $record->id]), [
                     'note' => 'Reviewed',
                     'assurance' => true,
@@ -333,7 +383,7 @@ class DelistmentTest extends TestCase
                 ->assertUnprocessable();
         }
 
-        $this->withSession(['login_user' => ['id' => 1, 'first_name' => 'Charles', 'last_name' => 'Galvan']])
+        $this->withSession(['login_user' => ['id' => 1, 'gmail' => 'formalcharlesandreigalvan@gmail.com', 'first_name' => 'Charles', 'last_name' => 'Galvan']])
             ->putJson(route('de-listment.endorse', ['record' => $endorsed->id]), [
                 'note' => 'Reviewed',
                 'assurance' => true,

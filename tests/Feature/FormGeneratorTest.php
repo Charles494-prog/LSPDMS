@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Record;
 use App\Models\GlobalVariable;
+use App\Models\MonthlyRecordSnapshot;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +28,11 @@ class FormGeneratorTest extends TestCase
             ->assertSee('id="deliberation-tab"', false)
             ->assertSee('id="monthly-forms-tab"', false)
             ->assertSee('Monthly Forms')
+            ->assertSee('id="monthlySessionWidget"', false)
+            ->assertSee('id="monthlySessionOpen"', false)
+            ->assertSee('Please type the following exactly. It is case-sensitive:', false)
+            ->assertSee('Please match the entire sentence exactly, including capitalization.', false)
+            ->assertSee('monthlySessionBlocker', false)
             ->assertDontSee('data-panel="deliberation"', false)
             ->assertSee('Deliberation')
             ->assertSee(route('forms.monthly.modify'), false)
@@ -66,6 +72,7 @@ class FormGeneratorTest extends TestCase
             ->assertDontSee('Report month')
             ->assertDontSee('Generate preview')
             ->assertSee('Monthly Forms</a>', false);
+        $this->assertSame(1, substr_count($response->getContent(), 'id="monthlySessionWidget"'));
         $this->assertSame(1, substr_count($response->getContent(), '<aside class="sidebar"'));
         $this->assertSame(1, substr_count($response->getContent(), '<header class="topbar">'));
     }
@@ -133,6 +140,7 @@ class FormGeneratorTest extends TestCase
                 'monthly_code' => $grupo === 1 ? null : ($grupo === 2 ? 'MS: C+' : 'MS: B'),
             ]);
         }
+
         Record::query()->create([
             'full_name' => 'Different Status Member',
             'registry' => '9234567890123',
@@ -218,14 +226,16 @@ class FormGeneratorTest extends TestCase
         foreach (array_diff(glob($outputDirectory.'/R4-01*.docx') ?: [], $existingDocs) as $generatedDoc) {
             @unlink($generatedDoc);
         }
-        $docxSnapshot = \App\Models\R401Snapshot::query()->where('format', 'docx')->firstOrFail();
-        Storage::disk('local')->assertExists($docxSnapshot->file_path);
-        $pdfResponse = $this->withSession($session)
-            ->get(route('forms.monthly.r4-01.download.pdf', ['purok' => 'all', 'kalagayan' => 'MS']))
-            ->assertOk()
-            ->assertDownload('R4-01 (MS) Oct 2026.pdf');
-        $pdfSnapshot = \App\Models\R401Snapshot::query()->where('format', 'pdf')->firstOrFail();
-        Storage::disk('local')->assertExists($pdfSnapshot->file_path);
+        $this->assertDatabaseCount('r4_01_snapshots', 0);
+        $r401Preview = $this->withSession($session)
+            ->get(route('forms.monthly.r4-01', ['purok' => 1, 'kalagayan' => 'MS']))
+            ->assertDontSee('Download PDF')
+            ->assertDontSee('download/pdf')
+            ->getContent();
+        $this->assertStringContainsString('class="r401-movement-row"', $r401Preview);
+        $this->withSession($session)
+            ->get('/forms/monthly/r4-01/download/pdf?purok=all&kalagayan=MS')
+            ->assertNotFound();
         $this->withSession($session)
             ->get(route('forms.monthly.r4-01.snapshots'))
             ->assertOk()
@@ -234,18 +244,7 @@ class FormGeneratorTest extends TestCase
             ->assertSee('Open Resumen &amp; R4-01 Generators', false)
             ->assertDontSee('Open R4-01 Generator')
             ->assertDontSee('Open Resumen Generator')
-            ->assertSee('All Purok')
-            ->assertSee($docxSnapshot->file_name)
-            ->assertSee($pdfSnapshot->file_name);
-        $this->withSession($session)
-            ->get(route('forms.monthly.r4-01.snapshots.download', $docxSnapshot))
-            ->assertOk()
-            ->assertDownload($docxSnapshot->file_name);
-        $this->assertStringStartsWith(
-            '%PDF-',
-            Storage::disk('local')->get($pdfSnapshot->file_path),
-            'The archived PDF should contain a valid PDF document.'
-        );
+            ->assertSee('No saved monthly session snapshots match these filters.');
 
         $allPuroksResponse = $this->withSession($session)
             ->get(route('forms.monthly.r4-01', ['purok' => 'all', 'kalagayan' => 'MS']))
@@ -274,7 +273,7 @@ class FormGeneratorTest extends TestCase
         $reportTableBodies = [];
         foreach ($allPurokPages[1] as $pageHtml) {
             preg_match('/<table class="r401-report-table".*?<tbody>(.*?)<\/tbody>/s', $pageHtml, $bodyMatch);
-            preg_match('/<tr>\s*<td>(\d+)<\/td>/', $bodyMatch[1] ?? '', $firstRowMatch);
+            preg_match('/<tr\s*(?:class="[^"]*")?\s*>\s*<td>(\d+)<\/td>/', $bodyMatch[1] ?? '', $firstRowMatch);
             $reportTableBodies[] = (int) ($firstRowMatch[1] ?? 0);
         }
         $this->assertSame([1, 21, 41, 1, 1, 21], $reportTableBodies);
@@ -368,6 +367,133 @@ class FormGeneratorTest extends TestCase
         }
     }
 
+    public function test_r4_01_includes_coded_inactive_and_mk_records_and_session_transfer_at_previous_location(): void
+    {
+        $user = $this->makeSecretary(['form_generator_allow' => true]);
+        DB::table('puroks')->insert([
+            [
+                'purok_number' => 1,
+                'purok_name' => 'Purok One',
+                'manggagawa' => 'Worker One',
+                'ministerial_id' => 'MIN-001',
+                'grupo_start' => 1,
+                'grupo_end' => 24,
+                'full_purok' => true,
+            ],
+            [
+                'purok_number' => 2,
+                'purok_name' => 'Purok Two',
+                'manggagawa' => 'Worker Two',
+                'ministerial_id' => 'MIN-002',
+                'grupo_start' => 1,
+                'grupo_end' => 24,
+                'full_purok' => true,
+            ],
+        ]);
+        $sessionId = DB::table('monthly_movement_sessions')->insertGetId([
+            'active_key' => 'active',
+            'status' => 'active',
+            'period_month' => '2026-10-01',
+            'started_at' => '2026-10-01 09:00:00',
+        ]);
+        Record::query()->create([
+            'full_name' => 'Active A Early',
+            'status' => 'MS',
+            'purok' => '1',
+            'grupo' => '1',
+        ]);
+        Record::query()->create([
+            'full_name' => 'Active A Late',
+            'status' => 'MS',
+            'purok' => '1',
+            'grupo' => '20',
+        ]);
+        Record::query()->create([
+            'full_name' => 'Inactive With DD Code',
+            'status' => 'INACTIVE',
+            'purok' => '1',
+            'grupo' => '1',
+            'monthly_code' => 'MS: DD',
+        ]);
+        Record::query()->create([
+            'full_name' => 'MK With MS Code',
+            'status' => 'MK',
+            'purok' => '1',
+            'grupo' => '2',
+            'monthly_code' => 'MS: G',
+        ]);
+        $transfer = Record::query()->create([
+            'full_name' => 'Jacquelyn Gascon',
+            'registry' => 'RZL0831000164',
+            'gender' => 'B',
+            'kapisanan' => 'K',
+            'date_of_baptism' => '1998-01-06',
+            'evangelist' => 'Teodoro Mangandi',
+            'status' => 'MS',
+            'purok' => '2',
+            'grupo' => '8',
+            'monthly_code' => 'MS: C+',
+        ]);
+        DB::table('monthly_session_movements')->insert([
+            'session_id' => $sessionId,
+            'record_id' => $transfer->id,
+            'action' => 'transfer',
+            'full_name' => $transfer->full_name,
+            'registry' => $transfer->registry,
+            'gender' => $transfer->gender,
+            'kapisanan' => $transfer->kapisanan,
+            'date_of_baptism' => '1998-01-06',
+            'evangelist' => $transfer->evangelist,
+            'status' => 'MS',
+            'monthly_code' => 'MS: C- / MS: C+',
+            'previous_purok' => '1',
+            'previous_grupo' => '8',
+            'destination_description' => '1-8 -> 2-8',
+            'previous_values' => json_encode(['status' => 'MS', 'purok' => '1', 'grupo' => '8']),
+            'next_values' => json_encode(['status' => 'MS', 'purok' => '2', 'grupo' => '8']),
+            'changed_at' => '2026-10-02 10:00:00',
+        ]);
+
+        $response = $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.r4-01', ['purok' => 1, 'kalagayan' => 'MS']));
+        $response->assertOk()
+            ->assertSee('class="r401-movement-row"', false);
+        $this->assertMatchesRegularExpression(
+            '/<tr class="r401-movement-row">\s*<td>3<\/td>\s*<td>DD<\/td>/',
+            $response->getContent()
+        );
+        $this->assertMatchesRegularExpression(
+            '/<tr\s*>\s*<td>1<\/td>\s*<td>A<\/td>/',
+            $response->getContent()
+        );
+        $response->assertOk()
+            ->assertViewHas('reportRows', function (array $rows): bool {
+                $this->assertSame([
+                    'Active A Early',
+                    'Active A Late',
+                    'Inactive With DD Code',
+                    'MK With MS Code',
+                    'Jacquelyn Gascon',
+                ], array_column($rows, 'name'));
+                $this->assertSame(['A', 'A', 'DD', 'G', 'C-'], array_column($rows, 'code'));
+                $this->assertSame('1-8', $rows[4]['purok_grupo']);
+                $this->assertSame('RZL0831000164', $rows[4]['registry']);
+
+                return true;
+            });
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.r4-01', ['purok' => 2, 'kalagayan' => 'MS']))
+            ->assertOk()
+            ->assertViewHas('reportRows', function (array $rows): bool {
+            $this->assertSame(['Jacquelyn Gascon'], array_column($rows, 'name'));
+            $this->assertSame(['C+'], array_column($rows, 'code'));
+            $this->assertSame('2-8', $rows[0]['purok_grupo']);
+
+            return true;
+            });
+    }
+
     public function test_resumen_calculates_next_month_totals_from_prior_counts_and_movements(): void
     {
         Storage::fake('local');
@@ -414,6 +540,7 @@ class FormGeneratorTest extends TestCase
                 'movement_counts' => $movementCounts,
             ]);
         }
+        $this->createMonthlySession('2026-07-01');
 
         $session = ['login_user' => [
             'id' => $user->id,
@@ -425,6 +552,9 @@ class FormGeneratorTest extends TestCase
             ->get(route('forms.monthly.resumen'))
             ->assertOk()
             ->assertSee('Resumen Generator')
+            ->assertSee('Download DOCX')
+            ->assertDontSee('Download PDF')
+            ->assertDontSee('window.print()')
             ->assertSee('Head LSP Person')
             ->assertSee('KSP Person')
             ->assertSee('Pastor Person')
@@ -479,13 +609,12 @@ class FormGeneratorTest extends TestCase
             ->get(route('forms.monthly.resumen.download'))
             ->assertOk()
             ->assertDownload('Resumen Jul 2026.docx');
-        $snapshot = \App\Models\R401Snapshot::query()->where('report_type', 'Resumen')->firstOrFail();
-        Storage::disk('local')->assertExists($snapshot->file_path);
+        $this->assertDatabaseCount('r4_01_snapshots', 0);
         $this->withSession($session)
-            ->get(route('forms.monthly.r4-01.snapshots', ['report_type' => 'Resumen']))
+            ->get(route('forms.monthly.r4-01.snapshots'))
             ->assertOk()
             ->assertSee('Resumen & R4-01 Snapshots')
-            ->assertSee('Resumen · Resumen Jul 2026.docx');
+            ->assertSee('No saved monthly session snapshots match these filters.');
     }
 
     public function test_resumen_assigns_snapshot_counts_to_separate_split_purok_rows(): void
@@ -526,6 +655,7 @@ class FormGeneratorTest extends TestCase
                 'movement_counts' => $movementCounts,
             ]);
         }
+        $this->createMonthlySession('2026-07-01');
 
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->get(route('forms.monthly.resumen'))
@@ -541,6 +671,333 @@ class FormGeneratorTest extends TestCase
                 $this->assertSame(3, array_sum(array_column(array_column($rows, 'ms'), 'E')));
                 $this->assertSame(19, array_sum(array_column($rows, 'ms_total')));
                 $this->assertSame(19, $report['totals']['ms_total']);
+
+                return true;
+            });
+    }
+
+    public function test_completed_transfer_movement_is_assigned_to_its_archived_grupo_segment(): void
+    {
+        $user = $this->makeSecretary(['form_generator_allow' => true]);
+        DB::table('puroks')->insert([
+            [
+                'purok_number' => 2,
+                'purok_name' => 'Purok 2A',
+                'manggagawa' => 'Worker 2A',
+                'grupo_start' => 1,
+                'grupo_end' => 6,
+                'full_purok' => false,
+            ],
+            [
+                'purok_number' => 2,
+                'purok_name' => 'Purok 2B',
+                'manggagawa' => 'Worker 2B',
+                'grupo_start' => 7,
+                'grupo_end' => 11,
+                'full_purok' => false,
+            ],
+            [
+                'purok_number' => 5,
+                'purok_name' => 'Purok 5',
+                'manggagawa' => 'Worker 5',
+                'grupo_start' => 1,
+                'grupo_end' => 24,
+                'full_purok' => true,
+            ],
+        ]);
+        foreach (range(1, 10) as $group) {
+            Record::query()->create([
+                'full_name' => 'Purok 2A weighting member '.$group,
+                'purok' => '2',
+                'grupo' => (string) min($group, 6),
+                'status' => 'MS',
+            ]);
+        }
+        $aira = Record::query()->create([
+            'full_name' => 'AIRA LLENARESAS',
+            'registry' => 'AIRA123456789',
+            'gender' => 'B',
+            'purok' => '5',
+            'grupo' => '6',
+            'status' => 'MS',
+        ]);
+        $this->createMonthlySession('2026-10-01', 'completed');
+        $sessionId = (int) DB::table('monthly_movement_sessions')->whereDate('period_month', '2026-10-01')->value('id');
+
+        MonthlyRecordSnapshot::query()->create([
+            'month' => '2026-10-01',
+            'purok_number' => 2,
+            'ms_count' => 10,
+            'uwp_count' => 0,
+            'mk_count' => 0,
+            'movement_counts' => ['MS' => ['C-' => 1, 'C+' => 1]],
+            'session_generated' => true,
+        ]);
+        DB::table('permanent_history')->insert([
+            [
+                'session_id' => $sessionId,
+                'record_id' => $aira->id,
+                'action' => 'transfer',
+                'full_name' => $aira->full_name,
+                'registry' => $aira->registry,
+                'status' => 'MS',
+                'monthly_code' => 'MS: C+',
+                'changed_at' => now(),
+                'previous_values' => json_encode(['status' => 'MS', 'purok' => '5', 'grupo' => '6']),
+                'next_values' => json_encode(['status' => 'MS', 'purok' => '5', 'grupo' => '6']),
+            ],
+            [
+                'session_id' => $sessionId,
+                'record_id' => $aira->id,
+                'action' => 'transfer',
+                'full_name' => $aira->full_name,
+                'registry' => $aira->registry,
+                'status' => 'MS',
+                'monthly_code' => 'MS: C- / MS: C+',
+                'changed_at' => now(),
+                'previous_values' => json_encode(['status' => 'MS', 'purok' => '2', 'grupo' => '10']),
+                'next_values' => json_encode(['status' => 'MS', 'purok' => '5', 'grupo' => '6']),
+            ],
+        ]);
+
+        $report = app(\App\Services\MonthlyResumenReport::class)
+            ->generate(\Illuminate\Support\Carbon::createFromFormat('Y-m-d', '2026-10-01'), true);
+        $purok2a = collect($report['rows'])->firstWhere('purok_label', 'Purok 2A');
+        $purok2b = collect($report['rows'])->firstWhere('purok_label', 'Purok 2B');
+        $this->assertSame(0, $purok2a['ms']['C-']);
+        $this->assertSame(1, $purok2b['ms']['C-']);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.r4-01', ['purok' => 2, 'kalagayan' => 'MS']))
+            ->assertOk()
+            ->assertSee('AIRA LLENARESAS')
+            ->assertSee('C-')
+            ->assertSee('2-10');
+    }
+
+    public function test_resumen_starts_a_fresh_current_month_when_no_session_exists(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 3));
+        $user = $this->makeSecretary(['form_generator_allow' => true]);
+        DB::table('puroks')->insert([
+            'purok_number' => 1,
+            'purok_name' => 'Purok Uno',
+            'manggagawa' => 'Worker One',
+            'ministerial_id' => 'MIN-001',
+            'grupo_start' => 1,
+            'grupo_end' => 24,
+            'full_purok' => false,
+        ]);
+        Record::query()->create([
+            'full_name' => 'Current Opening Member',
+            'purok' => '1',
+            'grupo' => '1',
+            'status' => 'MS',
+        ]);
+        MonthlyRecordSnapshot::query()->create([
+            'month' => '2025-10-01',
+            'purok_number' => 1,
+            'ms_count' => 51,
+            'uwp_count' => 11,
+            'mk_count' => 0,
+            'movement_counts' => ['MS' => ['B' => 2, 'D' => 3]],
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.resumen'))
+            ->assertOk()
+            ->assertSee('OCTOBER 2026')
+            ->assertViewHas('report', function (array $report): bool {
+                $this->assertSame('2026-10', $report['month']->format('Y-m'));
+                $this->assertSame(1, $report['rows'][0]['ms']['A']);
+                $this->assertSame(0, $report['rows'][0]['ms']['B']);
+                $this->assertSame(0, $report['rows'][0]['ms']['D']);
+                $this->assertSame(1, $report['rows'][0]['ms_total']);
+
+                return true;
+            });
+    }
+
+    public function test_resumen_after_completed_session_uses_final_counts_and_archive_reconstructs_opening(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 3));
+        $user = $this->makeSecretary(['form_generator_allow' => true]);
+        DB::table('puroks')->insert([
+            'purok_number' => 1,
+            'purok_name' => 'Purok Uno',
+            'manggagawa' => 'Worker One',
+            'ministerial_id' => 'MIN-001',
+            'grupo_start' => 1,
+            'grupo_end' => 24,
+            'full_purok' => false,
+        ]);
+        foreach (range(1, 4) as $grupo) {
+            Record::query()->create([
+                'full_name' => 'MS Opening '.$grupo,
+                'purok' => '1',
+                'grupo' => (string) $grupo,
+                'status' => 'MS',
+            ]);
+        }
+        foreach (range(5, 6) as $grupo) {
+            Record::query()->create([
+                'full_name' => 'UWP Opening '.$grupo,
+                'purok' => '1',
+                'grupo' => (string) $grupo,
+                'status' => 'UWP',
+            ]);
+        }
+        $this->createMonthlySession('2026-10-01', 'completed');
+        MonthlyRecordSnapshot::query()->create([
+            'month' => '2026-10-01',
+            'purok_number' => 1,
+            'ms_count' => 4,
+            'uwp_count' => 2,
+            'mk_count' => 0,
+            'movement_counts' => ['MS' => ['B' => 3, 'D' => 1], 'UWP' => ['G' => 2]],
+            'session_generated' => true,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.resumen'))
+            ->assertOk()
+            ->assertViewHas('report', function (array $report): bool {
+                $this->assertSame('2026-10', $report['month']->format('Y-m'));
+                $this->assertSame(4, $report['rows'][0]['ms']['A']);
+                $this->assertSame(0, $report['rows'][0]['ms']['B']);
+                $this->assertSame(0, $report['rows'][0]['ms']['D']);
+                $this->assertSame(2, $report['rows'][0]['uwp']['A']);
+                $this->assertSame(0, $report['rows'][0]['uwp']['G']);
+                $this->assertSame(4, $report['rows'][0]['ms_total']);
+                $this->assertSame(2, $report['rows'][0]['uwp_total']);
+
+                return true;
+            });
+
+        $archiveReport = app(\App\Services\MonthlyResumenReport::class)
+            ->generate(\Illuminate\Support\Carbon::parse('2026-10-01'), true);
+        $this->assertSame(2, $archiveReport['rows'][0]['ms']['A']);
+        $this->assertSame(3, $archiveReport['rows'][0]['ms']['B']);
+        $this->assertSame(1, $archiveReport['rows'][0]['ms']['D']);
+        $this->assertSame(4, $archiveReport['rows'][0]['uwp']['A']);
+        $this->assertSame(2, $archiveReport['rows'][0]['uwp']['G']);
+        $this->assertSame(4, $archiveReport['rows'][0]['ms_total']);
+        $this->assertSame(2, $archiveReport['rows'][0]['uwp_total']);
+    }
+
+    public function test_resumen_and_r4_01_count_add_reactivation_and_status_entry_consistently(): void
+    {
+        $this->travelTo(now()->setDate(2026, 10, 3));
+        $user = $this->makeSecretary(['form_generator_allow' => true]);
+        DB::table('puroks')->insert([
+            'purok_number' => 1,
+            'purok_name' => 'Purok Uno',
+            'manggagawa' => 'Worker One',
+            'ministerial_id' => 'MIN-001',
+            'grupo_start' => 1,
+            'grupo_end' => 24,
+            'full_purok' => false,
+        ]);
+        $sessionId = DB::table('monthly_movement_sessions')->insertGetId([
+            'active_key' => 'active',
+            'status' => 'active',
+            'period_month' => '2026-10-01',
+            'started_by' => 'Secretary Example',
+            'started_at' => '2026-10-01 09:00:00',
+        ]);
+        $added = Record::query()->create([
+            'full_name' => 'New Add Member',
+            'registry' => 'RZL12345678901',
+            'status' => 'MS',
+            'purok' => '1',
+            'grupo' => '1',
+            'monthly_code' => 'MS: B',
+        ]);
+        $reactivated = Record::query()->create([
+            'full_name' => 'Reactivated Member',
+            'registry' => 'RZL12345678902',
+            'status' => 'MS',
+            'purok' => '1',
+            'grupo' => '2',
+            'monthly_code' => 'MS: B',
+        ]);
+        $statusChange = Record::query()->create([
+            'full_name' => 'Status Entry Member',
+            'registry' => 'RZL12345678903',
+            'status' => 'MS',
+            'purok' => '1',
+            'grupo' => '3',
+            'monthly_code' => 'MS: B',
+        ]);
+        $previousValues = [
+            'status' => 'UWP',
+            'purok' => '1',
+            'grupo' => '3',
+            'monthly_code' => null,
+            'date_of_entry' => null,
+            'reason_of_r2_10_endorsement' => null,
+            'log_section' => null,
+        ];
+        $nextValues = [
+            ...$previousValues,
+            'status' => 'MS',
+            'monthly_code' => 'MS: B',
+        ];
+        $movementId = DB::table('monthly_session_movements')->insertGetId([
+            'session_id' => $sessionId,
+            'record_id' => $statusChange->id,
+            'action' => 'status',
+            'full_name' => $statusChange->full_name,
+            'status' => 'UWP',
+            'monthly_code' => 'UWP: G',
+            'previous_purok' => '1',
+            'previous_grupo' => '3',
+            'destination_description' => 'UWP -> MS',
+            'previous_values' => json_encode($previousValues),
+            'next_values' => json_encode($nextValues),
+            'changed_at' => now(),
+        ]);
+        foreach ([
+            [$added, 'add', 'in', 'MS: B', null],
+            [$reactivated, 'reactivate', 'in', 'MS: B', null],
+            [$statusChange, 'status', 'out', 'UWP: G', $movementId],
+            [$statusChange, 'status', 'in', 'MS: B', $movementId],
+        ] as [$record, $action, $direction, $code, $linkedMovementId]) {
+            DB::table('monthly_session_activities')->insert([
+                'session_id' => $sessionId,
+                'session_movement_id' => $linkedMovementId,
+                'record_id' => $record->id,
+                'action' => $action,
+                'direction' => $direction,
+                'full_name' => $record->full_name,
+                'status' => str_starts_with($code, 'UWP:') ? 'UWP' : 'MS',
+                'monthly_code' => $code,
+                'purok' => '1',
+                'grupo' => $record->grupo,
+                'changed_at' => now(),
+            ]);
+        }
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.resumen'))
+            ->assertOk()
+            ->assertViewHas('report', function (array $report): bool {
+                $this->assertSame(3, $report['rows'][0]['ms']['B']);
+                $this->assertSame(1, $report['rows'][0]['uwp']['G']);
+
+                return true;
+            });
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.r4-01', ['purok' => 1, 'kalagayan' => 'MS']))
+            ->assertOk()
+            ->assertViewHas('reportRows', function (array $rows) use ($added, $reactivated, $statusChange): bool {
+                $bRows = array_values(array_filter($rows, fn (array $row): bool => $row['code'] === 'B'));
+                $this->assertCount(3, $bRows);
+                $this->assertEqualsCanonicalizing(
+                    [$added->full_name, $reactivated->full_name, $statusChange->full_name],
+                    array_column($bRows, 'name')
+                );
 
                 return true;
             });
@@ -605,6 +1062,19 @@ class FormGeneratorTest extends TestCase
             'password' => 'password',
             'tungkulin' => 'Secretary',
             'is_verified' => true,
+        ]);
+    }
+
+    private function createMonthlySession(string $periodMonth, string $status = 'active'): void
+    {
+        DB::table('monthly_movement_sessions')->insert([
+            'active_key' => $status === 'active' ? 'active' : null,
+            'status' => $status,
+            'period_month' => $periodMonth,
+            'started_by' => 'Secretary Example',
+            'started_at' => $periodMonth.' 09:00:00',
+            'completed_by' => $status === 'completed' ? 'Head Secretary' : null,
+            'completed_at' => $status === 'completed' ? $periodMonth.' 10:00:00' : null,
         ]);
     }
 }

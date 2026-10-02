@@ -194,13 +194,11 @@ class DashboardController extends Controller
         foreach ($monthlySnapshots as $snapshot) {
             $monthKey = $snapshot->month->format('Y-m');
             $purok = (string) $snapshot->purok_number;
-            $monthlyPurokCounts[$monthKey][$purok] = [
-                'MS' => (int) $snapshot->ms_count,
-                'UWP' => (int) $snapshot->uwp_count,
-                'MK' => (int) $snapshot->mk_count,
-            ];
+            $monthlyPurokCounts[$monthKey][$purok] ??= ['MS' => 0, 'UWP' => 0, 'MK' => 0];
             foreach (['MS' => 'ms_count', 'UWP' => 'uwp_count', 'MK' => 'mk_count'] as $status => $column) {
-                $monthlyCounts[$monthKey][$status] += (int) $snapshot->{$column};
+                $quantity = (int) $snapshot->{$column};
+                $monthlyPurokCounts[$monthKey][$purok][$status] += $quantity;
+                $monthlyCounts[$monthKey][$status] += $quantity;
             }
             foreach (($snapshot->movement_counts ?? []) as $status => $codes) {
                 foreach ($codes as $code => $count) {

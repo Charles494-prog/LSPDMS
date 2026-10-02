@@ -16,8 +16,9 @@
     .resumen-table .purok-col { width:65px; }
     .resumen-table .count-col { width:43px; }
     .resumen-table tfoot { font-weight:700; background:#f4f4f4; }
-    .resumen-signatories { display:grid; grid-template-columns:repeat(3,1fr); gap:2rem; margin:2.5rem 1rem .5rem; text-align:center; color:#111; font-size:.8rem; }
+    .resumen-signatories { width:100%; margin:2.5rem 0 .5rem; border-collapse:separate; border-spacing:2rem 0; table-layout:fixed; text-align:center; color:#111; font-size:.8rem; }
     .resumen-signatory { padding-top:1.5rem; border-top:1px solid #111; }
+    .resumen-signatory { width:33.33%; vertical-align:bottom; }
     .resumen-signatory strong { display:block; margin-bottom:.25rem; text-transform:uppercase; }
     @media print {
         @page { size:landscape; margin:.25in; }
@@ -34,12 +35,13 @@
 </style>
 
 <div class="resumen-page">
+    @unless($pdf ?? false)
     <div class="resumen-tools">
-        <a href="{{ route('forms.monthly.resumen.download') }}">Download editable DOCX</a>
-        <button type="button" onclick="window.print()">Print / Save PDF</button>
+        <a href="{{ route('forms.monthly.resumen.download') }}">Download DOCX</a>
     </div>
 
     <p class="resumen-note">The starting count (A) is the previous month’s closing MS/UWP total. Additions (B, C+) are added; C-, D, DD, E, G, and H are deducted to calculate this month’s total.</p>
+    @endunless
 
     <div class="resumen-scroll">
         <section class="resumen-sheet" aria-label="Monthly Resumen report">
@@ -93,11 +95,13 @@
                 </tfoot>
             </table>
             <p>LOKAL: {{ $locale }} &nbsp; LCODE: {{ $lcode }}</p>
-            <div class="resumen-signatories">
-                <div class="resumen-signatory"><strong>{{ $signatories['head_lsp'] ?: ' ' }}</strong>KALIHIM SA LSP</div>
-                <div class="resumen-signatory"><strong>{{ $signatories['ksp_pd'] ?: ' ' }}</strong>KATIWALA SA PAGPAPATIBAY (KSP)</div>
-                <div class="resumen-signatory"><strong>{{ $signatories['pastor_destinado'] ?: ' ' }}</strong>PASTOR NG LOKAL</div>
-            </div>
+            <table class="resumen-signatories">
+                <tbody><tr>
+                    <td class="resumen-signatory"><strong>{{ $signatories['head_lsp'] ?: ' ' }}</strong>KALIHIM SA LSP</td>
+                    <td class="resumen-signatory"><strong>{{ $signatories['ksp_pd'] ?: ' ' }}</strong>KATIWALA SA PAGPAPATIBAY (KSP)</td>
+                    <td class="resumen-signatory"><strong>{{ $signatories['pastor_destinado'] ?: ' ' }}</strong>PASTOR NG LOKAL</td>
+                </tr></tbody>
+            </table>
         </section>
     </div>
 </div>

@@ -4,14 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\MonthlyMovementSession;
 use App\Models\MonthlyRecordSnapshot;
+use App\Models\MonthlySessionActivity;
 use App\Models\MonthlySessionMovement;
 use App\Models\Purok;
+use App\Models\R401Snapshot;
 use App\Models\Record;
+use App\Services\MonthlySessionSnapshotExporter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -63,6 +67,50 @@ class DeliberationController extends Controller
                     'undo_url' => route('forms.monthly.session.undo', $movement),
                 ])
                 ->values();
+            $activityGroups = $session->activities()
+                ->orderByDesc('changed_at')
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy(fn (MonthlySessionActivity $activity): string => $activity->session_movement_id
+                    ? 'movement-'.$activity->session_movement_id
+                    : 'activity-'.$activity->id);
+            $response['activities'] = $activityGroups
+                ->map(function ($activities): array {
+                    /** @var MonthlySessionActivity $activity */
+                    $activity = $activities->first();
+                    $undoUrl = $activity->session_movement_id
+                        ? route('forms.monthly.session.undo', $activity->session_movement_id)
+                        : ($activity->record_id !== null
+                            && in_array($activity->action, ['add', 'subtract', 'reactivate'], true)
+                            && $activity->previous_values !== null
+                            && $activity->next_values !== null
+                                ? route('forms.monthly.session.activity.undo', $activity)
+                                : null);
+
+                    return [
+                        'id' => $activity->session_movement_id ?? $activity->id,
+                        'name' => $activity->full_name,
+                        'registry' => $activity->registry,
+                        'gender' => $activity->gender,
+                        'kapisanan' => $activity->kapisanan,
+                        'action' => ucfirst($activity->action),
+                        'description' => $activity->description,
+                        'changed_by' => $activity->changed_by,
+                        'changed_at' => $activity->changed_at?->timezone('Asia/Manila')->format('d/m/Y H:i:s'),
+                        'entries' => $activities->map(fn (MonthlySessionActivity $entry): array => [
+                            'name' => $entry->full_name,
+                            'monthly_code' => $entry->monthly_code,
+                            'direction' => $entry->direction,
+                            'location' => $entry->purok && $entry->grupo
+                                ? $entry->purok.'-'.$entry->grupo
+                                : ($entry->purok ? 'Purok '.$entry->purok : 'Location not set'),
+                        ])->sortBy(fn (array $entry): int => $entry['direction'] === 'out' ? 0 : 1)
+                            ->values(),
+                        'undo_url' => $undoUrl,
+                    ];
+                })
+                ->values();
+            $response['session']['activity_count'] = $activityGroups->count();
         }
 
         return response()->json($response);
@@ -121,9 +169,68 @@ class DeliberationController extends Controller
         return response()->json(['message' => 'Movement undone and removed from the temporary session log.']);
     }
 
-    public function finishSession(Request $request): JsonResponse
+    public function undoActivity(Request $request, MonthlySessionActivity $activity): JsonResponse
     {
-        $result = DB::transaction(function () use ($request): array {
+        DB::transaction(function () use ($activity): void {
+            $session = MonthlyMovementSession::query()
+                ->whereKey($activity->session_id)
+                ->where('active_key', 'active')
+                ->lockForUpdate()
+                ->firstOrFail();
+            $activity = MonthlySessionActivity::query()
+                ->whereKey($activity->id)
+                ->where('session_id', $session->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($activity->session_movement_id !== null
+                || ! in_array($activity->action, ['add', 'subtract', 'reactivate'], true)
+                || $activity->record_id === null
+                || $activity->previous_values === null
+                || $activity->next_values === null) {
+                throw ValidationException::withMessages([
+                    'activity' => ['This activity cannot be undone independently.'],
+                ]);
+            }
+            if ($session->activities()
+                ->where('record_id', $activity->record_id)
+                ->where('id', '>', $activity->id)
+                ->exists()) {
+                throw ValidationException::withMessages([
+                    'activity' => ['Undo later activity for this member first.'],
+                ]);
+            }
+
+            $record = Record::query()->lockForUpdate()->findOrFail($activity->record_id);
+            if ($this->movementState($record) != $activity->next_values) {
+                throw ValidationException::withMessages([
+                    'activity' => ['This member changed after the logged activity. Review the record before undoing it.'],
+                ]);
+            }
+
+            if ($activity->action === 'add') {
+                $record->status = 'INACTIVE';
+                $record->date_of_entry = null;
+                $record->monthly_code = null;
+                foreach (['reason_of_r2_10_endorsement', 'log_section'] as $field) {
+                    $record->{$field} = $activity->previous_values[$field] ?? null;
+                }
+            } else {
+                $record->forceFill($activity->previous_values);
+            }
+            $record->save();
+            $activity->delete();
+        });
+
+        return response()->json(['message' => 'Activity undone and removed from the monthly session log.']);
+    }
+
+    public function finishSession(Request $request, MonthlySessionSnapshotExporter $snapshotExporter): JsonResponse
+    {
+        $snapshotPath = null;
+        $previewPath = null;
+        try {
+            $result = DB::transaction(function () use ($request, $snapshotExporter, &$snapshotPath, &$previewPath): array {
             $session = MonthlyMovementSession::query()
                 ->where('active_key', 'active')
                 ->lockForUpdate()
@@ -135,6 +242,52 @@ class DeliberationController extends Controller
                 ->get();
             $count = $movements->count();
             $actor = $this->changedBy($request);
+
+            $codedRecords = Record::query()
+                ->whereNotNull('monthly_code')
+                ->whereRaw("TRIM(monthly_code) <> ''")
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get();
+            $snapshot = $snapshotExporter->generate($session);
+            foreach ($codedRecords as $record) {
+                [$codeStatus, $code] = $this->monthlyCodeParts(
+                    (string) $record->monthly_code,
+                    mb_strtoupper(trim((string) $record->status))
+                );
+                $nextValues = $this->movementState($record);
+                $previousValues = $nextValues;
+                if ($record->status === 'INACTIVE' && in_array($codeStatus, ['MS', 'UWP'], true)) {
+                    $previousValues['status'] = $codeStatus;
+                }
+                DB::table('permanent_history')->insert([
+                    'session_id' => $session->id,
+                    'period_month' => $session->period_month?->toDateString(),
+                    'record_id' => $record->id,
+                    'action' => match ($code) {
+                        'B' => 'add',
+                        'C+', 'C-' => 'transfer',
+                        'D', 'DD', 'G', 'H' => 'subtract',
+                        default => 'status',
+                    },
+                    'full_name' => trim((string) $record->full_name) ?: 'Unnamed record',
+                    'registry' => trim((string) $record->registry) ?: null,
+                    'gender' => trim((string) $record->gender) ?: null,
+                    'kapisanan' => trim((string) $record->kapisanan) ?: null,
+                    'status' => $codeStatus ?: null,
+                    'monthly_code' => trim((string) $record->monthly_code),
+                    'destination_description' => $code === 'D' || $code === 'DD' || $code === 'G' || $code === 'H'
+                        ? "{$codeStatus} -> INACTIVE ({$code})"
+                        : null,
+                    'description' => null,
+                    'changed_by' => $actor,
+                    'changed_at' => now(),
+                    'date_of_baptism' => $record->date_of_baptism?->format('Y-m-d'),
+                    'evangelist' => trim((string) $record->evangelist) ?: null,
+                    'previous_values' => json_encode($previousValues, JSON_THROW_ON_ERROR),
+                    'next_values' => json_encode($nextValues, JSON_THROW_ON_ERROR),
+                ]);
+            }
 
             foreach ($movements as $movement) {
                 DB::table('permanent_history')->insert([
@@ -160,9 +313,38 @@ class DeliberationController extends Controller
             }
 
             $this->snapshotSession($session, $movements);
+            $month = $session->period_month;
+            $fileName = 'Monthly_'.$month->format('F_Y').'_RESUMEN_MS_UWP.docx';
+            $snapshotPath = 'monthly-session-snapshots/'.$month->format('Y-m').'/session-'.$session->id.'.docx';
+            $previewPath = 'monthly-session-snapshots/'.$month->format('Y-m').'/session-'.$session->id.'.html';
+            if (! Storage::disk('local')->put($snapshotPath, $snapshot['contents'])) {
+                throw new \RuntimeException('Unable to store the finalized monthly session snapshot.');
+            }
+            if (! Storage::disk('local')->put($previewPath, $snapshot['preview'])) {
+                throw new \RuntimeException('Unable to store the finalized monthly session preview.');
+            }
+            R401Snapshot::query()->create([
+                'session_id' => $session->id,
+                'period_month' => $month->toDateString(),
+                'report_type' => 'Monthly session',
+                'kalagayan' => '',
+                'purok_selection' => 'All Puroks',
+                'format' => 'docx',
+                'file_path' => $snapshotPath,
+                'file_name' => $fileName,
+                'generated_by' => $actor,
+            ]);
+            MonthlySessionActivity::query()
+                ->where('session_id', $session->id)
+                ->whereNotNull('session_movement_id')
+                ->update(['session_movement_id' => null]);
             MonthlySessionMovement::query()->where('session_id', $session->id)->delete();
-            $clearedMonthlyCodes = Record::query()->whereNotNull('monthly_code')->count();
-            Record::query()->whereNotNull('monthly_code')->update(['monthly_code' => null]);
+            $clearedMonthlyCodes = $codedRecords->count();
+            if ($clearedMonthlyCodes > 0) {
+                Record::query()
+                    ->whereIn('id', $codedRecords->modelKeys())
+                    ->update(['monthly_code' => null]);
+            }
             DB::table('system_maintenance_audits')->insert([
                 'action' => 'finish_monthly_clear_codes',
                 'affected_count' => $clearedMonthlyCodes,
@@ -178,18 +360,32 @@ class DeliberationController extends Controller
 
             return [
                 'movements' => $count,
+                'coded_records' => $codedRecords->count(),
                 'cleared_monthly_codes' => $clearedMonthlyCodes,
+                'snapshot_file_name' => $fileName,
+                'period_label' => $month->format('F Y'),
             ];
-        });
+            });
+        } catch (\Throwable $exception) {
+            if ($snapshotPath !== null) {
+                Storage::disk('local')->delete($snapshotPath);
+            }
+            if ($previewPath !== null) {
+                Storage::disk('local')->delete($previewPath);
+            }
+            throw $exception;
+        }
         $count = $result['movements'];
+        $codedRecordCount = $result['coded_records'];
         $clearedMonthlyCodes = $result['cleared_monthly_codes'];
 
         return response()->json([
-            'message' => "Monthly session finalized. {$count} movement".($count === 1 ? '' : 's')
-                ." copied to permanent history; {$clearedMonthlyCodes} monthly code".($clearedMonthlyCodes === 1 ? '' : 's').' cleared.',
+            'message' => 'Monthly '.$result['period_label'].' finalized.',
             'movements' => $count,
+            'coded_records' => $codedRecordCount,
             'cleared_monthly_codes' => $clearedMonthlyCodes,
-            'cleared_monthly_codes' => $clearedMonthlyCodes,
+            'snapshot_file_name' => $result['snapshot_file_name'],
+            'period_label' => $result['period_label'],
         ]);
     }
 
@@ -269,7 +465,6 @@ class DeliberationController extends Controller
             'status' => ['required_if:action,status', Rule::in(['MS', 'UWP', 'MK'])],
             'purok_id' => ['required_if:action,transfer', 'integer', 'exists:puroks,id'],
             'grupo' => ['required_if:action,transfer', 'integer', 'min:1', 'max:999'],
-            'confirmed_mk_demotion' => ['nullable', 'boolean'],
             'description' => ['nullable', 'string', 'max:500'],
             'endorsement_reason' => ['required_if:status,MK', 'nullable', 'string', 'max:2000'],
         ]);
@@ -314,9 +509,9 @@ class DeliberationController extends Controller
 
             if ($validated['action'] === 'status') {
                 $newStatus = $validated['status'];
-                if ($oldStatus === 'MK' && $newStatus !== 'MK' && ! ($validated['confirmed_mk_demotion'] ?? false)) {
+                if ($oldStatus === 'MK' && $newStatus !== 'MK') {
                     throw ValidationException::withMessages([
-                        'confirmed_mk_demotion' => ['Confirm that you want to change this MK record to a lower status.'],
+                        'status' => ['MK records cannot be changed to MS or UWP in Monthly Modify.'],
                     ]);
                 }
                 if ($oldStatus === $newStatus) {
@@ -352,7 +547,7 @@ class DeliberationController extends Controller
                     $validated['description'] ?? null
                 );
                 $record->save();
-                $this->storeSessionMovement(
+                $movement = $this->storeSessionMovement(
                     $session,
                     $record,
                     'status',
@@ -362,6 +557,34 @@ class DeliberationController extends Controller
                     $request,
                     $oldStatus.': '.$historyCode
                 );
+                $this->storeSessionActivity(
+                    $session,
+                    $movement,
+                    $record,
+                    'status',
+                    'out',
+                    $oldStatus,
+                    $oldStatus.': '.$historyCode,
+                    (string) ($previousValues['purok'] ?? ''),
+                    (string) ($previousValues['grupo'] ?? ''),
+                    $validated['description'] ?? $endorsementReason,
+                    $request
+                );
+                if ($monthlyCode !== null) {
+                    $this->storeSessionActivity(
+                        $session,
+                        $movement,
+                        $record,
+                        'status',
+                        'in',
+                        $newStatus,
+                        $monthlyCode,
+                        (string) $record->purok,
+                        (string) $record->grupo,
+                        $validated['description'] ?? null,
+                        $request
+                    );
+                }
 
                 return $record;
             }
@@ -400,7 +623,7 @@ class DeliberationController extends Controller
                 $validated['description'] ?? null
             );
             $record->save();
-            $this->storeSessionMovement(
+            $movement = $this->storeSessionMovement(
                 $session,
                 $record,
                 'transfer',
@@ -409,6 +632,32 @@ class DeliberationController extends Controller
                 $validated['description'] ?? null,
                 $request,
                 $oldStatus.': C- / '.$oldStatus.': C+'
+            );
+            $this->storeSessionActivity(
+                $session,
+                $movement,
+                $record,
+                'transfer',
+                'out',
+                $oldStatus,
+                $oldStatus.': C-',
+                $oldPurok,
+                $oldGrupo,
+                $validated['description'] ?? null,
+                $request
+            );
+            $this->storeSessionActivity(
+                $session,
+                $movement,
+                $record,
+                'transfer',
+                'in',
+                $oldStatus,
+                $oldStatus.': C+',
+                (string) $destination->purok_number,
+                (string) $validated['grupo'],
+                $validated['description'] ?? null,
+                $request
             );
 
             return $record;
@@ -710,19 +959,24 @@ class DeliberationController extends Controller
                 $this->appendLogEntry($record, $description, null, 'd-m-Y');
             }
             $record->save();
-            $this->storeSessionMovement(
+            $this->storeSessionActivity(
                 $session,
+                null,
                 $record,
                 'subtract',
-                $previousValues,
-                "{$status} -> INACTIVE ({$validated['code']})",
+                'out',
+                $status,
+                $record->monthly_code,
+                (string) ($previousValues['purok'] ?? ''),
+                (string) ($previousValues['grupo'] ?? ''),
                 $description,
                 $request,
-                $status.': '.$validated['code']
+                $previousValues,
+                $this->movementState($record)
             );
 
             return response()->json([
-                'message' => 'Record marked INACTIVE for this monthly session; it remains in the database.',
+                'message' => 'Record marked INACTIVE for this monthly session; its monthly code will be included in R4-01 and permanent history.',
                 'record' => [
                     'id' => $record->id,
                     'full_name' => $record->full_name,
@@ -797,15 +1051,20 @@ class DeliberationController extends Controller
                     $this->appendLogEntry($record, $description, null, 'd-m-Y');
                 }
                 $record->save();
-                $this->storeSessionMovement(
+                $this->storeSessionActivity(
                     $session,
+                    null,
                     $record,
                     'reactivate',
-                    $previousValues,
-                    "INACTIVE -> {$record->status}",
+                    'in',
+                    $record->status,
+                    $record->monthly_code,
+                    (string) $record->purok,
+                    (string) $record->grupo,
                     $description,
                     $request,
-                    $record->monthly_code
+                    $previousValues,
+                    $this->movementState($record)
                 );
 
                 return [
@@ -850,21 +1109,28 @@ class DeliberationController extends Controller
                 'is_married' => $isMarried,
             ]);
             $session = $this->requireActiveMonthlySession($request);
-            $previousValues = array_fill_keys(self::MOVEMENT_STATE_FIELDS, null);
             $this->appendLogEntry($record, $record->monthly_code, null, 'd-m-Y');
             if ($description !== '') {
                 $this->appendLogEntry($record, $description, null, 'd-m-Y');
             }
             $record->save();
-            $this->storeSessionMovement(
+            $this->storeSessionActivity(
                 $session,
+                null,
                 $record,
                 'add',
-                $previousValues,
-                "Added -> {$record->status}",
+                'in',
+                $record->status,
+                $record->monthly_code,
+                (string) $record->purok,
+                (string) $record->grupo,
                 $description,
                 $request,
-                $record->monthly_code
+                [
+                    'reason_of_r2_10_endorsement' => null,
+                    'log_section' => null,
+                ],
+                $this->movementState($record)
             );
 
             return [
@@ -875,8 +1141,8 @@ class DeliberationController extends Controller
 
         return response()->json([
             'message' => $result['reused']
-                ? "Existing inactive record reactivated to {$result['record']->status}; the movement is recorded in the active session."
-                : 'Deliberation record added to the active monthly session.',
+                ? "Existing inactive record reactivated to {$result['record']->status} with a monthly code for the active session."
+                : 'Deliberation record added with a monthly code for the active session.',
             'reused' => $result['reused'],
             'record' => [
                 'id' => $result['record']->id,
@@ -1055,10 +1321,9 @@ class DeliberationController extends Controller
 
     private function changedBy(Request $request): ?string
     {
-        return trim(implode(' ', array_filter([
-            (string) $request->session()->get('login_user.first_name', ''),
-            (string) $request->session()->get('login_user.last_name', ''),
-        ]))) ?: $request->session()->get('login_user.gmail');
+        $gmail = trim((string) $request->session()->get('login_user.gmail', ''));
+
+        return $gmail !== '' ? $gmail : null;
     }
 
     private function movementState(Record $record): array
@@ -1072,6 +1337,22 @@ class DeliberationController extends Controller
             ->all();
     }
 
+    private function monthlyCodeParts(string $monthlyCode, string $fallbackStatus = ''): array
+    {
+        $parts = explode(':', trim($monthlyCode), 2);
+        if (count($parts) < 2) {
+            return [mb_strtoupper(trim($fallbackStatus)), mb_strtoupper(trim($monthlyCode, " \t\n\r\0\x0B\"'"))];
+        }
+
+        $status = mb_strtoupper(trim($parts[0]));
+        if (! in_array($status, ['MS', 'UWP', 'MK'], true)) {
+            $status = mb_strtoupper(trim($fallbackStatus));
+        }
+        $code = mb_strtoupper(trim(explode('/', $parts[1], 2)[0], " \t\n\r\0\x0B\"'"));
+
+        return [$status, $code];
+    }
+
     private function storeSessionMovement(
         MonthlyMovementSession $session,
         Record $record,
@@ -1081,8 +1362,8 @@ class DeliberationController extends Controller
         ?string $description,
         Request $request,
         ?string $monthlyCode
-    ): void {
-        MonthlySessionMovement::query()->create([
+    ): MonthlySessionMovement {
+        return MonthlySessionMovement::query()->create([
             'session_id' => $session->id,
             'record_id' => $record->id,
             'action' => $action,
@@ -1105,6 +1386,45 @@ class DeliberationController extends Controller
         ]);
     }
 
+    private function storeSessionActivity(
+        MonthlyMovementSession $session,
+        ?MonthlySessionMovement $movement,
+        Record $record,
+        string $action,
+        string $direction,
+        string $status,
+        string $monthlyCode,
+        string $purok,
+        string $grupo,
+        ?string $description,
+        Request $request,
+        ?array $previousValues = null,
+        ?array $nextValues = null
+    ): void {
+        MonthlySessionActivity::query()->create([
+            'session_id' => $session->id,
+            'session_movement_id' => $movement?->id,
+            'record_id' => $record->id,
+            'action' => $action,
+            'direction' => $direction,
+            'full_name' => trim((string) $record->full_name) ?: 'Unnamed record',
+            'registry' => trim((string) $record->registry) ?: null,
+            'gender' => trim((string) $record->gender) ?: null,
+            'kapisanan' => trim((string) $record->kapisanan) ?: null,
+            'date_of_baptism' => $record->date_of_baptism?->format('Y-m-d'),
+            'evangelist' => trim((string) $record->evangelist) ?: null,
+            'status' => $status,
+            'monthly_code' => $monthlyCode,
+            'purok' => trim($purok) ?: null,
+            'grupo' => trim($grupo) ?: null,
+            'description' => $this->normalizeDescription($description) ?: null,
+            'changed_by' => $this->changedBy($request),
+            'changed_at' => now(),
+            'previous_values' => $previousValues,
+            'next_values' => $nextValues,
+        ]);
+    }
+
     private function sessionPayload(MonthlyMovementSession $session): array
     {
         return [
@@ -1113,14 +1433,25 @@ class DeliberationController extends Controller
             'started_at' => $session->started_at?->toIso8601String(),
             'period_month' => $session->period_month?->format('F Y'),
             'movement_count' => $session->movements()->count(),
+            'activity_count' => $session->activities()
+                ->whereNull('session_movement_id')
+                ->count()
+                + $session->activities()->whereNotNull('session_movement_id')
+                    ->distinct('session_movement_id')
+                    ->count('session_movement_id'),
         ];
     }
 
     private function snapshotSession(MonthlyMovementSession $session, $movements): void
     {
         $month = $session->period_month->startOfMonth()->toDateString();
-        $purokNumbers = Purok::query()->pluck('purok_number')
-            ->merge(Record::query()->pluck('purok')->filter()->map(fn ($number): int => (int) preg_replace('/\D+/', '', (string) $number)))
+        $puroks = Purok::query()
+            ->orderBy('purok_number')
+            ->orderBy('grupo_start')
+            ->get(['id', 'purok_number', 'grupo_start', 'grupo_end', 'full_purok']);
+        $records = Record::query()->get(['purok', 'grupo', 'status', 'monthly_code']);
+        $purokNumbers = $puroks->pluck('purok_number')
+            ->merge($records->pluck('purok')->filter()->map(fn ($number): int => (int) preg_replace('/\D+/', '', (string) $number)))
             ->merge(collect($movements)->flatMap(fn (MonthlySessionMovement $movement): array => [
                 $movement->previous_values['purok'] ?? null,
                 $movement->next_values['purok'] ?? null,
@@ -1129,69 +1460,119 @@ class DeliberationController extends Controller
             ->unique()
             ->sort()
             ->values();
-        $movementCountsByPurok = [];
+        $movementCountsBySegment = [];
 
-        $increment = function (?string $purok, ?string $status, string $code) use (&$movementCountsByPurok): void {
+        $segmentForLocation = static function (mixed $purok, mixed $grupo) use ($puroks): ?Purok {
+            $number = (int) preg_replace('/\D+/', '', (string) $purok);
+            $groupNumber = (int) preg_replace('/\D+/', '', (string) $grupo);
+
+            return $puroks->first(function (Purok $candidate) use ($number, $groupNumber): bool {
+                if ((int) $candidate->purok_number !== $number) {
+                    return false;
+                }
+                $start = $candidate->full_purok ? 1 : (int) $candidate->grupo_start;
+                $end = $candidate->full_purok ? PHP_INT_MAX : (int) $candidate->grupo_end;
+
+                return $groupNumber >= $start && $groupNumber <= $end;
+            });
+        };
+        $increment = function (mixed $purok, mixed $grupo, mixed $status, string $code) use (&$movementCountsBySegment, $segmentForLocation): void {
             $number = (int) preg_replace('/\D+/', '', (string) $purok);
             $status = mb_strtoupper(trim((string) $status));
-            if ($number < 1 || $status === '') {
+            if ($number < 1 || ! in_array($status, ['MS', 'UWP'], true)) {
                 return;
             }
-            $movementCountsByPurok[$number][$status][$code] =
-                ($movementCountsByPurok[$number][$status][$code] ?? 0) + 1;
+            $segment = $segmentForLocation($purok, $grupo);
+            $segmentId = $segment?->id !== null ? (string) $segment->id : 'fallback';
+            $movementCountsBySegment[$segmentId][$status][$code] =
+                ($movementCountsBySegment[$segmentId][$status][$code] ?? 0) + 1;
         };
 
         foreach ($movements as $movement) {
             $previous = $movement->previous_values ?? [];
             $next = $movement->next_values ?? [];
-            $code = strtoupper(trim(explode(':', (string) $movement->monthly_code, 2)[1] ?? ''));
+            [$movementStatus, $code] = $this->monthlyCodeParts(
+                (string) $movement->monthly_code,
+                mb_strtoupper(trim((string) $movement->status))
+            );
             if ($movement->action === 'add') {
-                $increment($next['purok'] ?? null, $next['status'] ?? null, 'B');
+                $increment($next['purok'] ?? null, $next['grupo'] ?? null, $movementStatus ?: ($next['status'] ?? null), 'B');
             } elseif ($movement->action === 'subtract') {
-                $increment($previous['purok'] ?? null, $previous['status'] ?? null, $code);
+                $increment($previous['purok'] ?? null, $previous['grupo'] ?? null, $movementStatus ?: ($previous['status'] ?? null), $code);
             } elseif ($movement->action === 'transfer') {
-                $increment($previous['purok'] ?? null, $previous['status'] ?? null, 'C-');
-                $increment($next['purok'] ?? null, $previous['status'] ?? null, 'C+');
+                $increment($previous['purok'] ?? null, $previous['grupo'] ?? null, $movementStatus ?: ($previous['status'] ?? null), 'C-');
+                $increment($next['purok'] ?? null, $next['grupo'] ?? null, $movementStatus ?: ($previous['status'] ?? null), 'C+');
             } elseif ($movement->action === 'status') {
                 $oldStatus = mb_strtoupper(trim((string) ($previous['status'] ?? '')));
                 $newStatus = mb_strtoupper(trim((string) ($next['status'] ?? '')));
-                $increment($previous['purok'] ?? null, $oldStatus, $newStatus === 'MK' ? 'E' : 'G');
+                $increment($previous['purok'] ?? null, $previous['grupo'] ?? null, $oldStatus, $newStatus === 'MK' ? 'E' : 'G');
                 if ($newStatus !== 'MK') {
-                    $increment($next['purok'] ?? null, $newStatus, 'B');
+                    $increment($next['purok'] ?? null, $next['grupo'] ?? null, $newStatus, 'B');
                 }
             }
         }
 
+        $movementRecordIds = collect($movements)->pluck('record_id')->filter()->unique()->all();
+        $codedRecords = Record::query()
+            ->whereNotNull('monthly_code')
+            ->whereRaw("TRIM(monthly_code) <> ''")
+            ->when($movementRecordIds !== [], fn ($query) => $query->whereNotIn('id', $movementRecordIds))
+            ->get(['purok', 'grupo', 'status', 'monthly_code']);
+        foreach ($codedRecords as $record) {
+            [$codeStatus, $code] = $this->monthlyCodeParts(
+                (string) $record->monthly_code,
+                mb_strtoupper(trim((string) $record->status))
+            );
+            $increment($record->purok, $record->grupo, $codeStatus ?: (string) $record->status, $code);
+        }
+
         foreach ($purokNumbers as $purokNumber) {
-            $members = Record::query()
-                ->where('purok', (string) $purokNumber)
-                ->get(['status']);
-            $counts = $members->countBy(fn (Record $record): string => mb_strtoupper(trim((string) $record->status)));
-            $snapshot = MonthlyRecordSnapshot::query()
+            $numberSegments = $puroks->where('purok_number', $purokNumber)->values();
+            if ($numberSegments->isEmpty()) {
+                $numberSegments = collect([null]);
+            }
+            $existingSnapshots = MonthlyRecordSnapshot::query()
                 ->whereDate('month', $month)
                 ->where('purok_number', $purokNumber)
-                ->first();
-            if ($snapshot && ! $snapshot->session_generated) {
+                ->get()
+                ->keyBy(fn (MonthlyRecordSnapshot $snapshot): string => $snapshot->purok_id === null
+                    ? 'fallback'
+                    : (string) $snapshot->purok_id);
+            if ($existingSnapshots->contains(fn (MonthlyRecordSnapshot $snapshot): bool => ! $snapshot->session_generated)) {
                 continue;
             }
-            $movementCounts = $snapshot?->movement_counts ?? [];
-            foreach ($movementCountsByPurok[$purokNumber] ?? [] as $status => $codes) {
-                foreach ($codes as $code => $quantity) {
-                    $movementCounts[$status][$code] = ($movementCounts[$status][$code] ?? 0) + $quantity;
+
+            foreach ($numberSegments as $segment) {
+                $segmentId = $segment?->id !== null ? (string) $segment->id : 'fallback';
+                $start = $segment === null ? 1 : ($segment->full_purok ? 1 : (int) $segment->grupo_start);
+                $end = $segment === null ? PHP_INT_MAX : ($segment->full_purok ? PHP_INT_MAX : (int) $segment->grupo_end);
+                $members = $records->filter(fn (Record $record): bool =>
+                    (int) preg_replace('/\D+/', '', (string) $record->purok) === (int) $purokNumber
+                    && (int) preg_replace('/\D+/', '', (string) $record->grupo) >= $start
+                    && (int) preg_replace('/\D+/', '', (string) $record->grupo) <= $end
+                );
+                $counts = $members->countBy(fn (Record $record): string => mb_strtoupper(trim((string) $record->status)));
+                $snapshot = $existingSnapshots->get($segmentId);
+                $movementCounts = $snapshot?->movement_counts ?? [];
+                foreach ($movementCountsBySegment[$segmentId] ?? [] as $status => $codes) {
+                    foreach ($codes as $code => $quantity) {
+                        $movementCounts[$status][$code] = ($movementCounts[$status][$code] ?? 0) + $quantity;
+                    }
                 }
+                DB::table('monthly_record_snapshots')->updateOrInsert(
+                    ['month' => $month, 'purok_id' => $segment?->id],
+                    [
+                        'purok_number' => (int) $purokNumber,
+                        'ms_count' => $counts->get('MS', 0),
+                        'uwp_count' => $counts->get('UWP', 0),
+                        'mk_count' => $counts->get('MK', 0),
+                        'movement_counts' => json_encode($movementCounts, JSON_THROW_ON_ERROR),
+                        'created_at' => $snapshot?->created_at ?? now(),
+                        'updated_at' => now(),
+                        'session_generated' => true,
+                    ]
+                );
             }
-            DB::table('monthly_record_snapshots')->updateOrInsert(
-                ['month' => $month, 'purok_number' => (int) $purokNumber],
-                [
-                    'ms_count' => $counts->get('MS', 0),
-                    'uwp_count' => $counts->get('UWP', 0),
-                    'mk_count' => $counts->get('MK', 0),
-                    'movement_counts' => json_encode($movementCounts, JSON_THROW_ON_ERROR),
-                    'created_at' => $snapshot?->created_at ?? now(),
-                    'updated_at' => now(),
-                    'session_generated' => true,
-                ]
-            );
         }
     }
 

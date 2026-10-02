@@ -32,4 +32,9 @@ class MonthlyMovementSession extends Model
     {
         return $this->hasMany(MonthlySessionMovement::class, 'session_id');
     }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(MonthlySessionActivity::class, 'session_id');
+    }
 }

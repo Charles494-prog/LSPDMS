@@ -6,23 +6,27 @@ use App\Models\Record;
 use App\Models\GlobalVariable;
 use App\Models\MonthlyMovementSession;
 use App\Models\MonthlyRecordSnapshot;
+use App\Models\MonthlySessionMovement;
 use App\Models\Purok;
 use App\Models\R401Snapshot;
 use App\Services\MonthlyResumenReport;
 use App\Services\R401DocxExporter;
+use App\Services\R401ReportBuilder;
 use App\Services\ResumenDocxExporter;
-use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class FormGeneratorController extends Controller
 {
+    public function __construct(private readonly R401ReportBuilder $r401ReportBuilder)
+    {
+    }
+
     public function index(Request $request)
     {
         $validated = $request->validate([
@@ -33,6 +37,10 @@ class FormGeneratorController extends Controller
         return view('form-generator', [
             'activePanel' => $validated['panel'] ?? 'weekly',
             'activeMonthlyPanel' => $validated['monthly_section'] ?? 'deliberation',
+            'monthlySession' => MonthlyMovementSession::query()
+                ->where('active_key', 'active')
+                ->withCount('activities')
+                ->first(),
         ]);
     }
 
@@ -50,6 +58,10 @@ class FormGeneratorController extends Controller
 
         return view('forms.monthly-generators', array_merge($resumenData, $r401Data, [
             'embedded' => true,
+            'monthlySession' => MonthlyMovementSession::query()
+                ->where('active_key', 'active')
+                ->withCount('activities')
+                ->first(),
         ]));
     }
 
@@ -61,7 +73,6 @@ class FormGeneratorController extends Controller
     }
 
     public function downloadResumen(
-        Request $request,
         MonthlyResumenReport $resumenReport,
         ResumenDocxExporter $exporter
     ): BinaryFileResponse {
@@ -73,31 +84,10 @@ class FormGeneratorController extends Controller
             $data['signatories']
         );
         $fileName = 'Resumen '.$data['report']['month']->format('M Y').'.docx';
-        $contents = file_get_contents($generatedPath);
-        if ($contents === false) {
-            throw new \RuntimeException('Unable to read the generated Resumen DOCX for snapshot storage.');
-        }
-        $relativePath = 'r4-01-snapshots/'.$data['report']['month']->format('Y-m').'/'.Str::uuid().'.docx';
-        if (! Storage::disk('local')->put($relativePath, $contents)) {
-            throw new \RuntimeException('Unable to store the generated Resumen snapshot.');
-        }
-        unlink($generatedPath);
-        $snapshot = R401Snapshot::query()->create([
-            'period_month' => $data['report']['month']->toDateString(),
-            'report_type' => 'Resumen',
-            'kalagayan' => '',
-            'purok_selection' => 'All Puroks',
-            'format' => 'docx',
-            'file_path' => $relativePath,
-            'file_name' => $fileName,
-            'generated_by' => (string) ($request->session()->get('login_user', [])['gmail'] ?? ''),
-        ]);
 
-        return response()->download(
-            Storage::disk('local')->path($snapshot->file_path),
-            $fileName,
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-        );
+        return response()->download($generatedPath, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ])->deleteFileAfterSend(true);
     }
 
     public function downloadR401(Request $request, R401DocxExporter $exporter): BinaryFileResponse
@@ -129,52 +119,29 @@ class FormGeneratorController extends Controller
         ], $data['reportPages']);
 
         $fileName = 'R4-01 ('.$data['selectedStatus'].') '.$data['month']->format('M Y').'.docx';
-        $contents = file_get_contents($path);
-        if ($contents === false) {
-            throw new \RuntimeException('Unable to read the generated R4-01 DOCX for snapshot storage.');
-        }
-        $snapshot = $this->storeR401Snapshot($request, $data, 'docx', $fileName, $contents);
-        unlink($path);
-
-        return response()->download(
-            Storage::disk('local')->path($snapshot->file_path),
-            $fileName,
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-        );
-    }
-
-    public function downloadR401Pdf(Request $request)
-    {
-        $request->validate([
-            'purok' => ['required', 'string', 'max:20'],
-            'kalagayan' => ['required', 'string', 'in:MS,UWP'],
-        ]);
-        $data = $this->r401ReportData($request);
-        abort_if($data['reportRows'] === [], 404, 'No records match the selected Purok and Kalagayan.');
-
-        $fileName = 'R4-01 ('.$data['selectedStatus'].') '.$data['month']->format('M Y').'.pdf';
-        $contents = Pdf::loadView('forms.monthly-r4-01', $data)
-            ->setPaper('a4', 'landscape')
-            ->output();
-        $snapshot = $this->storeR401Snapshot($request, $data, 'pdf', $fileName, $contents);
-
-        return response()->download(Storage::disk('local')->path($snapshot->file_path), $fileName, [
-            'Content-Type' => 'application/pdf',
-        ]);
+        return response()->download($path, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        ])->deleteFileAfterSend(true);
     }
 
     public function r401Snapshots(Request $request)
     {
         $filters = $request->validate([
             'month' => ['nullable', 'date_format:Y-m'],
-            'kalagayan' => ['nullable', 'in:MS,UWP'],
-            'report_type' => ['nullable', 'in:Resumen,R4-01'],
+            'year' => ['nullable', 'digits:4'],
         ]);
+        $years = R401Snapshot::query()
+            ->where('report_type', 'Monthly session')
+            ->pluck('period_month')
+            ->map(fn ($month): string => Carbon::parse($month)->format('Y'))
+            ->unique()
+            ->sortDesc()
+            ->values();
         $snapshots = R401Snapshot::query()
+            ->where('report_type', 'Monthly session')
+            ->when(isset($filters['year']), fn ($query) => $query->whereYear('period_month', $filters['year']))
             ->when(isset($filters['month']), fn ($query) => $query->whereYear('period_month', substr($filters['month'], 0, 4))
                 ->whereMonth('period_month', substr($filters['month'], 5, 2)))
-            ->when(isset($filters['kalagayan']), fn ($query) => $query->where('kalagayan', $filters['kalagayan']))
-            ->when(isset($filters['report_type']), fn ($query) => $query->where('report_type', $filters['report_type']))
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->paginate(25)
@@ -183,43 +150,63 @@ class FormGeneratorController extends Controller
         return view('forms.monthly-r4-01-snapshots', [
             'snapshots' => $snapshots,
             'filters' => $filters,
+            'years' => $years,
+            'canDeleteSnapshots' => in_array(mb_strtolower(trim((string) $request->session()->get('login_user.tungkulin', ''))), [
+                'head secretary',
+                'secretary head',
+            ], true),
         ]);
+    }
+
+    public function viewR401Snapshot(R401Snapshot $snapshot)
+    {
+        abort_unless($snapshot->report_type === 'Monthly session', 404);
+        $previewPath = preg_replace('/\.docx$/i', '.html', $snapshot->file_path);
+        abort_unless(is_string($previewPath) && Storage::disk('local')->exists($previewPath), 404);
+
+        return response(Storage::disk('local')->get($previewPath), 200, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Content-Disposition' => 'inline; filename="'.str_replace('.docx', '.html', $snapshot->file_name).'"',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    public function deleteR401Snapshot(Request $request, R401Snapshot $snapshot)
+    {
+        $request->validate([
+            'acknowledge_permanent_deletion' => ['required', 'accepted'],
+            'confirmation_phrase' => ['required', 'string', \Illuminate\Validation\Rule::in(['SUPERADMIN'])],
+        ], [
+            'acknowledge_permanent_deletion.accepted' => 'Acknowledge that this deletion is permanent before proceeding.',
+            'confirmation_phrase.in' => 'Type SUPERADMIN exactly to permanently delete this monthly snapshot.',
+        ]);
+        abort_unless($snapshot->report_type === 'Monthly session', 404);
+
+        $disk = Storage::disk('local');
+        $previewPath = preg_replace('/\.docx$/i', '.html', $snapshot->file_path);
+        foreach (array_filter([$snapshot->file_path, $previewPath]) as $path) {
+            if ($disk->exists($path) && ! $disk->delete($path)) {
+                throw new \RuntimeException('Unable to delete the saved monthly snapshot file.');
+            }
+        }
+        $snapshot->delete();
+
+        return redirect()
+            ->route('forms.monthly.r4-01.snapshots')
+            ->with('status', 'Monthly snapshot deleted.');
     }
 
     public function downloadR401Snapshot(R401Snapshot $snapshot)
     {
+        abort_unless($snapshot->report_type === 'Monthly session', 404);
+        abort_unless($snapshot->format === 'docx', 404);
         abort_unless(Storage::disk('local')->exists($snapshot->file_path), 404);
 
         return response()->download(
             Storage::disk('local')->path($snapshot->file_path),
             $snapshot->file_name,
-            ['Content-Type' => $snapshot->format === 'pdf'
-                ? 'application/pdf'
-                : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
         );
-    }
-
-    private function storeR401Snapshot(
-        Request $request,
-        array $data,
-        string $format,
-        string $fileName,
-        string $contents
-    ): R401Snapshot {
-        $relativePath = 'r4-01-snapshots/'.$data['month']->format('Y-m').'/'.Str::uuid().'.'.$format;
-        if (! Storage::disk('local')->put($relativePath, $contents)) {
-            throw new \RuntimeException('Unable to store the generated R4-01 snapshot.');
-        }
-
-        return R401Snapshot::query()->create([
-            'period_month' => $data['month']->toDateString(),
-            'kalagayan' => $data['selectedStatus'],
-            'purok_selection' => $data['selectedPurok'] === 'all' ? 'All Purok' : 'Purok '.$data['selectedPurok'],
-            'format' => $format,
-            'file_path' => $relativePath,
-            'file_name' => $fileName,
-            'generated_by' => (string) ($request->session()->get('login_user', [])['gmail'] ?? ''),
-        ]);
     }
 
     private function resumenReportData(MonthlyResumenReport $resumenReport): array
@@ -229,7 +216,6 @@ class FormGeneratorController extends Controller
             ->orderByDesc('period_month')
             ->orderByDesc('id')
             ->value('period_month')
-            ?? MonthlyRecordSnapshot::query()->max('month')
             ?? now()->startOfMonth()->toDateString();
         $selectedMonth = Carbon::parse($defaultMonth)->format('Y-m');
         $report = $resumenReport->generate(Carbon::createFromFormat('Y-m', $selectedMonth));
@@ -257,17 +243,17 @@ class FormGeneratorController extends Controller
         if (isset($validated['purok']) && $validated['purok'] !== 'all') {
             $request->validate(['purok' => ['integer', 'exists:puroks,purok_number']]);
         }
-        $sessionMonth = MonthlyMovementSession::query()
+        $session = MonthlyMovementSession::query()
             ->whereNotNull('period_month')
             ->orderByDesc('period_month')
             ->orderByDesc('id')
-            ->value('period_month');
-        $month = Carbon::parse($sessionMonth ?? now())->startOfMonth();
+            ->first();
+        $month = Carbon::parse($session?->period_month ?? now())->startOfMonth();
         $puroks = Purok::query()->orderBy('purok_number')->get(['purok_number', 'purok_name']);
         $selectedPurok = $validated['purok'] ?? null;
         $selectedStatus = $validated['kalagayan'] ?? null;
         $report = $selectedPurok !== null && $selectedStatus !== null
-            ? $this->selectedMemberRows($selectedPurok, $selectedStatus)
+            ? $this->r401ReportBuilder->build($selectedPurok, $selectedStatus, $session)
             : ['rows' => [], 'pages' => []];
         $globalVariables = GlobalVariable::query()->first();
 
@@ -291,10 +277,10 @@ class FormGeneratorController extends Controller
 
     private function selectedMemberRows(string $purok, string $status): array
     {
-        $records = Record::query()
-            ->whereRaw('UPPER(TRIM(status)) = ?', [$status])
+        $candidateRows = Record::query()
             ->orderBy('full_name')
             ->get([
+                'id',
                 'full_name',
                 'registry',
                 'gender',
@@ -306,10 +292,80 @@ class FormGeneratorController extends Controller
                 'status',
                 'monthly_code',
             ])
-            ->when($purok !== 'all', fn ($records) => $records->filter(
-                fn (Record $record): bool => $this->numericSortKey((string) $record->purok) === (int) $purok
+            ->map(function (Record $record): array {
+                $monthlyCode = trim((string) $record->monthly_code);
+                [$codeStatus, $code] = $this->monthlyCodeParts(
+                    $monthlyCode,
+                    mb_strtoupper(trim((string) $record->status))
+                );
+
+                return [
+                    'record_id' => $record->id,
+                    'status' => $codeStatus ?: mb_strtoupper(trim((string) $record->status)),
+                    'code' => $monthlyCode === '' ? 'A' : ($code ?: 'A'),
+                    'name' => trim((string) $record->full_name),
+                    'registry' => strtoupper(trim((string) $record->registry)),
+                    'gender' => $this->displayGender((string) $record->gender),
+                    'purok' => trim((string) $record->purok),
+                    'grupo' => trim((string) $record->grupo),
+                    'kapisanan' => $this->displayKapisanan((string) $record->kapisanan),
+                    'date_of_baptism' => $record->date_of_baptism?->format('d/m/Y') ?? '',
+                    'doctrinator' => trim((string) $record->evangelist),
+                ];
+            })
+            ->filter(fn (array $row): bool => $row['status'] === $status);
+
+        $activeSessionId = MonthlyMovementSession::query()
+            ->where('active_key', 'active')
+            ->value('id');
+        if ($activeSessionId !== null) {
+            $movementRows = MonthlySessionMovement::query()
+                ->where('session_id', $activeSessionId)
+                ->orderBy('id')
+                ->get()
+                ->map(function (MonthlySessionMovement $movement): ?array {
+                    $previous = $movement->previous_values ?? [];
+                    [$codeStatus, $code] = $this->monthlyCodeParts(
+                        (string) $movement->monthly_code,
+                        mb_strtoupper(trim((string) ($previous['status'] ?? $movement->status)))
+                    );
+                    $memberStatus = $codeStatus ?: mb_strtoupper(trim((string) ($previous['status'] ?? $movement->status)));
+                    $memberPurok = trim((string) ($previous['purok'] ?? $movement->previous_purok));
+                    $memberGrupo = trim((string) ($previous['grupo'] ?? $movement->previous_grupo));
+                    if (! in_array($memberStatus, ['MS', 'UWP'], true) || $memberPurok === '') {
+                        return null;
+                    }
+
+                    return [
+                        'record_id' => $movement->record_id,
+                        'status' => $memberStatus,
+                        'code' => $code ?: 'A',
+                        'name' => trim((string) $movement->full_name),
+                        'registry' => strtoupper(trim((string) $movement->registry)),
+                        'gender' => $this->displayGender((string) $movement->gender),
+                        'purok' => $memberPurok,
+                        'grupo' => $memberGrupo,
+                        'kapisanan' => $this->displayKapisanan((string) $movement->kapisanan),
+                        'date_of_baptism' => $movement->date_of_baptism?->format('d/m/Y') ?? '',
+                        'doctrinator' => trim((string) $movement->evangelist),
+                    ];
+                })
+                ->filter(fn (?array $row): bool => $row !== null && $row['status'] === $status);
+            $candidateRows = $candidateRows->concat($movementRows);
+        }
+
+        $candidateRows = $candidateRows
+            ->unique(fn (array $row): string => implode('|', [
+                (string) ($row['record_id'] ?? $row['name'].'|'.$row['registry']),
+                $row['status'],
+                $row['code'],
+                $this->numericSortKey($row['purok']),
+                preg_replace('/\D+/', '', $row['grupo']) ?? '',
+            ]))
+            ->when($purok !== 'all', fn ($rows) => $rows->filter(
+                fn (array $row): bool => $this->numericSortKey($row['purok']) === (int) $purok
             ))
-            ->groupBy(fn (Record $record): string => (string) $this->numericSortKey((string) $record->purok))
+            ->groupBy(fn (array $row): string => (string) $this->numericSortKey($row['purok']))
             ->sortBy(fn ($group, string $key): int => $this->numericSortKey($key));
         $purokDetails = Purok::query()
             ->orderBy('purok_number')
@@ -318,7 +374,7 @@ class FormGeneratorController extends Controller
         $reportRows = [];
         $reportPages = [];
 
-        foreach ($records as $purokNumber => $purokRecords) {
+        foreach ($candidateRows as $purokNumber => $purokRecords) {
             $number = (int) $purokNumber;
             $splitPuroks = $purokDetails->where('purok_number', $number)->values();
             $assignedRecords = $splitPuroks->mapWithKeys(function (Purok $splitPurok) use ($purokRecords): array {
@@ -327,7 +383,7 @@ class FormGeneratorController extends Controller
 
                 return [
                     $splitPurok->id => $purokRecords->filter(
-                        fn (Record $record): bool => (int) $record->grupo >= $min && (int) $record->grupo <= $max
+                        fn (array $row): bool => (int) $row['grupo'] >= $min && (int) $row['grupo'] <= $max
                     ),
                 ];
             });
@@ -341,27 +397,26 @@ class FormGeneratorController extends Controller
                 }
                 $splitPurok = $splitPuroks->firstWhere('id', $splitPurokId);
                 $rows = $splitRecords
-                    ->sort(function (Record $left, Record $right): int {
-                        $grupoOrder = (int) $left->grupo <=> (int) $right->grupo;
+                    ->sort(function (array $left, array $right): int {
+                        $codeOrder = ($left['code'] === 'A' ? 0 : 1) <=> ($right['code'] === 'A' ? 0 : 1);
+                        if ($codeOrder !== 0) {
+                            return $codeOrder;
+                        }
+                        $grupoOrder = (int) $left['grupo'] <=> (int) $right['grupo'];
 
-                        return $grupoOrder !== 0
-                            ? $grupoOrder
-                            : strcasecmp((string) $left->full_name, (string) $right->full_name);
+                        return $grupoOrder !== 0 ? $grupoOrder : strcasecmp($left['name'], $right['name']);
                     })
                     ->values()
-                    ->map(function (Record $record): array {
-                        $monthlyCode = trim((string) $record->monthly_code);
-                        $codeParts = explode(':', $monthlyCode, 2);
-
+                    ->map(function (array $row): array {
                         return [
-                            'code' => strtoupper(trim($codeParts[1] ?? '')) ?: 'A',
-                            'name' => trim((string) $record->full_name),
-                            'registry' => strtoupper(trim((string) $record->registry)),
-                            'gender' => $this->displayGender((string) $record->gender),
-                            'purok_grupo' => $this->numericSortKey((string) $record->purok).'-'.trim((string) $record->grupo, " \t\n\r\0\x0B-"),
-                            'kapisanan' => $this->displayKapisanan((string) $record->kapisanan),
-                            'date_of_baptism' => $record->date_of_baptism?->format('d/m/Y') ?? '',
-                            'doctrinator' => trim((string) $record->evangelist),
+                            'code' => $row['code'],
+                            'name' => $row['name'],
+                            'registry' => $row['registry'],
+                            'gender' => $row['gender'],
+                            'purok_grupo' => $this->numericSortKey($row['purok']).'-'.trim($row['grupo'], " \t\n\r\0\x0B-"),
+                            'kapisanan' => $row['kapisanan'],
+                            'date_of_baptism' => $row['date_of_baptism'],
+                            'doctrinator' => $row['doctrinator'],
                         ];
                     })->all();
                 $reportRows = [...$reportRows, ...$rows];
@@ -379,6 +434,24 @@ class FormGeneratorController extends Controller
         }
 
         return ['rows' => $reportRows, 'pages' => $reportPages];
+    }
+
+    private function monthlyCodeParts(string $monthlyCode, string $fallbackStatus = ''): array
+    {
+        $parts = explode(':', trim($monthlyCode), 2);
+        if (count($parts) < 2) {
+            return [mb_strtoupper(trim($fallbackStatus)), mb_strtoupper(trim($monthlyCode, " \t\n\r\0\x0B\"'"))];
+        }
+
+        $status = mb_strtoupper(trim($parts[0]));
+        if (! in_array($status, ['MS', 'UWP', 'MK'], true)) {
+            $status = mb_strtoupper(trim($fallbackStatus));
+        }
+
+        return [
+            $status,
+            mb_strtoupper(trim(explode('/', $parts[1], 2)[0], " \t\n\r\0\x0B\"'")),
+        ];
     }
 
     private function numericSortKey(string $value): int

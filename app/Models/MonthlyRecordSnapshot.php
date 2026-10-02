@@ -9,6 +9,7 @@ class MonthlyRecordSnapshot extends Model
     protected $fillable = [
         'month',
         'purok_number',
+        'purok_id',
         'ms_count',
         'uwp_count',
         'mk_count',

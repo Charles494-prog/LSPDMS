@@ -8,6 +8,7 @@
         data-entry-years="{{ $entryYearsRequirement }}"
         data-endorse-url="{{ route('de-listment.endorse', ['record' => '__RECORD__']) }}"
         data-delist-url="{{ route('de-listment.delist', ['record' => '__RECORD__']) }}"
+        data-export-url="{{ route('de-listment.export', ['category' => '__CATEGORY__']) }}"
         data-update-dates-url="{{ route('de-listment.update-dates') }}"
         data-csrf="{{ csrf_token() }}"
         hidden></span>
@@ -291,7 +292,10 @@
                     <span>There are no records in this chart category.</span>
                 </div>
             </div>
-            <div class="modal-actions"><button type="button" class="btn" data-close>Close</button></div>
+            <div class="modal-actions">
+                <a class="btn btn-primary" id="chart-members-export" href="#" download>Export DOCX</a>
+                <button type="button" class="btn" data-close>Close</button>
+            </div>
         </div>
     </dialog>
 
@@ -797,16 +801,25 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('delisted-history-btn').addEventListener('click', () => delistedHistoryDialog.showModal());
 
     const chartMembersDialog = document.getElementById('chart-members-dialog');
-    function showChartMembers(title, subtitle, matchingMembers) {
+    function showChartMembers(title, subtitle, matchingMembers, exportCategory) {
         document.getElementById('chart-members-title').textContent = title;
         document.getElementById('chart-members-sub').textContent = `${matchingMembers.length} matching ${matchingMembers.length === 1 ? 'record' : 'records'} · ${subtitle}`;
+        const exportButton = document.getElementById('chart-members-export');
+        exportButton.href = matchingMembers.length
+            ? config.dataset.exportUrl.replace('__CATEGORY__', encodeURIComponent(exportCategory))
+            : '#';
+        exportButton.hidden = matchingMembers.length === 0;
         const rows = matchingMembers.map(member => {
             const row = document.createElement('tr');
             const values = [
                 member.name,
                 member.kalagayan,
                 member.eligible ? 'Eligible' : 'Not eligible',
-                member.reported ? 'Created & reported' : 'Not yet done',
+                member.reported
+                    ? 'Created & reported'
+                    : (!member.eligible && member.endorsed
+                        ? 'Endorsed · Not eligible — review required'
+                        : 'Not yet done'),
             ];
             values.forEach(value => {
                 const cell = document.createElement('td');
@@ -882,15 +895,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const categories = detailed => detailed
         ? [
-            { label: 'Not eligible · No endorsement', color: colors.notEligibleNotEndorsed, matches: m => !m.eligible && !m.endorsed && m.kalagayan !== 'MK' },
-            { label: 'Not eligible · Endorsed', color: colors.notEligibleEndorsed, matches: m => !m.eligible && m.endorsed && m.kalagayan !== 'MK' },
-            { label: 'Eligible · No endorsement', color: colors.eligibleNotEndorsed, matches: m => m.eligible && !m.endorsed && m.kalagayan !== 'MK' },
-            { label: 'Eligible · Endorsed', color: colors.eligibleEndorsed, matches: m => m.eligible && m.endorsed && m.kalagayan !== 'MK' },
-            { label: 'MK', color: colors.mk, matches: m => m.kalagayan === 'MK' },
+            { key: 'not-eligible-no-endorsement', label: 'Not eligible · No endorsement', color: colors.notEligibleNotEndorsed, matches: m => !m.eligible && !m.endorsed && m.kalagayan !== 'MK' },
+            { key: 'not-eligible-endorsed', label: 'Not eligible · Endorsed (review required)', color: colors.notEligibleEndorsed, matches: m => !m.eligible && m.endorsed && m.kalagayan !== 'MK' },
+            { key: 'eligible-no-endorsement', label: 'Eligible · No endorsement', color: colors.eligibleNotEndorsed, matches: m => m.eligible && !m.endorsed && m.kalagayan !== 'MK' },
+            { key: 'eligible-endorsed', label: 'Eligible · Endorsed', color: colors.eligibleEndorsed, matches: m => m.eligible && m.endorsed && m.kalagayan !== 'MK' },
+            { key: 'mk', label: 'MK', color: colors.mk, matches: m => m.kalagayan === 'MK' },
         ]
         : [
-            { label: 'Eligible', color: colors.eligible, matches: m => m.eligible },
-            { label: 'Not eligible', color: colors.notEligible, matches: m => !m.eligible },
+            { key: 'eligible', label: 'Eligible', color: colors.eligible, matches: m => m.eligible },
+            { key: 'not-eligible', label: 'Not eligible', color: colors.notEligible, matches: m => !m.eligible },
         ];
 
     // Eligible share in the middle of the donut.
@@ -940,7 +953,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const [hit] = chart.getElementsAtEventForMode(event, 'nearest', { intersect: true }, true);
                     if (!hit) return;
                     const category = cats[hit.index];
-                    showChartMembers(category.label, 'R2-10 eligibility', members.filter(category.matches));
+                    showChartMembers(category.label, 'R2-10 eligibility', members.filter(category.matches), category.key);
                 },
                 plugins: {
                     legend: { display: false },
@@ -981,7 +994,7 @@ document.addEventListener('DOMContentLoaded', () => {
             value.append(strong, document.createTextNode(`${total ? Math.round(c.count / total * 100) : 0}%`));
             row.append(label, value);
             row.setAttribute('aria-label', `Show ${c.count} records: ${c.label}`);
-            row.addEventListener('click', () => showChartMembers(c.label, 'R2-10 eligibility', members.filter(c.matches)));
+            row.addEventListener('click', () => showChartMembers(c.label, 'R2-10 eligibility', members.filter(c.matches), c.key));
             row.addEventListener('mouseenter', () => {
                 if (!eligibilityChart || !eligibilityChart.ctx) return;
                 eligibilityChart.setActiveElements([{ datasetIndex: 0, index: i }]);
@@ -1070,7 +1083,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         const reported = hit.datasetIndex === 0;
                         const label = reported ? 'Created & reported' : 'Not yet done';
                         showChartMembers(`${kalagayan} · ${label}`, 'R2-10 report progress',
-                            members.filter(member => member.kalagayan === kalagayan && member.reported === reported));
+                            members.filter(member => member.kalagayan === kalagayan && member.reported === reported),
+                            `progress-${kalagayan.toLowerCase()}-${reported ? 'reported' : 'pending'}`);
                     },
                 },
                 plugins: [segmentLabels],
@@ -1243,7 +1257,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `${member.name} is endorsed but does not currently meet the R2-10 eligibility rules.`
                 : `Not yet done. ${member.name} is not eligible, so R2-10 can't be reported.`);
             btn.innerHTML = lockSvg;
-            btn.append(document.createTextNode(member.endorsed ? 'Endorsed · Not eligible' : 'Not yet done'));
+            btn.append(document.createTextNode(member.endorsed
+                ? 'Endorsed · Not eligible — review required'
+                : 'Not yet done'));
             btn.addEventListener('click', () => showToast(member.endorsed
                 ? `${member.name} is endorsed, but does not currently meet the R2-10 eligibility rules.`
                 : `${member.name} is not eligible, so R2-10 can't be reported.`));

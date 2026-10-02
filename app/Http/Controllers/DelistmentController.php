@@ -6,6 +6,7 @@ use App\Models\DelistmentHistory;
 use App\Models\GlobalVariable;
 use App\Models\Record;
 use App\Models\User;
+use App\Services\DelistmentDocxExporter;
 use App\Services\R210Eligibility;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,21 @@ use Illuminate\Validation\ValidationException;
 class DelistmentController extends Controller
 {
     private const STATUSES = ['MS', 'UWP', 'MK'];
+    private const EXPORT_CATEGORIES = [
+        'eligible',
+        'not-eligible',
+        'not-eligible-no-endorsement',
+        'not-eligible-endorsed',
+        'eligible-no-endorsement',
+        'eligible-endorsed',
+        'mk',
+        'progress-ms-reported',
+        'progress-ms-pending',
+        'progress-uwp-reported',
+        'progress-uwp-pending',
+        'progress-mk-reported',
+        'progress-mk-pending',
+    ];
 
     public function index(R210Eligibility $eligibility)
     {
@@ -80,6 +96,47 @@ class DelistmentController extends Controller
         ]);
     }
 
+    public function exportCategory(
+        string $category,
+        R210Eligibility $eligibility,
+        DelistmentDocxExporter $exporter
+    ) {
+        abort_unless(in_array($category, self::EXPORT_CATEGORIES, true), 404);
+        $globalVariables = GlobalVariable::query()->first();
+        $members = Record::query()
+            ->select(['id', 'full_name', 'registry', 'status', 'r2_10_endorsement'])
+            ->whereIn(DB::raw('UPPER(TRIM(status))'), self::STATUSES)
+            ->orderBy('full_name')
+            ->get()
+            ->map(function (Record $record) use ($eligibility, $globalVariables): array {
+                $eligible = $eligibility->forRecord($record, $globalVariables);
+                $endorsed = mb_strtoupper(trim((string) $record->r2_10_endorsement)) === 'ENDORSED';
+                $status = mb_strtoupper(trim((string) $record->status));
+
+                return [
+                    'name' => trim((string) $record->full_name) ?: 'Unnamed record',
+                    'registry' => trim((string) $record->registry),
+                    'kalagayan' => $status,
+                    'eligible' => $eligible,
+                    'endorsed' => $endorsed,
+                    'reported' => $eligible && $endorsed,
+                ];
+            })
+            ->filter(fn (array $member): bool => $this->matchesExportCategory($member, $category))
+            ->values()
+            ->all();
+
+        abort_if($members === [], 404, 'No records match this chart category.');
+        $path = $exporter->generate($this->exportCategoryLabel($category), $members);
+        $fileName = 'R2-10 - '.$this->exportCategoryLabel($category).'.docx';
+
+        return response()->download(
+            $path,
+            $fileName,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+        )->deleteFileAfterSend(true);
+    }
+
     public function endorse(Request $request, Record $record, R210Eligibility $eligibility): JsonResponse
     {
         $validated = $request->validate([
@@ -119,13 +176,10 @@ class DelistmentController extends Controller
             }
 
             $user = $request->session()->get('login_user', []);
-            $author = trim(($user['first_name'] ?? '').' '.($user['last_name'] ?? ''));
-            if ($author === '') {
-                $author = trim((string) ($user['gmail'] ?? ''));
-            }
+            $author = trim((string) ($user['gmail'] ?? ''));
             if ($author === '') {
                 return response()->json([
-                    'message' => 'The signed-in account name is unavailable. Please sign in again.',
+                    'message' => 'The signed-in account email is unavailable. Please sign in again.',
                 ], 422);
             }
             $reason = $oneYearConfirmed ? '1 year MS or UWP' : 'due to '.$note;
@@ -167,12 +221,9 @@ class DelistmentController extends Controller
             if (! $user) {
                 return response()->json(['message' => 'The signed-in account is unavailable. Please sign in again.'], 401);
             }
-            $author = trim(($user->first_name ?? '').' '.($user->last_name ?? ''));
+            $author = trim((string) $user->gmail);
             if ($author === '') {
-                $author = trim((string) $user->gmail);
-            }
-            if ($author === '') {
-                return response()->json(['message' => 'The signed-in account name is unavailable. Please sign in again.'], 422);
+                return response()->json(['message' => 'The signed-in account email is unavailable. Please sign in again.'], 422);
             }
 
             $now = Carbon::now('Asia/Manila');
@@ -253,5 +304,44 @@ class DelistmentController extends Controller
                 ? (preg_match('/,\s+$/u', $existing) === 1 ? '' : ' ')
                 : ', ');
         $record->log_section = $existing.$separator.$entry;
+    }
+
+    private function matchesExportCategory(array $member, string $category): bool
+    {
+        return match ($category) {
+            'eligible' => $member['eligible'],
+            'not-eligible' => ! $member['eligible'],
+            'not-eligible-no-endorsement' => ! $member['eligible'] && ! $member['endorsed'] && $member['kalagayan'] !== 'MK',
+            'not-eligible-endorsed' => ! $member['eligible'] && $member['endorsed'] && $member['kalagayan'] !== 'MK',
+            'eligible-no-endorsement' => $member['eligible'] && ! $member['endorsed'] && $member['kalagayan'] !== 'MK',
+            'eligible-endorsed' => $member['eligible'] && $member['endorsed'] && $member['kalagayan'] !== 'MK',
+            'mk' => $member['kalagayan'] === 'MK',
+            'progress-ms-reported' => $member['kalagayan'] === 'MS' && $member['reported'],
+            'progress-ms-pending' => $member['kalagayan'] === 'MS' && ! $member['reported'],
+            'progress-uwp-reported' => $member['kalagayan'] === 'UWP' && $member['reported'],
+            'progress-uwp-pending' => $member['kalagayan'] === 'UWP' && ! $member['reported'],
+            'progress-mk-reported' => $member['kalagayan'] === 'MK' && $member['reported'],
+            'progress-mk-pending' => $member['kalagayan'] === 'MK' && ! $member['reported'],
+            default => false,
+        };
+    }
+
+    private function exportCategoryLabel(string $category): string
+    {
+        return match ($category) {
+            'eligible' => 'Eligible',
+            'not-eligible' => 'Not eligible',
+            'not-eligible-no-endorsement' => 'Not eligible - No endorsement',
+            'not-eligible-endorsed' => 'Not eligible - Endorsed (review required)',
+            'eligible-no-endorsement' => 'Eligible - No endorsement',
+            'eligible-endorsed' => 'Eligible - Endorsed',
+            'mk' => 'MK',
+            'progress-ms-reported' => 'MS - Created and reported',
+            'progress-ms-pending' => 'MS - Not yet done',
+            'progress-uwp-reported' => 'UWP - Created and reported',
+            'progress-uwp-pending' => 'UWP - Not yet done',
+            'progress-mk-reported' => 'MK - Created and reported',
+            'progress-mk-pending' => 'MK - Not yet done',
+        };
     }
 }

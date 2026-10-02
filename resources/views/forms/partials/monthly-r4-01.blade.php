@@ -26,6 +26,7 @@
     .r401-report-table { width:100%; }
     .r401-report-table th { height:31px; text-align:center; vertical-align:middle; }
     .r401-report-table td { height:23px; }
+    .r401-report-table tbody tr.r401-movement-row td:nth-child(2) { color:#c62828!important; }
     .r401-report-table td:nth-child(3) { text-align:left; padding-left:4px; }
     .r401-report-table td:nth-child(1),.r401-report-table td:nth-child(2),.r401-report-table td:nth-child(n+4):nth-child(-n+16),.r401-report-table td:nth-child(17),.r401-report-table td:nth-child(18),.r401-report-table td:nth-child(19),.r401-report-table td:nth-child(20) { text-align:center; }
     .r401-signature-table { margin-top:9px; }
@@ -55,10 +56,12 @@
         .r401-page-sheet th,.r401-page-sheet td { padding:1px; }
         .r401-report-table th { height:29px; }
         .r401-report-table td { height:21px; }
+        .r401-report-table tbody tr.r401-movement-row td:nth-child(2) { color:#c62828!important; }
     }
 </style>
 
 <div class="r401-page">
+    @unless($pdf ?? false)
     <form class="r401-tools" id="r401Filters" method="GET" action="{{ route(($embedded ?? false) ? 'forms.monthly.generators' : 'forms.monthly.r4-01') }}">
         @if ($embedded ?? false)<input type="hidden" name="month" value="{{ $selectedMonth }}">@endif
         <label for="r401Purok">Purok
@@ -81,10 +84,8 @@
         </label>
         @if ($selectedPurok !== null && $selectedStatus !== null && $reportRows !== [])
             <a href="{{ route('forms.monthly.r4-01.download', ['purok' => $selectedPurok, 'kalagayan' => $selectedStatus]) }}">Download DOCX</a>
-            <a href="{{ route('forms.monthly.r4-01.download.pdf', ['purok' => $selectedPurok, 'kalagayan' => $selectedStatus]) }}">Download PDF</a>
         @else
             <button type="button" disabled>Download DOCX</button>
-            <button type="button" disabled>Download PDF</button>
         @endif
     </form>
 
@@ -93,6 +94,7 @@
     @elseif ($reportRows === [])
         <p class="r401-empty-note">No {{ $selectedStatus }} records were found in the selected Purok.</p>
     @endif
+    @endunless
 
     <section class="r401-pages" aria-label="R4-01 report preview">
         @foreach ($reportPages as $pageData)
@@ -147,7 +149,7 @@
                     <tbody>
                     @foreach ($pageData['rows'] as $index => $row)
                         @php($digits = str_split($row['registry']))
-                        <tr>
+                        <tr @if($row['code'] !== 'A')class="r401-movement-row"@endif>
                             <td>{{ (($pageData['page_number'] - 1) * 20) + $index + 1 }}</td>
                             <td>{{ $row['code'] }}</td>
                             <td>{{ $row['name'] }}</td>
@@ -183,8 +185,10 @@
         @endforeach
     </section>
 </div>
+@unless($pdf ?? false)
 <script>
     document.querySelectorAll('#r401Filters select').forEach((select) => {
         select.addEventListener('change', () => document.getElementById('r401Filters').requestSubmit());
     });
 </script>
+@endunless

@@ -17,6 +17,7 @@ class R401Snapshot extends Model
         'file_path',
         'file_name',
         'generated_by',
+        'session_id',
     ];
 
     protected function casts(): array

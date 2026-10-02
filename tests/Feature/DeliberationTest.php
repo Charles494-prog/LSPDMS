@@ -3,12 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\MonthlyMovementSession;
+use App\Models\MonthlySessionActivity;
 use App\Models\MonthlySessionMovement;
 use App\Models\Purok;
+use App\Models\R401Snapshot;
 use App\Models\Record;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class DeliberationTest extends TestCase
@@ -127,7 +130,7 @@ class DeliberationTest extends TestCase
         $this->withSession($session)
             ->postJson(route('forms.monthly.deliberation.store'), $this->validPayload())
             ->assertCreated();
-        $this->assertDatabaseCount('monthly_session_movements', 1);
+        $this->assertDatabaseCount('monthly_session_movements', 0);
         Carbon::setTestNow();
     }
 
@@ -182,7 +185,7 @@ class DeliberationTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_monthly_modify_can_change_status_only_and_requires_mk_demotion_confirmation(): void
+    public function test_monthly_modify_cannot_change_mk_status_to_ms_or_uwp(): void
     {
         $user = $this->makeSecretary();
         $purok = Purok::query()->create([
@@ -205,7 +208,7 @@ class DeliberationTest extends TestCase
                 'status' => 'MS',
             ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors('confirmed_mk_demotion');
+            ->assertJsonValidationErrors('status');
 
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->postJson(route('forms.monthly.modify.save'), [
@@ -225,24 +228,26 @@ class DeliberationTest extends TestCase
                 'status' => 'MS',
                 'confirmed_mk_demotion' => true,
             ])
-            ->assertOk()
-            ->assertJsonPath('record.status', 'MS');
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('status');
 
         $this->assertDatabaseHas('records', [
             'id' => $member->id,
-            'status' => 'MS',
+            'status' => 'MK',
             'purok' => null,
             'grupo' => null,
-            'monthly_code' => 'MS: B',
+            'monthly_code' => null,
         ]);
-        $this->assertDatabaseHas('monthly_session_movements', [
-            'record_id' => $member->id,
-            'full_name' => 'MK Status Member',
-            'action' => 'status',
-            'status' => 'MK',
-            'monthly_code' => 'MK: G',
-            'destination_description' => 'MK -> MS',
-        ]);
+        $this->assertDatabaseCount('monthly_session_movements', 0);
+        $this->assertDatabaseCount('monthly_session_activities', 0);
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('forms.monthly.modify.save'), [
+                'record_id' => $member->id,
+                'action' => 'status',
+                'status' => 'UWP',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('status');
         $this->assertDatabaseCount('monthly_record_movement_histories', 0);
     }
 
@@ -675,7 +680,7 @@ class DeliberationTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('grupo');
 
-        $this->withSession(['login_user' => ['id' => $user->id]])
+        $this->withSession(['login_user' => ['id' => $user->id, 'gmail' => $user->gmail]])
             ->postJson(route('forms.monthly.modify.save'), [
                 'record_id' => $member->id,
                 'action' => 'transfer',
@@ -705,6 +710,7 @@ class DeliberationTest extends TestCase
             'status' => 'MS',
             'monthly_code' => 'MS: C- / MS: C+',
             'destination_description' => '1-4 -> 2-8',
+            'changed_by' => $user->gmail,
             'gender' => 'F',
             'kapisanan' => 'B',
             'evangelist' => 'Maria Evangelist',
@@ -801,7 +807,7 @@ class DeliberationTest extends TestCase
             ->assertCreated();
 
         $this->assertDatabaseHas('records', [
-            'full_name' => 'Optional Information Member',
+            'full_name' => 'OPTIONAL INFORMATION MEMBER',
             'purok' => '1',
             'grupo' => null,
             'date_of_baptism' => null,
@@ -813,7 +819,7 @@ class DeliberationTest extends TestCase
         ]);
         $this->assertSame(
             '2026-10-01',
-            Record::query()->where('full_name', 'Optional Information Member')->firstOrFail()->date_of_entry->format('Y-m-d')
+            Record::query()->where('full_name', 'OPTIONAL INFORMATION MEMBER')->firstOrFail()->date_of_entry->format('Y-m-d')
         );
     }
 
@@ -834,13 +840,13 @@ class DeliberationTest extends TestCase
                 ->assertCreated();
 
             $this->assertDatabaseHas('records', [
-                'full_name' => $name,
+                'full_name' => mb_strtoupper($name),
                 'status' => $status,
                 'monthly_code' => "{$status}: B",
             ]);
             $this->assertSame(
                 '2026-10-01',
-                Record::query()->where('full_name', $name)->firstOrFail()->date_of_entry->format('Y-m-d')
+                Record::query()->where('full_name', mb_strtoupper($name))->firstOrFail()->date_of_entry->format('Y-m-d')
             );
         }
     }
@@ -858,7 +864,7 @@ class DeliberationTest extends TestCase
             ->assertCreated();
 
         $this->assertDatabaseHas('records', [
-            'full_name' => 'New Member',
+            'full_name' => 'NEW MEMBER',
             'log_section' => $today.': MS: B, '.$today.': Added after review,',
         ]);
     }
@@ -879,7 +885,7 @@ class DeliberationTest extends TestCase
             ->assertCreated();
 
         $this->assertDatabaseHas('records', [
-            'full_name' => 'Female RFID Buklod',
+            'full_name' => 'FEMALE RFID BUKLOD',
             'registry' => 'RFID',
             'gender' => 'B',
             'kapisanan' => 'B',
@@ -989,23 +995,12 @@ class DeliberationTest extends TestCase
             'date_of_birth' => '1980-05-06 00:00:00',
             'date_of_baptism' => '2000-01-01 00:00:00',
         ]);
-        $this->assertDatabaseHas('monthly_session_movements', [
-            'record_id' => $existing->id,
-            'action' => 'reactivate',
-            'monthly_code' => 'UWP: B',
-        ]);
+        $this->assertDatabaseMissing('monthly_session_movements', ['record_id' => $existing->id]);
         $this->assertDatabaseCount('records', 1);
-
-        $movement = MonthlySessionMovement::query()->where('record_id', $existing->id)->firstOrFail();
-        $this->withSession(['login_user' => ['id' => $user->id]])
-            ->deleteJson(route('forms.monthly.session.undo', $movement))
-            ->assertOk();
         $this->assertDatabaseHas('records', [
             'id' => $existing->id,
-            'status' => 'INACTIVE',
-            'monthly_code' => null,
-            'date_of_entry' => null,
-            'log_section' => null,
+            'status' => 'UWP',
+            'monthly_code' => 'UWP: B',
         ]);
     }
 
@@ -1055,7 +1050,7 @@ class DeliberationTest extends TestCase
                 ->assertCreated();
 
             $this->assertDatabaseHas('records', [
-                'full_name' => $name,
+                'full_name' => mb_strtoupper($name),
                 'kapisanan' => $expectedKapisanan,
                 'is_married' => $isMarried,
             ]);
@@ -1078,7 +1073,7 @@ class DeliberationTest extends TestCase
             ->assertCreated();
 
         $this->assertDatabaseHas('records', [
-            'full_name' => 'Default Not Married Member',
+            'full_name' => 'DEFAULT NOT MARRIED MEMBER',
             'is_married' => 0,
             'kapisanan' => 'K',
         ]);
@@ -1112,7 +1107,7 @@ class DeliberationTest extends TestCase
             ->assertCreated();
 
         $this->assertDatabaseHas('records', [
-            'full_name' => 'Buklod Marriage Member',
+            'full_name' => 'BUKLOD MARRIAGE MEMBER',
             'kapisanan' => 'B',
             'is_married' => 1,
         ]);
@@ -1143,7 +1138,6 @@ class DeliberationTest extends TestCase
             'status' => 'uwp',
             'monthly_code' => 'UWP: D',
         ]);
-
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->getJson(route('forms.monthly.deliberation.subtract.search', ['q' => 'zxcv']))
             ->assertOk()
@@ -1296,7 +1290,7 @@ class DeliberationTest extends TestCase
         $this->assertDatabaseHas('records', ['id' => $mk->id, 'status' => 'MK']);
     }
 
-    public function test_add_and_subtract_movements_can_be_undone_and_are_removed_from_temporary_log(): void
+    public function test_add_and_subtract_are_kept_in_records_until_session_finalization(): void
     {
         $user = $this->makeSecretary();
         $purok = $this->makePurok();
@@ -1311,27 +1305,19 @@ class DeliberationTest extends TestCase
                 'description' => 'Add note to undo',
             ]))
             ->assertCreated();
-        $added = Record::query()->where('full_name', 'New Member')->firstOrFail();
-        $addMovement = MonthlySessionMovement::query()->where('record_id', $added->id)->firstOrFail();
-        $this->assertSame('add', $addMovement->action);
-        $this->assertSame('Add note to undo', $addMovement->description);
+        $added = Record::query()->where('full_name', 'NEW MEMBER')->firstOrFail();
+        $this->assertSame('MS: B', $added->monthly_code);
+        $this->assertDatabaseHas('monthly_session_activities', [
+            'record_id' => $added->id,
+            'action' => 'add',
+            'direction' => 'in',
+            'status' => 'MS',
+            'monthly_code' => 'MS: B',
+            'purok' => (string) $purok->purok_number,
+        ]);
         $this->assertStringContainsString('Add note to undo', $added->log_section);
         $this->assertStringContainsString('MS: B', $added->log_section);
-
-        $this->withSession($session)
-            ->deleteJson(route('forms.monthly.session.undo', $addMovement))
-            ->assertOk()
-            ->assertJsonPath('message', 'Movement undone and removed from the temporary session log.');
-        $this->assertDatabaseHas('records', [
-            'id' => $added->id,
-            'status' => 'INACTIVE',
-            'date_of_entry' => null,
-            'monthly_code' => null,
-        ]);
-        $this->assertNull($added->fresh()->log_section);
-        $this->assertNull($added->fresh()->reason_of_r2_10_endorsement);
-        $this->assertDatabaseMissing('monthly_session_movements', ['id' => $addMovement->id]);
-        $this->assertDatabaseCount('permanent_history', 0);
+        $this->assertDatabaseCount('monthly_session_movements', 0);
 
         $subtractRecord = Record::query()->create([
             'full_name' => 'Restore Subtract Member',
@@ -1348,21 +1334,18 @@ class DeliberationTest extends TestCase
                     'description' => 'Subtract note to undo',
                 ])
                 ->assertOk();
-            $subtractMovement = MonthlySessionMovement::query()->where('record_id', $subtractRecord->id)->firstOrFail();
-            $this->assertSame('Subtract note to undo', $subtractMovement->description);
-            $this->withSession($session)
-            ->deleteJson(route('forms.monthly.session.undo', $subtractMovement))
-            ->assertOk();
         $this->assertDatabaseHas('records', [
             'id' => $subtractRecord->id,
-            'status' => 'UWP',
-            'monthly_code' => null,
-            'reason_of_r2_10_endorsement' => 'Existing reason',
-            'log_section' => 'Existing log,',
-        ]);
-        $this->assertDatabaseMissing('records', [
-            'id' => $subtractRecord->id,
+            'status' => 'INACTIVE',
             'monthly_code' => 'UWP: D',
+        ]);
+        $this->assertDatabaseHas('monthly_session_activities', [
+            'record_id' => $subtractRecord->id,
+            'action' => 'subtract',
+            'direction' => 'out',
+            'status' => 'UWP',
+            'monthly_code' => 'UWP: D',
+            'purok' => (string) $purok->purok_number,
         ]);
         $this->assertDatabaseCount('monthly_session_movements', 0);
         $headSecretary = User::query()->create([
@@ -1374,8 +1357,13 @@ class DeliberationTest extends TestCase
         $finishSession = ['login_user' => ['id' => $headSecretary->id]];
         $this->withSession($finishSession)
             ->postJson(route('forms.monthly.session.finish'))
-            ->assertOk();
-        $this->assertDatabaseCount('permanent_history', 0);
+            ->assertOk()
+            ->assertJsonPath('movements', 0)
+            ->assertJsonPath('coded_records', 2);
+        $this->assertDatabaseHas('permanent_history', ['record_id' => $added->id, 'monthly_code' => 'MS: B']);
+        $this->assertDatabaseHas('permanent_history', ['record_id' => $subtractRecord->id, 'monthly_code' => 'UWP: D']);
+        $this->assertNull($added->fresh()->monthly_code);
+        $this->assertNull($subtractRecord->fresh()->monthly_code);
     }
 
     public function test_transfer_and_status_movements_restore_prior_values_on_undo(): void
@@ -1405,13 +1393,42 @@ class DeliberationTest extends TestCase
         $transfer = MonthlySessionMovement::query()->where('record_id', $member->id)->firstOrFail();
         $this->assertSame('1-4 -> 2-8', $transfer->destination_description);
         $this->assertSame('Transfer note to undo', $transfer->description);
+        $this->assertSame([
+            ['MS: C+', 'in', '2', '8'],
+            ['MS: C-', 'out', '1', '4'],
+        ], MonthlySessionActivity::query()
+            ->where('session_movement_id', $transfer->id)
+            ->orderBy('direction')
+            ->get(['monthly_code', 'direction', 'purok', 'grupo'])
+            ->map(fn (MonthlySessionActivity $activity): array => [
+                $activity->monthly_code,
+                $activity->direction,
+                $activity->purok,
+                $activity->grupo,
+            ])
+            ->all());
         $this->assertStringContainsString('Transfer note to undo', $member->fresh()->log_section);
         $this->withSession($session)
             ->get(route('forms.monthly.session'))
             ->assertOk()
             ->assertSee('Undo Transfer Member')
-            ->assertSee('1-4 -> 2-8');
+            ->assertSee('1-4 -> 2-8')
+            ->assertSee('monthly-session-entries', false);
+        $this->withSession($session)
+            ->getJson(route('forms.monthly.session.status').'?include_movements=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'activities')
+            ->assertJsonPath('activities.0.action', 'Transfer')
+            ->assertJsonCount(2, 'activities.0.entries')
+            ->assertJsonPath('activities.0.entries.0.monthly_code', 'MS: C-')
+            ->assertJsonPath('activities.0.entries.0.direction', 'out')
+            ->assertJsonPath('activities.0.entries.0.name', 'Undo Transfer Member')
+            ->assertJsonPath('activities.0.entries.0.location', '1-4')
+            ->assertJsonPath('activities.0.entries.1.monthly_code', 'MS: C+')
+            ->assertJsonPath('activities.0.entries.1.direction', 'in')
+            ->assertJsonPath('activities.0.entries.1.location', '2-8');
         $this->withSession($session)->deleteJson(route('forms.monthly.session.undo', $transfer))->assertOk();
+        $this->assertDatabaseMissing('monthly_session_activities', ['session_movement_id' => $transfer->id]);
         $this->assertDatabaseHas('records', [
             'id' => $member->id,
             'purok' => '1',
@@ -1432,6 +1449,16 @@ class DeliberationTest extends TestCase
             ->assertOk();
         $statusChange = MonthlySessionMovement::query()->where('record_id', $member->id)->firstOrFail();
         $this->assertSame('MS -> UWP', $statusChange->destination_description);
+        $this->assertDatabaseHas('monthly_session_activities', [
+            'session_movement_id' => $statusChange->id,
+            'monthly_code' => 'MS: G',
+            'direction' => 'out',
+        ]);
+        $this->assertDatabaseHas('monthly_session_activities', [
+            'session_movement_id' => $statusChange->id,
+            'monthly_code' => 'UWP: B',
+            'direction' => 'in',
+        ]);
         $this->assertSame('Status note to undo', $statusChange->description);
         $this->assertStringContainsString('Status note to undo', $member->fresh()->log_section);
         $this->withSession($session)->deleteJson(route('forms.monthly.session.undo', $statusChange))->assertOk();
@@ -1447,10 +1474,17 @@ class DeliberationTest extends TestCase
         $this->assertDatabaseCount('monthly_session_movements', 0);
     }
 
-    public function test_finishing_session_copies_only_remaining_movements_to_permanent_history_and_snapshots(): void
+    public function test_finishing_session_archives_monthly_codes_and_movements_then_snapshots(): void
     {
+        Storage::fake('local');
         $user = $this->makeSecretary();
         $purok = $this->makePurok();
+        $secondPurokSegment = Purok::query()->create([
+            'purok_number' => $purok->purok_number,
+            'purok_name' => 'Central B',
+            'grupo_start' => 4,
+            'grupo_end' => 6,
+        ]);
         $record = Record::query()->create([
             'full_name' => 'Finalized Member',
             'registry' => 'FINALIZED12345',
@@ -1482,11 +1516,14 @@ class DeliberationTest extends TestCase
             'tungkulin' => 'Head Secretary',
             'is_verified' => true,
         ]);
-        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+        $this->withSession(['login_user' => ['id' => $headSecretary->id, 'tungkulin' => 'Head Secretary']])
             ->postJson(route('forms.monthly.session.finish'))
             ->assertOk()
-            ->assertJsonPath('movements', 1)
-            ->assertJsonPath('cleared_monthly_codes', 2);
+            ->assertJsonPath('movements', 0)
+            ->assertJsonPath('coded_records', 2)
+            ->assertJsonPath('cleared_monthly_codes', 2)
+            ->assertJsonPath('period_label', now()->timezone('Asia/Manila')->startOfMonth()->addMonthNoOverflow()->format('F Y'))
+            ->assertJsonPath('message', 'Monthly '.now()->timezone('Asia/Manila')->startOfMonth()->addMonthNoOverflow()->format('F Y').' finalized.');
 
         $this->assertDatabaseHas('permanent_history', [
             'record_id' => $record->id,
@@ -1513,17 +1550,239 @@ class DeliberationTest extends TestCase
             'status' => 'completed',
             'active_key' => null,
         ]);
+        $completedSession = MonthlyMovementSession::query()->where('status', 'completed')->firstOrFail();
+        $monthlyReport = R401Snapshot::query()->where('session_id', $completedSession->id)->firstOrFail();
+        $this->assertSame('Monthly session', $monthlyReport->report_type);
+        $this->assertSame('Monthly_'.Carbon::parse($completedSession->period_month)->format('F_Y').'_RESUMEN_MS_UWP.docx', $monthlyReport->file_name);
+        $this->assertSame('docx', $monthlyReport->format);
+        Storage::disk('local')->assertExists($monthlyReport->file_path);
+        $document = new \PharData(Storage::disk('local')->path($monthlyReport->file_path));
+        $documentXml = $document['word/document.xml']->getContent();
+        $this->assertStringContainsString('BILANG NG NADAGDAG/NABAWAS NA MS/TS AT UWP', $documentXml);
+        $this->assertStringContainsString('ULAT UKOL SA SAKOP NA MS / UWP', $documentXml);
+        $this->assertStringContainsString('Finalized Member', $documentXml);
+        $this->assertStringContainsString('Unrelated coded member', $documentXml);
+        $this->assertLessThan(
+            strpos($documentXml, 'ULAT UKOL SA SAKOP NA MS / UWP'),
+            strpos($documentXml, 'BILANG NG NADAGDAG/NABAWAS NA MS/TS AT UWP')
+        );
+        $previewPath = preg_replace('/\.docx$/', '.html', $monthlyReport->file_path);
+        Storage::disk('local')->assertExists($previewPath);
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.r4-01.snapshots.view', $monthlyReport))
+            ->assertOk()
+            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->assertSee('Monthly '.$completedSession->period_month->format('F Y'))
+            ->assertSee('snapshotResumenHeading')
+            ->assertSee('snapshotMSHeading')
+            ->assertSee('snapshotUWPHeading');
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.r4-01.snapshots.download', $monthlyReport))
+            ->assertOk()
+            ->assertDownload($monthlyReport->file_name);
+        $this->withSession(['login_user' => ['id' => $headSecretary->id, 'tungkulin' => 'Head Secretary']])
+            ->get(route('forms.monthly.r4-01.snapshots', ['year' => Carbon::parse($completedSession->period_month)->format('Y')]))
+            ->assertOk()
+            ->assertSee($monthlyReport->file_name)
+            ->assertSee('Generated on')
+            ->assertSee('data-snapshot-view=', false)
+            ->assertSee('r401SnapshotViewer', false)
+            ->assertSee('Filter snapshots by year')
+            ->assertSee('type="month"', false)
+            ->assertSee('SUPERADMIN')
+            ->assertSee('I understand this permanently deletes both the saved file and its archive entry.')
+            ->assertSee('filters.requestSubmit()', false)
+            ->assertDontSee('<th>Month</th>', false)
+            ->assertDontSee('<th>Kalagayan</th>', false)
+            ->assertDontSee('<th>Purok</th>', false)
+            ->assertDontSee('>Filter<', false)
+            ->assertDontSee('>Clear<', false);
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.r4-01.snapshots', ['month' => Carbon::parse($completedSession->period_month)->format('Y-m')]))
+            ->assertOk()
+            ->assertSee($monthlyReport->file_name);
+        $this->withSession(['login_user' => ['id' => $user->id, 'tungkulin' => 'Secretary']])
+            ->delete(route('forms.monthly.r4-01.snapshots.delete', $monthlyReport), ['confirmation_phrase' => 'SUPERADMIN'])
+            ->assertForbidden();
+        $this->withSession(['login_user' => ['id' => $headSecretary->id, 'tungkulin' => 'Head Secretary']])
+            ->delete(route('forms.monthly.r4-01.snapshots.delete', $monthlyReport), [
+                'acknowledge_permanent_deletion' => '1',
+                'confirmation_phrase' => 'superadmin',
+            ])
+            ->assertSessionHasErrors('confirmation_phrase');
+        $this->withSession(['login_user' => ['id' => $headSecretary->id, 'tungkulin' => 'Head Secretary']])
+            ->delete(route('forms.monthly.r4-01.snapshots.delete', $monthlyReport), ['confirmation_phrase' => 'SUPERADMIN'])
+            ->assertSessionHasErrors('acknowledge_permanent_deletion');
+        $this->withSession(['login_user' => ['id' => $headSecretary->id, 'tungkulin' => 'Head Secretary']])
+            ->delete(route('forms.monthly.r4-01.snapshots.delete', $monthlyReport), [
+                'acknowledge_permanent_deletion' => '1',
+                'confirmation_phrase' => 'SUPERADMIN',
+            ])
+            ->assertRedirect(route('forms.monthly.r4-01.snapshots'));
+        $this->assertDatabaseMissing('r4_01_snapshots', ['id' => $monthlyReport->id]);
+        Storage::disk('local')->assertMissing($monthlyReport->file_path);
+        Storage::disk('local')->assertMissing($previewPath);
         $this->assertDatabaseHas('monthly_record_snapshots', [
             'month' => now()->timezone('Asia/Manila')->startOfMonth()->addMonthNoOverflow()->toDateString(),
             'purok_number' => $purok->purok_number,
             'ms_count' => 0,
             'session_generated' => true,
         ]);
+        $snapshot = \App\Models\MonthlyRecordSnapshot::query()
+            ->whereDate('month', now()->timezone('Asia/Manila')->startOfMonth()->addMonthNoOverflow()->toDateString())
+            ->where('purok_number', $purok->purok_number)
+            ->where('purok_id', $purok->id)
+            ->firstOrFail();
+        $this->assertSame(1, $snapshot->movement_counts['MS']['DD'] ?? 0);
+        $secondSegmentSnapshot = \App\Models\MonthlyRecordSnapshot::query()
+            ->whereDate('month', now()->timezone('Asia/Manila')->startOfMonth()->addMonthNoOverflow()->toDateString())
+            ->where('purok_id', $secondPurokSegment->id)
+            ->firstOrFail();
+        $this->assertSame([], $secondSegmentSnapshot->movement_counts);
         $this->assertDatabaseHas('monthly_record_snapshots', [
             'month' => '2025-01-01',
             'purok_number' => 1,
             'ms_count' => 67,
         ]);
+    }
+
+    public function test_add_and_subtract_activity_batches_can_be_undone_safely(): void
+    {
+        $user = $this->makeSecretary();
+        $purok = $this->makePurok();
+        $session = ['login_user' => ['id' => $user->id]];
+
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.deliberation.store'), $this->validPayload([
+                'description' => 'Add to undo',
+            ]))
+            ->assertCreated();
+        $added = Record::query()->where('full_name', 'NEW MEMBER')->firstOrFail();
+        $activity = MonthlySessionActivity::query()->where('record_id', $added->id)->firstOrFail();
+        $this->withSession($session)
+            ->getJson(route('forms.monthly.session.status').'?include_movements=1')
+            ->assertOk()
+            ->assertJsonCount(1, 'activities')
+            ->assertJsonPath('activities.0.action', 'Add')
+            ->assertJsonPath('activities.0.entries.0.monthly_code', 'MS: B')
+            ->assertJsonPath('activities.0.undo_url', route('forms.monthly.session.activity.undo', $activity));
+        $this->withSession($session)
+            ->deleteJson(route('forms.monthly.session.activity.undo', $activity))
+            ->assertOk();
+        $this->assertDatabaseHas('records', [
+            'id' => $added->id,
+            'status' => 'INACTIVE',
+            'monthly_code' => null,
+            'date_of_entry' => null,
+            'log_section' => null,
+        ]);
+        $this->assertDatabaseMissing('monthly_session_activities', ['id' => $activity->id]);
+        $this->assertDatabaseCount('monthly_session_movements', 0);
+
+        $subtract = Record::query()->create([
+            'full_name' => 'Undo Subtract Member',
+            'status' => 'UWP',
+            'purok' => (string) $purok->purok_number,
+            'grupo' => '2',
+            'reason_of_r2_10_endorsement' => 'Original reason',
+            'log_section' => 'Original log,',
+        ]);
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.deliberation.subtract'), [
+                'record_id' => $subtract->id,
+                'code' => 'D',
+                'description' => 'Subtract to undo',
+            ])
+            ->assertOk();
+        $activity = MonthlySessionActivity::query()->where('record_id', $subtract->id)->firstOrFail();
+        $this->withSession($session)
+            ->deleteJson(route('forms.monthly.session.activity.undo', $activity))
+            ->assertOk();
+        $this->assertDatabaseHas('records', [
+            'id' => $subtract->id,
+            'status' => 'UWP',
+            'monthly_code' => null,
+            'reason_of_r2_10_endorsement' => 'Original reason',
+            'log_section' => 'Original log,',
+        ]);
+        $this->assertDatabaseMissing('monthly_session_activities', ['id' => $activity->id]);
+        $this->assertDatabaseCount('monthly_session_movements', 0);
+    }
+
+    public function test_finishing_session_archives_record_codes_and_modify_movement_separately(): void
+    {
+        $user = $this->makeSecretary();
+        Purok::query()->create([
+            'purok_number' => 1,
+            'purok_name' => 'Source',
+            'grupo_start' => 1,
+            'grupo_end' => 24,
+            'full_purok' => true,
+        ]);
+        $destination = Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Destination',
+            'grupo_start' => 1,
+            'grupo_end' => 24,
+            'full_purok' => true,
+        ]);
+        $record = Record::query()->create([
+            'full_name' => 'TRANSFER HISTORY MEMBER',
+            'status' => 'MS',
+            'purok' => '1',
+            'grupo' => '4',
+        ]);
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('forms.monthly.modify.save'), [
+                'record_id' => $record->id,
+                'action' => 'transfer',
+                'purok_id' => $destination->id,
+                'grupo' => 8,
+            ])
+            ->assertOk();
+
+        $headSecretary = User::query()->create([
+            'gmail' => 'transfer.history.head@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->postJson(route('forms.monthly.session.finish'))
+            ->assertOk()
+            ->assertJsonPath('movements', 1)
+            ->assertJsonPath('coded_records', 1);
+
+        $this->assertDatabaseHas('permanent_history', [
+            'record_id' => $record->id,
+            'action' => 'transfer',
+            'monthly_code' => 'MS: C+',
+        ]);
+        $this->assertDatabaseHas('permanent_history', [
+            'record_id' => $record->id,
+            'action' => 'transfer',
+            'monthly_code' => 'MS: C- / MS: C+',
+            'previous_values->purok' => '1',
+            'previous_values->grupo' => '4',
+            'next_values->purok' => '2',
+            'next_values->grupo' => '8',
+        ]);
+        $this->assertDatabaseCount('permanent_history', 2);
+        $this->assertDatabaseCount('monthly_session_movements', 0);
+        $this->assertDatabaseCount('monthly_session_activities', 2);
+        $this->assertDatabaseHas('monthly_session_activities', [
+            'record_id' => $record->id,
+            'monthly_code' => 'MS: C-',
+            'direction' => 'out',
+            'session_movement_id' => null,
+        ]);
+        $this->assertDatabaseHas('monthly_session_activities', [
+            'record_id' => $record->id,
+            'monthly_code' => 'MS: C+',
+            'direction' => 'in',
+            'session_movement_id' => null,
+        ]);
+        $this->assertNull($record->fresh()->monthly_code);
     }
 
     private function validPayload(array $overrides = []): array

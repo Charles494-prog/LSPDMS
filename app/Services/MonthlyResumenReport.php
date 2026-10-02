@@ -8,32 +8,46 @@ use App\Models\Purok;
 use App\Models\Record;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class MonthlyResumenReport
 {
     private const CODES = ['A', 'B', 'C+', 'C-', 'D', 'DD', 'E', 'G', 'H'];
 
-    public function generate(Carbon $month): array
+    public function generate(Carbon $month, bool $includeCompletedSessionMovements = false): array
     {
         $month = $month->copy()->startOfMonth();
         $previousMonth = $month->copy()->subMonthNoOverflow();
         $previousSnapshots = MonthlyRecordSnapshot::query()
             ->whereDate('month', $previousMonth->toDateString())
-            ->get(['purok_number', 'ms_count', 'uwp_count']);
+            ->get(['purok_number', 'purok_id', 'ms_count', 'uwp_count']);
         $monthSnapshots = MonthlyRecordSnapshot::query()
             ->whereDate('month', $month->toDateString())
-            ->get(['purok_number', 'movement_counts']);
+            ->get(['purok_number', 'purok_id', 'ms_count', 'uwp_count', 'movement_counts']);
         $session = MonthlyMovementSession::query()
             ->with('movements')
             ->whereDate('period_month', $month->toDateString())
             ->first();
-        $movementCounts = $this->movementCounts($monthSnapshots, $session);
-        $baselineCounts = $this->baselineCounts($previousSnapshots, $monthSnapshots, $session, $month);
+        $sessionCompleted = $session !== null && $session->status !== 'active';
+        $movementCounts = $sessionCompleted
+            ? ($includeCompletedSessionMovements ? $this->snapshotMovementCounts($monthSnapshots) : [])
+            : $this->movementCounts($monthSnapshots, $session);
+        $baselineCounts = $sessionCompleted
+            ? $this->completedSessionBaseline(
+                $previousSnapshots,
+                $monthSnapshots,
+                $month,
+                $includeCompletedSessionMovements
+            )
+            : $this->baselineCounts($previousSnapshots, $monthSnapshots, $session, $month);
 
         $purokDetails = Purok::query()
             ->orderBy('purok_number')
             ->orderBy('grupo_start')
             ->get(['id', 'purok_number', 'purok_name', 'manggagawa', 'grupo_start', 'grupo_end', 'full_purok']);
+        $exactMovementCounts = $sessionCompleted && $includeCompletedSessionMovements
+            ? $this->completedSessionSegmentMovements($session, $purokDetails)
+            : $this->activeSessionSegmentMovements($session, $purokDetails);
         $records = Record::query()->get(['purok', 'grupo', 'status']);
         $purokNumbers = $purokDetails->pluck('purok_number')
             ->merge($previousSnapshots->pluck('purok_number'))
@@ -44,7 +58,7 @@ class MonthlyResumenReport
             ->sort()
             ->values();
 
-        $rows = $purokNumbers->flatMap(function (int $number) use ($purokDetails, $records, $baselineCounts, $movementCounts): array {
+        $rows = $purokNumbers->flatMap(function (int $number) use ($purokDetails, $records, $baselineCounts, $movementCounts, $exactMovementCounts): array {
             $segments = $purokDetails->where('purok_number', $number)->values();
             if ($segments->isEmpty()) {
                 $segments = collect([[
@@ -74,16 +88,36 @@ class MonthlyResumenReport
             foreach (['MS', 'UWP'] as $status) {
                 $statusWeights = $weights->map(fn (array $counts): int => (int) ($counts[$status] ?? 0))->all();
                 foreach (self::CODES as $code) {
-                    $allocatedBaseline[$status][$code] = $this->allocate(
-                        $code === 'A' ? (int) ($baselineCounts[$number][$status] ?? 0) : 0,
-                        $statusWeights
-                    );
+                    $allocatedBaseline[$status][$code] = $code === 'A'
+                        ? $this->allocateBaselineCount(
+                            (int) ($baselineCounts[$number][$status] ?? 0),
+                            $statusWeights,
+                            $baselineCounts[$number][$status.'_segments'] ?? []
+                        )
+                        : $this->allocate(0, $statusWeights);
                 }
                 foreach (($movementCounts[$number][$status] ?? []) as $code => $count) {
                     $code = strtoupper(trim((string) $code));
                     if (in_array($code, self::CODES, true)) {
-                        $allocatedMovements[$status][$code] = $this->allocate((int) $count, $statusWeights);
+                        $exact = $exactMovementCounts[$number][$status][$code] ?? [];
+                        $exactCount = array_sum($exact);
+                        $allocatedMovements[$status][$code] = $this->allocate(
+                            max(0, (int) $count - $exactCount),
+                            $statusWeights
+                        );
+                        foreach ($exact as $segmentId => $quantity) {
+                            $allocatedMovements[$status][$code][$segmentId] =
+                                ($allocatedMovements[$status][$code][$segmentId] ?? 0) + $quantity;
+                        }
                     }
+                }
+            }
+            foreach (($exactMovementCounts[$number] ?? []) as $status => $codes) {
+                foreach ($codes as $code => $segmentCounts) {
+                    if (isset($allocatedMovements[$status][$code])) {
+                        continue;
+                    }
+                    $allocatedMovements[$status][$code] = $segmentCounts;
                 }
             }
 
@@ -131,29 +165,192 @@ class MonthlyResumenReport
         ];
     }
 
-    private function movementCounts(Collection $snapshots, ?MonthlyMovementSession $session): array
+    private function snapshotMovementCounts(Collection $snapshots): array
     {
-        if ($snapshots->isNotEmpty()) {
-            $counts = [];
-            foreach ($snapshots as $snapshot) {
-                foreach (($snapshot->movement_counts ?? []) as $status => $codes) {
-                    $status = mb_strtoupper(trim((string) $status));
-                    if (! in_array($status, ['MS', 'UWP'], true)) {
-                        continue;
-                    }
-                    foreach ($codes as $code => $quantity) {
-                        $code = strtoupper(trim((string) $code));
+        $counts = [];
+        foreach ($snapshots as $snapshot) {
+            foreach (($snapshot->movement_counts ?? []) as $status => $codes) {
+                $status = mb_strtoupper(trim((string) $status));
+                if (! in_array($status, ['MS', 'UWP'], true)) {
+                    continue;
+                }
+                foreach ($codes as $code => $quantity) {
+                    $code = strtoupper(trim((string) $code));
+                    if (in_array($code, self::CODES, true)) {
                         $counts[$snapshot->purok_number][$status][$code] =
                             ($counts[$snapshot->purok_number][$status][$code] ?? 0) + (int) $quantity;
                     }
                 }
             }
+        }
 
-            return $counts;
+        return $counts;
+    }
+
+    private function activeSessionSegmentMovements(?MonthlyMovementSession $session, Collection $purokDetails): array
+    {
+        if ($session === null || $session->status !== 'active') {
+            return [];
         }
 
         $counts = [];
-        foreach ($session?->movements ?? [] as $movement) {
+        foreach ($session->movements as $movement) {
+            $previous = $movement->previous_values ?? [];
+            $next = $movement->next_values ?? [];
+            [$status, $code] = $this->monthlyCodeParts(
+                (string) $movement->monthly_code,
+                mb_strtoupper(trim((string) $movement->status))
+            );
+            if ($movement->action === 'add') {
+                $this->incrementSegment($counts, $next['purok'] ?? null, $next['grupo'] ?? null, $next['status'] ?? $status, 'B', $purokDetails);
+            } elseif ($movement->action === 'subtract') {
+                $this->incrementSegment($counts, $previous['purok'] ?? null, $previous['grupo'] ?? null, $previous['status'] ?? $status, $code, $purokDetails);
+            } elseif ($movement->action === 'transfer') {
+                $this->incrementSegment($counts, $previous['purok'] ?? null, $previous['grupo'] ?? null, $previous['status'] ?? $status, 'C-', $purokDetails);
+                $this->incrementSegment($counts, $next['purok'] ?? null, $next['grupo'] ?? null, $next['status'] ?? $status, 'C+', $purokDetails);
+            } elseif ($movement->action === 'status') {
+                $oldStatus = mb_strtoupper(trim((string) ($previous['status'] ?? $movement->status)));
+                $newStatus = mb_strtoupper(trim((string) ($next['status'] ?? '')));
+                $this->incrementSegment($counts, $previous['purok'] ?? null, $previous['grupo'] ?? null, $oldStatus, $newStatus === 'MK' ? 'E' : 'G', $purokDetails);
+                if ($newStatus !== 'MK') {
+                    $this->incrementSegment($counts, $next['purok'] ?? null, $next['grupo'] ?? null, $newStatus, 'B', $purokDetails);
+                }
+            }
+        }
+
+        foreach ($session->activities()->whereNull('session_movement_id')->whereIn('action', ['add', 'reactivate', 'subtract'])->get() as $activity) {
+            [$status, $code] = $this->monthlyCodeParts((string) $activity->monthly_code);
+            $this->incrementSegment(
+                $counts,
+                $activity->purok,
+                $activity->grupo,
+                $status,
+                $activity->action === 'subtract' ? $code : 'B',
+                $purokDetails
+            );
+        }
+
+        return $counts;
+    }
+
+    private function completedSessionSegmentMovements(?MonthlyMovementSession $session, Collection $purokDetails): array
+    {
+        if ($session === null || $session->status === 'active') {
+            return [];
+        }
+
+        $history = DB::table('permanent_history')
+            ->where('session_id', $session->id)
+            ->orderBy('id')
+            ->get();
+        $pairedTransfers = $history->filter(fn ($row): bool => $row->action === 'transfer'
+            && preg_match('/C-\s*\/\s*(?:MS|UWP)\s*:\s*C\+/i', (string) $row->monthly_code) === 1)
+            ->keyBy('record_id');
+        $counts = [];
+        $seen = [];
+        foreach ($history as $row) {
+            $previous = json_decode((string) ($row->previous_values ?? ''), true) ?: [];
+            $next = json_decode((string) ($row->next_values ?? ''), true) ?: [];
+            [$status, $code] = $this->monthlyCodeParts(
+                (string) $row->monthly_code,
+                mb_strtoupper(trim((string) $row->status))
+            );
+            if (! in_array($status, ['MS', 'UWP'], true) || ! in_array($code, self::CODES, true)) {
+                continue;
+            }
+
+            if ($row->action === 'transfer' && isset($pairedTransfers[$row->record_id])) {
+                if ($pairedTransfers[$row->record_id]->id !== $row->id) {
+                    continue;
+                }
+                $this->incrementSegment($counts, $previous['purok'] ?? null, $previous['grupo'] ?? null, $status, 'C-', $purokDetails);
+                $this->incrementSegment($counts, $next['purok'] ?? null, $next['grupo'] ?? null, $status, 'C+', $purokDetails);
+
+                continue;
+            }
+
+            $isPreviousSide = in_array($code, ['C-', 'D', 'DD', 'E', 'G', 'H'], true);
+            $values = $isPreviousSide ? $previous : $next;
+            $purok = $values['purok'] ?? null;
+            $grupo = $values['grupo'] ?? null;
+            $key = implode('|', [(string) $row->record_id, $status, $code, (string) $purok, (string) $grupo]);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $this->incrementSegment($counts, $purok, $grupo, $status, $code, $purokDetails);
+        }
+
+        return $counts;
+    }
+
+    private function incrementSegment(
+        array &$counts,
+        mixed $purok,
+        mixed $grupo,
+        mixed $status,
+        string $code,
+        Collection $purokDetails
+    ): void {
+        $number = $this->purokNumber((string) $purok);
+        $status = mb_strtoupper(trim((string) $status));
+        if ($number < 1 || ! in_array($status, ['MS', 'UWP'], true) || ! in_array($code, self::CODES, true)) {
+            return;
+        }
+
+        $groupNumber = (int) preg_replace('/\D+/', '', (string) $grupo);
+        $segment = $purokDetails->first(function (Purok $candidate) use ($number, $groupNumber): bool {
+            if ((int) $candidate->purok_number !== $number) {
+                return false;
+            }
+            $start = $candidate->full_purok ? 1 : (int) $candidate->grupo_start;
+            $end = $candidate->full_purok ? PHP_INT_MAX : (int) $candidate->grupo_end;
+
+            return $groupNumber >= $start && $groupNumber <= $end;
+        });
+        $segmentId = $segment?->id !== null ? (string) $segment->id : 'fallback';
+        $counts[$number][$status][$code][$segmentId] =
+            ($counts[$number][$status][$code][$segmentId] ?? 0) + 1;
+    }
+
+    private function monthlyCodeParts(string $monthlyCode, string $fallbackStatus = ''): array
+    {
+        $part = trim(explode('/', trim($monthlyCode), 2)[0]);
+        $parts = explode(':', $part, 2);
+        if (count($parts) < 2) {
+            return [mb_strtoupper(trim($fallbackStatus)), mb_strtoupper(trim($part, " \t\n\r\0\x0B\"'"))];
+        }
+
+        $status = mb_strtoupper(trim($parts[0]));
+        if (! in_array($status, ['MS', 'UWP'], true)) {
+            $status = mb_strtoupper(trim($fallbackStatus));
+        }
+
+        return [$status, mb_strtoupper(trim($parts[1], " \t\n\r\0\x0B\"'"))];
+    }
+
+    private function movementCounts(Collection $snapshots, ?MonthlyMovementSession $session): array
+    {
+        $counts = [];
+        foreach ($snapshots as $snapshot) {
+            foreach (($snapshot->movement_counts ?? []) as $status => $codes) {
+                $status = mb_strtoupper(trim((string) $status));
+                if (! in_array($status, ['MS', 'UWP'], true)) {
+                    continue;
+                }
+                foreach ($codes as $code => $quantity) {
+                    $code = strtoupper(trim((string) $code));
+                    $counts[$snapshot->purok_number][$status][$code] =
+                        ($counts[$snapshot->purok_number][$status][$code] ?? 0) + (int) $quantity;
+                }
+            }
+        }
+
+        if ($session === null || $session->status !== 'active') {
+            return $counts;
+        }
+
+        foreach ($session->movements as $movement) {
             $previous = $movement->previous_values ?? [];
             $next = $movement->next_values ?? [];
             if ($movement->action === 'add') {
@@ -175,6 +372,20 @@ class MonthlyResumenReport
             }
         }
 
+        foreach ($session->activities()
+            ->whereNull('session_movement_id')
+            ->whereIn('action', ['add', 'reactivate', 'subtract'])
+            ->get() as $activity) {
+            [$status, $code] = array_pad(explode(':', (string) $activity->monthly_code, 2), 2, '');
+            $status = mb_strtoupper(trim($status));
+            $code = mb_strtoupper(trim($code));
+            if ($activity->action === 'subtract') {
+                $this->increment($counts, $activity->purok, $status, $code);
+            } else {
+                $this->increment($counts, $activity->purok, $status, 'B');
+            }
+        }
+
         return $counts;
     }
 
@@ -185,26 +396,11 @@ class MonthlyResumenReport
         Carbon $month
     ): array {
         if ($previousSnapshots->isNotEmpty()) {
-            $counts = [];
-            foreach ($previousSnapshots as $snapshot) {
-                $counts[$snapshot->purok_number]['MS'] = (int) $snapshot->ms_count;
-                $counts[$snapshot->purok_number]['UWP'] = (int) $snapshot->uwp_count;
-            }
-
-            return $counts;
+            return $this->snapshotBaselineCounts($previousSnapshots, false);
         }
 
         if ($monthSnapshots->isNotEmpty()) {
-            $counts = [];
-            foreach ($monthSnapshots as $snapshot) {
-                foreach (['MS' => 'ms_count', 'UWP' => 'uwp_count'] as $status => $column) {
-                    $movementCodes = ($snapshot->movement_counts ?? [])[$status] ?? [];
-                    $movementNet = $this->endingCount(array_merge(['A' => 0], $movementCodes));
-                    $counts[$snapshot->purok_number][$status] = (int) $snapshot->{$column} - $movementNet;
-                }
-            }
-
-            return $counts;
+            return $this->snapshotBaselineCounts($monthSnapshots, true);
         }
 
         if ($session === null && ! $month->isSameMonth(now())) {
@@ -242,6 +438,77 @@ class MonthlyResumenReport
         }
 
         return $counts;
+    }
+
+    private function completedSessionBaseline(
+        Collection $previousSnapshots,
+        Collection $monthSnapshots,
+        Carbon $month,
+        bool $includeCompletedSessionMovements
+    ): array {
+        if (! $includeCompletedSessionMovements) {
+            return $monthSnapshots->isNotEmpty()
+                ? $this->snapshotBaselineCounts($monthSnapshots, false)
+                : $this->baselineCounts($previousSnapshots, $monthSnapshots, null, $month);
+        }
+        if ($previousSnapshots->isNotEmpty()) {
+            return $this->snapshotBaselineCounts($previousSnapshots, false);
+        }
+
+        return $monthSnapshots->isNotEmpty()
+            ? $this->snapshotBaselineCounts($monthSnapshots, true)
+            : $this->baselineCounts($previousSnapshots, $monthSnapshots, null, $month);
+    }
+
+    private function snapshotBaselineCounts(Collection $snapshots, bool $subtractMovements): array
+    {
+        $counts = [];
+        foreach ($snapshots as $snapshot) {
+            $segmentId = $snapshot->purok_id === null ? null : (string) $snapshot->purok_id;
+            foreach (['MS' => 'ms_count', 'UWP' => 'uwp_count'] as $status => $column) {
+                $quantity = (int) $snapshot->{$column};
+                if ($subtractMovements) {
+                    $movementCodes = ($snapshot->movement_counts ?? [])[$status] ?? [];
+                    $quantity -= $this->endingCount(array_merge(['A' => 0], $movementCodes));
+                }
+                $counts[$snapshot->purok_number][$status] =
+                    ($counts[$snapshot->purok_number][$status] ?? 0) + $quantity;
+                if ($segmentId !== null) {
+                    $counts[$snapshot->purok_number][$status.'_segments'][$segmentId] =
+                        ($counts[$snapshot->purok_number][$status.'_segments'][$segmentId] ?? 0) + $quantity;
+                }
+            }
+        }
+
+        return $counts;
+    }
+
+    private function allocateBaselineCount(int $total, array $weights, array $segmentCounts): array
+    {
+        if ($segmentCounts === []) {
+            return $this->allocate($total, $weights);
+        }
+
+        $allocation = array_fill_keys(array_keys($weights), 0);
+        foreach ($segmentCounts as $segmentId => $quantity) {
+            if (array_key_exists($segmentId, $allocation)) {
+                $allocation[$segmentId] = (int) $quantity;
+            }
+        }
+        $assigned = array_sum($allocation);
+        if ($assigned >= $total) {
+            return $allocation;
+        }
+
+        $remainingWeights = array_diff_key($weights, $segmentCounts);
+        if ($remainingWeights === []) {
+            $remainingWeights = $weights;
+        }
+        foreach ($this->allocate($total - $assigned, $remainingWeights) as $segmentId => $quantity) {
+            $allocation[$segmentId] = ($allocation[$segmentId] ?? 0) + $quantity;
+        }
+
+        return $allocation;
     }
 
     private function increment(array &$counts, mixed $purok, mixed $status, string $code): void

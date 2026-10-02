@@ -128,6 +128,7 @@ class DatabaseSchemaTest extends TestCase
             'id',
             'month',
             'purok_number',
+            'purok_id',
             'ms_count',
             'uwp_count',
             'mk_count',

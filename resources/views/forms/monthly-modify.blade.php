@@ -243,6 +243,9 @@
         [...purok.options].forEach(option => {
             option.disabled = Boolean(option.value && selectedRecord?.purok_id && option.value === String(selectedRecord.purok_id));
         });
+        [...statusSelect.options].forEach(option => {
+            option.disabled = Boolean(option.value && (selectedRecord?.status || '').toUpperCase() === 'MK' && option.value !== 'MK');
+        });
         if (!hasMonthlySession) {
             rangeHelp.textContent = 'Start a monthly session before modifying records.';
         } else if (unavailable) {
@@ -357,10 +360,7 @@
         }
         if (!selectedRecord) return;
         const changeStatus = action.value === 'status';
-        const isMkDemotion = changeStatus && selectedRecord.status === 'MK' && statusSelect.value !== 'MK';
-        const confirmationText = isMkDemotion
-            ? `This member is MK, a higher class than MS and UWP. Are you sure you want to change this status to ${statusSelect.value}?`
-            : changeStatus
+        const confirmationText = changeStatus
                 ? `Are you sure? ${selectedRecord.name} will change from ${selectedRecord.status} to ${statusSelect.value}. The change will be saved to the database.`
                 : `Are you sure? ${selectedRecord.name} will transfer from ${selectedRecord.purok_name} / Grupo ${selectedRecord.grupo} to ${purok.selectedOptions[0].textContent.trim()} / Grupo ${grupo.value}. The change will be saved to the database.`;
         if (!await confirmModification(confirmationText)) return;
@@ -372,7 +372,6 @@
             formData.set('action', action.value);
             if (changeStatus) {
                 formData.set('status', statusSelect.value);
-                formData.set('confirmed_mk_demotion', isMkDemotion ? '1' : '0');
                 if (statusSelect.value === 'MK') {
                     formData.set('endorsement_reason', endorsementReasonInput.value.trim());
                 }

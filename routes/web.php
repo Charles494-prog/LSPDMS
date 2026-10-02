@@ -63,6 +63,7 @@ Route::middleware('login.session')->group(function () {
     Route::get('/messages/{message}/attachment', [MessageController::class, 'attachment'])->name('messages.attachment');
     Route::get('/dashboard', [DashboardController::class, 'index'])->middleware('permission:dashboard_allow')->name('dashboard');
     Route::get('/de-listment', [DelistmentController::class, 'index'])->middleware('permission:Delistment_allow')->name('de-listment');
+    Route::get('/de-listment/export/{category}', [DelistmentController::class, 'exportCategory'])->middleware('permission:Delistment_allow')->name('de-listment.export');
     Route::put('/de-listment/records/{record}/endorsement', [DelistmentController::class, 'endorse'])->middleware('permission:Delistment_allow')->name('de-listment.endorse');
     Route::put('/de-listment/records/{record}/delist', [DelistmentController::class, 'delist'])->middleware('permission:Delistment_allow')->name('de-listment.delist');
     Route::put('/de-listment/records/dates', [DelistmentController::class, 'updateDates'])->middleware('permission:Delistment_allow')->name('de-listment.update-dates');
@@ -117,13 +118,14 @@ Route::middleware('login.session')->group(function () {
             ->middleware('head.secretary')
             ->name('forms.monthly.session.finish');
         Route::delete('/forms/monthly/session/movements/{movement}', [DeliberationController::class, 'undoMovement'])->name('forms.monthly.session.undo');
+        Route::delete('/forms/monthly/session/activities/{activity}', [DeliberationController::class, 'undoActivity'])->name('forms.monthly.session.activity.undo');
         Route::get('/forms/notes', [FormGeneratorController::class, 'notes'])->name('forms.notes');
         Route::get('/forms/monthly/generators', [FormGeneratorController::class, 'monthlyGenerators'])->name('forms.monthly.generators');
         Route::get('/forms/monthly/r4-01', [FormGeneratorController::class, 'r401'])->name('forms.monthly.r4-01');
         Route::get('/forms/monthly/r4-01/snapshots', [FormGeneratorController::class, 'r401Snapshots'])->name('forms.monthly.r4-01.snapshots');
+        Route::get('/forms/monthly/r4-01/snapshots/{snapshot}/view', [FormGeneratorController::class, 'viewR401Snapshot'])->name('forms.monthly.r4-01.snapshots.view');
         Route::get('/forms/monthly/r4-01/snapshots/{snapshot}/download', [FormGeneratorController::class, 'downloadR401Snapshot'])->name('forms.monthly.r4-01.snapshots.download');
         Route::get('/forms/monthly/r4-01/download', [FormGeneratorController::class, 'downloadR401'])->name('forms.monthly.r4-01.download');
-        Route::get('/forms/monthly/r4-01/download/pdf', [FormGeneratorController::class, 'downloadR401Pdf'])->name('forms.monthly.r4-01.download.pdf');
         Route::get('/forms/monthly/resumen', [FormGeneratorController::class, 'resumen'])->name('forms.monthly.resumen');
         Route::get('/forms/monthly/resumen/download', [FormGeneratorController::class, 'downloadResumen'])->name('forms.monthly.resumen.download');
         Route::post('/forms/notes/records/{record}', [FormGeneratorController::class, 'appendNote'])->middleware('throttle:30,1')->name('forms.notes.append');
@@ -138,6 +140,8 @@ Route::middleware('login.session')->group(function () {
         })->name('forms.monthly');
     });
     Route::middleware('head.secretary')->group(function (): void {
+        Route::delete('/forms/monthly/r4-01/snapshots/{snapshot}', [FormGeneratorController::class, 'deleteR401Snapshot'])
+            ->name('forms.monthly.r4-01.snapshots.delete');
         Route::get('/superadmin-dashboard', [SuperadminController::class, 'index'])->name('superadmin-dashboard');
         Route::post('/superadmin/r4-02/hakbangs', [SuperadminController::class, 'storeR402Hakbang'])->name('superadmin.r4-02.hakbangs.store');
         Route::put('/superadmin/r4-02/hakbangs/{hakbang}', [SuperadminController::class, 'updateR402Hakbang'])->name('superadmin.r4-02.hakbangs.update');

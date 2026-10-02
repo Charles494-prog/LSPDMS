@@ -379,9 +379,8 @@ class SuperadminController extends Controller
 
     private function changedBy(Request $request): ?string
     {
-        return trim(implode(' ', array_filter([
-            (string) $request->session()->get('login_user.first_name', ''),
-            (string) $request->session()->get('login_user.last_name', ''),
-        ]))) ?: $request->session()->get('login_user.gmail');
+        $gmail = trim((string) $request->session()->get('login_user.gmail', ''));
+
+        return $gmail !== '' ? $gmail : null;
     }
 }

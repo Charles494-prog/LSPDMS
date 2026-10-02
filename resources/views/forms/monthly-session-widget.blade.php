@@ -18,6 +18,11 @@
     .monthly-session-list { display:grid; gap:.6rem; max-height:55vh; overflow:auto; }
     .monthly-session-movement { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.8rem; padding:.8rem; border:1px solid var(--border); border-radius:11px; background:var(--bg); }
     .monthly-session-movement small { display:block; margin-top:.2rem; color:var(--text-muted); line-height:1.4; }
+    .monthly-session-entries { display:grid; gap:.35rem; }
+    .monthly-session-entry { display:grid; gap:.08rem; padding:.35rem .5rem; border-left:3px solid var(--accent); border-radius:4px; background:var(--surface); }
+    .monthly-session-entry strong { color:var(--text); font-size:.9rem; }
+    .monthly-session-entry small { margin:0; font-weight:700; }
+    .monthly-session-personal { margin-top:.4rem!important; }
     .monthly-session-dialog .monthly-undo { background:#b42318; }
     .monthly-session-empty { padding:1.5rem; color:var(--text-muted); text-align:center; }
     .monthly-session-footer { display:flex; justify-content:flex-end; gap:.55rem; margin-top:.8rem; padding-top:.8rem; border-top:1px solid var(--border); }
@@ -29,10 +34,24 @@
     .monthly-session-prompt h2 { margin:0 0 .65rem; font-size:1.2rem; }
     .monthly-session-prompt p { margin:0; color:var(--text-muted); line-height:1.55; white-space:pre-line; }
     .monthly-session-prompt input { width:100%; min-height:44px; margin-top:1rem; padding:.65rem .75rem; border:1px solid var(--border); border-radius:9px; background:var(--bg); color:var(--text); font:inherit; }
+    .monthly-session-prompt-hint { margin-top:.55rem!important; color:var(--text-muted)!important; font-size:.82rem; }
+    .monthly-session-prompt-error { margin-top:.35rem!important; color:#b42318!important; font-size:.82rem; font-weight:700; }
+    .monthly-session-prompt [hidden] { display:none; }
     .monthly-session-prompt-actions { display:flex; justify-content:flex-end; gap:.55rem; margin-top:1.25rem; }
     .monthly-session-prompt-actions button { min-height:40px; padding:.55rem .9rem; border:1px solid var(--border); border-radius:9px; background:var(--bg); color:var(--text); font:inherit; font-weight:700; cursor:pointer; }
     .monthly-session-prompt-actions button.primary { border-color:var(--accent); background:var(--accent); color:#fff; }
     .monthly-session-prompt-actions button.danger { border-color:#b42318; background:#b42318; color:#fff; }
+    .monthly-session-blocker { position:fixed; z-index:100000; inset:0; display:grid; place-items:center; padding:1rem; background:rgba(15,23,42,.76); color:#fff; text-align:center; }
+    .monthly-session-blocker[hidden] { display:none; }
+    .monthly-session-blocker-card { width:min(400px,100%); padding:2rem; border:1px solid rgba(255,255,255,.2); border-radius:20px; background:#172033; box-shadow:0 25px 80px rgba(0,0,0,.38); }
+    .monthly-session-spinner { width:52px; height:52px; margin:0 auto 1.25rem; border:5px solid rgba(255,255,255,.25); border-top-color:#fff; border-radius:50%; animation:monthly-session-spin .8s linear infinite; }
+    .monthly-session-success-check { display:grid; width:68px; height:68px; margin:0 auto 1.1rem; place-items:center; border:3px solid #74df9b; border-radius:50%; color:#74df9b; font-size:2.8rem; font-weight:800; line-height:1; animation:monthly-session-check .45s ease-out both; }
+    .monthly-session-blocker h2 { margin:0; font-size:1.55rem; }
+    .monthly-session-blocker p { margin:.55rem 0 0; color:#d6deeb; }
+    .monthly-session-blocker[data-state="success"] .monthly-session-spinner { display:none; }
+    .monthly-session-blocker[data-state="loading"] .monthly-session-success-check { display:none; }
+    @keyframes monthly-session-spin { to { transform:rotate(360deg); } }
+    @keyframes monthly-session-check { from { transform:scale(.3); opacity:0; } to { transform:scale(1); opacity:1; } }
     @media(max-width:520px) { .monthly-session-widget { top:4.5rem; right:.5rem; max-width:calc(100vw - 1rem); } .monthly-session-widget button { padding:.4rem .55rem; font-size:.78rem; } .monthly-session-movement { grid-template-columns:1fr; } .monthly-session-movement button { justify-self:end; } }
 </style>
 @php($currentMonthlySession = $monthlySession ?? null)
@@ -43,21 +62,21 @@
     <span class="monthly-session-minimized-label">Monthly Session</span>
     <button type="button" id="monthlySessionStart" @if ($currentMonthlySession) hidden @endif>Start session</button>
     <button type="button" id="monthlySessionOpen" @if (! $currentMonthlySession) hidden @endif>
-        Movements (<span id="monthlySessionCount">{{ $currentMonthlySession?->movements()->count() ?? 0 }}</span>)
+        Activity (<span id="monthlySessionCount">{{ $currentMonthlySession?->activities_count ?? 0 }}</span>)
     </button>
     <button type="button" class="monthly-session-widget-minimize" id="monthlySessionMinimize" aria-label="Minimize monthly session bubble" title="Minimize">−</button>
 </aside>
 <dialog class="monthly-session-dialog" id="monthlySessionDialog" aria-labelledby="monthlySessionDialogTitle">
     <header>
         <div>
-            <h2 id="monthlySessionDialogTitle">Monthly session movements</h2>
-            <p id="monthlySessionDialogInfo">Temporary changes can be undone here.</p>
+            <h2 id="monthlySessionDialogTitle">Monthly session activity</h2>
+            <p id="monthlySessionDialogInfo">Review each monthly code by Purok and Grupo.</p>
         </div>
         <button type="button" id="monthlySessionClose" aria-label="Close">Close</button>
     </header>
     <div class="monthly-session-dialog-content">
         <div class="monthly-session-list" id="monthlySessionMovements" aria-live="polite">
-            <div class="monthly-session-empty">Loading movements…</div>
+            <div class="monthly-session-empty">Loading monthly activity…</div>
         </div>
         <div class="monthly-session-footer">
             <button type="button" class="secondary" id="monthlySessionRefresh">Refresh</button>
@@ -74,13 +93,23 @@
     <div class="monthly-session-prompt-content">
         <h2 id="monthlySessionPromptTitle"></h2>
         <p id="monthlySessionPromptMessage"></p>
-        <input id="monthlySessionPromptInput" type="text" autocomplete="off" hidden>
+        <input id="monthlySessionPromptInput" type="text" autocomplete="off" aria-describedby="monthlySessionPromptHint monthlySessionPromptError" hidden>
+        <p class="monthly-session-prompt-hint" id="monthlySessionPromptHint" hidden></p>
+        <p class="monthly-session-prompt-error" id="monthlySessionPromptError" role="alert" hidden></p>
         <div class="monthly-session-prompt-actions">
             <button type="button" id="monthlySessionPromptCancel">Cancel</button>
             <button type="button" class="primary" id="monthlySessionPromptConfirm">Continue</button>
         </div>
     </div>
 </dialog>
+<div class="monthly-session-blocker" id="monthlySessionBlocker" data-state="loading" role="status" aria-live="assertive" aria-modal="true" hidden>
+    <div class="monthly-session-blocker-card">
+        <div class="monthly-session-spinner" aria-hidden="true"></div>
+        <div class="monthly-session-success-check" aria-hidden="true">✓</div>
+        <h2 id="monthlySessionBlockerTitle">Finishing monthly session…</h2>
+        <p id="monthlySessionBlockerMessage">Please wait. Do not close or leave this page.</p>
+    </div>
+</div>
 <script>
 (() => {
     const statusUrl = @json(route('forms.monthly.session.status'));
@@ -102,8 +131,44 @@
     const promptTitle = document.getElementById('monthlySessionPromptTitle');
     const promptMessage = document.getElementById('monthlySessionPromptMessage');
     const promptInput = document.getElementById('monthlySessionPromptInput');
+    const promptHint = document.getElementById('monthlySessionPromptHint');
+    const promptError = document.getElementById('monthlySessionPromptError');
     const promptCancel = document.getElementById('monthlySessionPromptCancel');
     const promptConfirm = document.getElementById('monthlySessionPromptConfirm');
+    const blocker = document.getElementById('monthlySessionBlocker');
+    const blockerTitle = document.getElementById('monthlySessionBlockerTitle');
+    const blockerMessage = document.getElementById('monthlySessionBlockerMessage');
+    let blockedElements = [];
+
+    const setBlocked = blocked => {
+        if (blocked) {
+            document.body.append(blocker);
+            blockedElements = [...document.body.children]
+                .filter(element => element !== blocker)
+                .map(element => ({ element, wasInert: element.inert }));
+            blockedElements.forEach(({ element }) => { element.inert = true; });
+            blocker.hidden = false;
+            document.body.style.overflow = 'hidden';
+            return;
+        }
+        blocker.hidden = true;
+        blockedElements.forEach(({ element, wasInert }) => { element.inert = wasInert; });
+        blockedElements = [];
+        document.body.style.overflow = '';
+    };
+    const showFinishing = () => {
+        blocker.dataset.state = 'loading';
+        blockerTitle.textContent = 'Finishing monthly session…';
+        blockerMessage.textContent = 'Please wait. Do not close or leave this page.';
+        setBlocked(true);
+    };
+    const showFinished = async periodLabel => {
+        blocker.dataset.state = 'success';
+        blockerTitle.textContent = `Monthly ${periodLabel}`;
+        blockerMessage.textContent = 'Session finalized successfully.';
+        await new Promise(resolve => window.setTimeout(resolve, 2200));
+        setBlocked(false);
+    };
 
     const ask = ({ title, message, confirmText = 'Continue', cancelText = 'Cancel', requiredText = null, kind = 'confirm' }) => new Promise(resolve => {
         promptTitle.textContent = title;
@@ -112,6 +177,10 @@
         promptInput.value = '';
         promptInput.placeholder = requiredText === null ? '' : `Type ${requiredText}`;
         promptInput.setAttribute('aria-label', requiredText === null ? '' : `Type ${requiredText}`);
+        promptHint.hidden = requiredText === null;
+        promptHint.textContent = requiredText === null ? '' : `Please type the following exactly. It is case-sensitive:\n${requiredText}`;
+        promptError.hidden = true;
+        promptError.textContent = '';
         promptConfirm.textContent = confirmText;
         promptConfirm.className = kind === 'danger' ? 'danger' : 'primary';
         promptCancel.textContent = cancelText;
@@ -125,7 +194,12 @@
             promptInput.removeEventListener('input', updateConfirm);
         };
         const updateConfirm = () => {
-            promptConfirm.disabled = requiredText !== null && promptInput.value !== requiredText;
+            const matches = requiredText === null || promptInput.value === requiredText;
+            promptConfirm.disabled = !matches;
+            promptError.hidden = matches || promptInput.value.length === 0;
+            promptError.textContent = matches || promptInput.value.length === 0
+                ? ''
+                : 'Please match the entire sentence exactly, including capitalization.';
         };
         const onConfirm = () => {
             if (requiredText !== null && promptInput.value !== requiredText) return;
@@ -186,43 +260,56 @@
         if (!rows.length) {
             const empty = document.createElement('div');
             empty.className = 'monthly-session-empty';
-            empty.textContent = 'No movements recorded yet.';
+            empty.textContent = 'No monthly activity recorded yet.';
             movements.append(empty);
             return;
         }
-        rows.forEach(movement => {
+        rows.forEach(activity => {
             const item = document.createElement('article');
             item.className = 'monthly-session-movement';
             const details = document.createElement('div');
-            const member = document.createElement('strong');
-            member.textContent = movement.name || 'Unnamed record';
-            const movementInfo = document.createElement('small');
-            movementInfo.textContent = `${movement.action} · ${movement.destination_description || ''} · ${movement.monthly_code || 'No code'}`;
-            const personal = document.createElement('small');
-            personal.textContent = `${movement.registry || 'No registry'} · ${movement.gender || 'Gender not set'} · ${movement.kapisanan || 'Kapisanan not set'} · ${movement.changed_by || 'Unknown'} · ${movement.changed_at || ''}${movement.description ? ` · ${movement.description}` : ''}`;
-            details.append(member, movementInfo, personal);
-            const undo = document.createElement('button');
-            undo.type = 'button';
-            undo.className = 'monthly-undo';
-            undo.textContent = 'Undo';
-            undo.addEventListener('click', async () => {
-                const confirmed = await ask({
-                    title: 'Undo monthly movement?',
-                    message: `Undo ${movement.action.toLowerCase()} for ${movement.name}? This restores the member and deletes this temporary log entry.`,
-                    confirmText: 'Undo movement',
-                    kind: 'danger',
-                });
-                if (!confirmed) return;
-                undo.disabled = true;
-                try {
-                    await send(movement.undo_url, 'DELETE');
-                    await refresh();
-                } catch (error) {
-                    await notify('Could not undo movement', error.message, 'danger');
-                    undo.disabled = false;
-                }
+            const entries = document.createElement('div');
+            entries.className = 'monthly-session-entries';
+            (activity.entries || []).forEach(entry => {
+                const row = document.createElement('div');
+                row.className = 'monthly-session-entry';
+                const member = document.createElement('strong');
+                member.textContent = `${entry.name || activity.name || 'Unnamed record'} · ${entry.location || 'Location not set'}`;
+                const code = document.createElement('small');
+                code.textContent = `${entry.monthly_code || 'No code'}${entry.direction ? ` (${entry.direction})` : ''}`;
+                row.append(member, code);
+                entries.append(row);
             });
-            item.append(details, undo);
+            const personal = document.createElement('small');
+            personal.className = 'monthly-session-personal';
+            personal.textContent = `${activity.registry || 'No registry'} · ${activity.gender || 'Gender not set'} · ${activity.kapisanan || 'Kapisanan not set'} · ${activity.changed_by || 'Unknown'} · ${activity.changed_at || ''}${activity.description ? ` · ${activity.description}` : ''}`;
+            details.append(entries, personal);
+            if (activity.undo_url) {
+                const undo = document.createElement('button');
+                undo.type = 'button';
+                undo.className = 'monthly-undo';
+                undo.textContent = `Undo ${activity.action}`;
+                undo.addEventListener('click', async () => {
+                    const confirmed = await ask({
+                        title: `Undo monthly ${activity.action.toLowerCase()}?`,
+                        message: `Undo ${activity.action.toLowerCase()} for ${activity.name}? This restores the prior monthly record state${(activity.entries || []).length > 1 ? ' and removes both paired activity entries' : ''}.`,
+                        confirmText: `Undo ${activity.action}`,
+                        kind: 'danger',
+                    });
+                    if (!confirmed) return;
+                    undo.disabled = true;
+                    try {
+                        await send(activity.undo_url, 'DELETE');
+                        await refresh();
+                    } catch (error) {
+                        await notify(`Could not undo ${activity.action.toLowerCase()}`, error.message, 'danger');
+                        undo.disabled = false;
+                    }
+                });
+                item.append(details, undo);
+            } else {
+                item.append(details);
+            }
             movements.append(item);
         });
     };
@@ -238,8 +325,8 @@
             showAvailability(result.start_availability);
             return;
         }
-        status.textContent = `Active · ${session.period_month} · ${session.movement_count} movements`;
-        count.textContent = session.movement_count;
+        status.textContent = `Active · ${session.period_month} · ${session.activity_count} activities`;
+        count.textContent = session.activity_count;
         start.hidden = true;
         open.hidden = false;
         finish.disabled = !canFinish;
@@ -252,7 +339,7 @@
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || 'Could not load monthly session.');
         update(result);
-        if (dialog.open) renderMovements(result.movements || []);
+        if (dialog.open) renderMovements(result.activities || []);
     }
 
     document.getElementById('monthlySessionClose').addEventListener('click', () => dialog.close());
@@ -273,21 +360,29 @@
         }
         const confirmation = await ask({
             title: 'Confirm monthly session finish',
-            message: 'Type the exact phrase below to permanently finish this monthly session.',
+            message: 'To permanently finish this monthly session, type the exact phrase shown below.',
             confirmText: 'Finish session',
             requiredText: 'FINISH MONTHLY SESSION',
             kind: 'danger',
         });
         if (!confirmation) return;
         finish.disabled = true;
+        showFinishing();
+        let result;
         try {
-            const result = await send(finishUrl);
-            dialog.close();
-            await notify('Monthly session finished', result.message);
-            await refresh();
+            result = await send(finishUrl);
         } catch (error) {
+            setBlocked(false);
             await notify('Could not finish monthly session', error.message, 'danger');
             finish.disabled = false;
+            return;
+        }
+        dialog.close();
+        await showFinished(result.period_label || 'session');
+        try {
+            await refresh();
+        } catch (error) {
+            await notify('Session finished, but the activity view could not refresh', error.message, 'danger');
         }
     });
     start.addEventListener('click', async () => {

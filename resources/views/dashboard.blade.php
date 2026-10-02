@@ -108,7 +108,7 @@
 
         <section class="panel span-12" aria-labelledby="ot-title">
             <div class="panel-row">
-                <div><h2 id="ot-title">Records over time</h2><p class="ot-help">Monthly total records by Purok, from the snapshot database. Select a point to view its movement codes.</p></div>
+                <div><h2 id="ot-title">Records over time</h2><p class="ot-help">Monthly MS, UWP, and MK snapshots. Select a point to view its movement codes.</p></div>
                 <ul class="legend" id="ot-legend"></ul>
             </div>
             <p class="ot-current" id="ot-current" role="status" aria-live="polite"></p>
@@ -757,13 +757,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const allIds = overtimePuroks.map(String);
     let idxs = [];
     let visiblePuroks = allIds;
-    const dataset = (id, index) => ({
-        label: `Purok ${id}`, data: [], borderColor: colorFor(`purok-${id}`, index), backgroundColor: colorFor(`purok-${id}`, index), borderWidth: 2.5, tension: .25,
+    const dataset = status => ({
+        label: status, data: [], borderColor: colorFor(status), backgroundColor: colorFor(status), borderWidth: 2.5, tension: .25,
         pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: '#fff', pointBorderWidth: 2,
     });
     const otChart = makeChart('ot-chart', {
         type: 'line',
-        data: { labels: [], datasets: [] },
+        data: { labels: [], datasets: historyStatuses.map(dataset) },
         options: {
             responsive: true, maintainAspectRatio: false,
             interaction: { mode: 'index', intersect: false },
@@ -808,24 +808,25 @@ document.addEventListener('DOMContentLoaded', () => {
         $('ot-current').textContent = `Now showing trend graph for ${isAllPuroks ? 'All Puroks' : selectedPuroks} · ${period}`;
         if (!otChart) return;
         const labels = idxs.map(m => MONTHS[m]);
+        const statusTotals = Object.fromEntries(historyStatuses.map(status => [
+            status,
+            idxs.map(monthIndex => ids.reduce(
+                (sum, id) => sum + (overtime[monthIndex]?.[id]?.[status] || 0),
+                0
+            )),
+        ]));
         otChart.stop();
         otChart.data.labels = labels;
-        otChart.data.datasets = ids.map((id, seriesIndex) => {
-            const line = dataset(id, seriesIndex);
-            line.data = idxs.map(monthIndex => historyStatuses.reduce(
-                (sum, status) => sum + (overtime[monthIndex]?.[id]?.[status] || 0),
-                0
-            ));
-            return line;
+        historyStatuses.forEach((status, index) => {
+            otChart.data.datasets[index].data = statusTotals[status];
         });
-        legend('ot-legend', ids.map((id, index) => [`Purok ${id}`, colorFor(`purok-${id}`, index)]));
+        legend('ot-legend', historyStatuses.map(status => [status, colorFor(status)]));
         otChart.options.scales.x.min = 0;
         otChart.options.scales.x.max = Math.max(0, labels.length - 1);
         otChart.update('none');
         otChart.canvas.setAttribute('aria-label',
-            `Records over time: ` + ids.map((id, seriesIndex) =>
-                `Purok ${id} ${labels.map((month, monthIndex) => `${month} ${otChart.data.datasets[seriesIndex].data[monthIndex]}`).join(', ')}`
-            ).join('; '));
+            `Records over time for ${ids.length === allIds.length ? 'all puroks' : 'Purok '+ids.join(', ')}: `
+            +idxs.map((monthIndex, index) => `${MONTHS[monthIndex]} ${historyStatuses.map(status => `${status} ${statusTotals[status][index]}`).join(', ')}`).join('; '));
     }
 
     const movementCodeModal = $('movement-code-modal');

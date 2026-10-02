@@ -227,6 +227,9 @@ class R401DocxExporter
                     $cellIndex === 2 ? 'left' : 'center'
                 );
             }
+            if (($row['code'] ?? 'A') !== 'A') {
+                $this->highlightMovementCode($document, $xpath, $tableRow);
+            }
         }
 
         $signatureRows = $xpath->query('./w:tr', $tables[3]);
@@ -312,6 +315,34 @@ class R401DocxExporter
         $repeat = $document->createElementNS(self::WORD_NAMESPACE, 'w:tblHeader');
         $repeat->setAttributeNS(self::WORD_NAMESPACE, 'w:val', 'true');
         $properties->appendChild($repeat);
+    }
+
+    private function highlightMovementCode(DOMDocument $document, DOMXPath $xpath, ?DOMNode $row): void
+    {
+        if (! $row) {
+            throw new RuntimeException('The editable R4-01 Word template is missing a movement code cell.');
+        }
+
+        $cell = $xpath->query('./w:tc', $row)?->item(1);
+        if (! $cell instanceof DOMElement) {
+            throw new RuntimeException('The editable R4-01 Word template is missing a movement code cell.');
+        }
+        foreach ($xpath->query('.//w:r', $cell) as $run) {
+            if (! $run instanceof DOMElement) {
+                continue;
+            }
+            $runProperties = $xpath->query('./w:rPr', $run)?->item(0);
+            if (! $runProperties instanceof DOMElement) {
+                $runProperties = $document->createElementNS(self::WORD_NAMESPACE, 'w:rPr');
+                $run->insertBefore($runProperties, $run->firstChild);
+            }
+            $fontColor = $xpath->query('./w:color', $runProperties)?->item(0);
+            if (! $fontColor instanceof DOMElement) {
+                $fontColor = $document->createElementNS(self::WORD_NAMESPACE, 'w:color');
+                $runProperties->appendChild($fontColor);
+            }
+            $fontColor->setAttributeNS(self::WORD_NAMESPACE, 'w:val', 'C62828');
+        }
     }
 
     private function setCell(

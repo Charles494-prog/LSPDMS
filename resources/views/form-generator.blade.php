@@ -217,6 +217,7 @@
         </div>
     </section>
 </div>
+@include('forms.monthly-session-widget')
 @endsection
 
 @push('scripts')

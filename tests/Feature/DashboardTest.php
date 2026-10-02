@@ -318,7 +318,7 @@ class DashboardTest extends TestCase
         $this->withSession(['login_user' => ['id' => 1]])
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('Monthly total records by Purok, from the snapshot database.', false)
+            ->assertSee('Monthly MS, UWP, and MK snapshots.', false)
             ->assertSee('id="ot-current"', false)
             ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
                 $this->assertSame('Jan 2025', $metrics['monthLabels'][0]);
@@ -364,7 +364,8 @@ class DashboardTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee('Nov 2025')
-            ->assertSee('ids.map((id, seriesIndex) =>', false)
+            ->assertSee('historyStatuses.map(dataset)', false)
+            ->assertSee('statusTotals[status]', false)
             ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
                 $this->assertSame('Nov 2025', $metrics['monthLabels'][10]);
                 $this->assertSame(25, $metrics['monthlyCounts'][10]['MS']);
@@ -377,6 +378,43 @@ class DashboardTest extends TestCase
                     'code' => 'B',
                     'count' => 2,
                 ], $metrics['movementDetails']);
+
+                return true;
+            });
+    }
+
+    public function test_records_over_time_sums_segment_snapshots_for_the_same_purok_number(): void
+    {
+        $purok2a = Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Purok 2A',
+            'grupo_start' => 1,
+            'grupo_end' => 6,
+        ]);
+        $purok2b = Purok::query()->create([
+            'purok_number' => 2,
+            'purok_name' => 'Purok 2B',
+            'grupo_start' => 7,
+            'grupo_end' => 11,
+        ]);
+        foreach ([[$purok2a, 4], [$purok2b, 5]] as [$purok, $count]) {
+            MonthlyRecordSnapshot::query()->create([
+                'month' => '2025-11-01',
+                'purok_number' => 2,
+                'purok_id' => $purok->id,
+                'ms_count' => $count,
+                'uwp_count' => 0,
+                'mk_count' => 0,
+                'movement_counts' => [],
+            ]);
+        }
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
+                $this->assertSame(9, $metrics['monthlyCounts'][10]['MS']);
+                $this->assertSame(9, $metrics['monthlyPurokCounts'][10]['2']['MS']);
 
                 return true;
             });

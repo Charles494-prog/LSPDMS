@@ -20,4 +20,5 @@
             @include('forms.partials.monthly-r4-01', ['embedded' => true])
         </section>
     </main>
+    @include('forms.monthly-session-widget')
 @endsection
