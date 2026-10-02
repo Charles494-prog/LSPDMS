@@ -8,6 +8,10 @@
     .monthly-modify-hero,.monthly-modify-form { padding:clamp(1rem,3vw,1.6rem); border:1px solid var(--border); border-radius:16px; background:var(--surface); }
     .monthly-modify-hero { margin-bottom:1rem; }
     .monthly-modify-hero a { color:var(--accent); font-size:.84rem; font-weight:700; text-decoration:none; }
+    .monthly-action-nav { display:flex; flex-wrap:wrap; gap:.45rem; margin:0 0 1rem; padding:.35rem; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+    .monthly-action-nav a { display:inline-flex; align-items:center; min-height:42px; padding:.6rem 1rem; border-radius:8px; background:var(--bg); color:var(--text-muted); font-weight:750; text-decoration:none; }
+    .monthly-action-nav a[aria-current="page"] { background:var(--accent); color:#fff; }
+    .monthly-back-button { display:inline-flex; align-items:center; min-height:40px; padding:.5rem .85rem; border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--accent); font-size:.85rem; font-weight:750; text-decoration:none; }
     .monthly-modify-hero h1 { margin:.6rem 0 .35rem; }
     .monthly-modify-hero p,.monthly-modify-help { color:var(--text-muted); line-height:1.5; }
     .monthly-modify-search { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.6rem; }
@@ -26,14 +30,24 @@
     .monthly-modify-status { min-height:1.25rem; margin-top:.8rem; font-size:.85rem; }
     .monthly-modify-status.error { color:var(--danger); }
     .monthly-modify-status.success { color:#15803d; }
+    .monthly-session-required { margin:0 0 1rem; padding:.85rem 1rem; border:1px solid #f3c56a; border-radius:10px; background:color-mix(in srgb,#f59e0b 9%,var(--surface)); color:var(--text); font-size:.88rem; line-height:1.5; }
+    .monthly-session-required[hidden] { display:none; }
     @media(max-width:600px) { .monthly-modify-fields { grid-template-columns:1fr; } .monthly-modify-fields .wide { grid-column:auto; } }
 </style>
 <main class="monthly-modify">
     <section class="monthly-modify-hero">
-        <a href="{{ route('form-generator') }}">&lt; Form Generator</a>
+        <a class="monthly-back-button" href="{{ route('form-generator') }}">&larr; Back to Form Generator</a>
         <h1>Monthly Modify</h1>
         <p>Search for a member to change their status or transfer them to a different configured Purok. Inactive records can be found but cannot be changed.</p>
     </section>
+    <nav class="monthly-action-nav" aria-label="Monthly actions">
+        <a href="{{ route('forms.monthly.deliberation') }}#add">Add</a>
+        <a href="{{ route('forms.monthly.deliberation') }}#subtract">Subtract</a>
+        <a href="{{ route('forms.monthly.modify') }}" aria-current="page">Modify</a>
+    </nav>
+    <p class="monthly-session-required" id="monthlySessionRequired" @if ($monthlySession) hidden @endif>
+        Start the monthly session using the session control in the upper-right before modifying records. You can search records, but changes are locked until a session is active.
+    </p>
     <section class="monthly-modify-form">
         <label for="monthlyModifySearch"><strong>Find a member</strong></label>
         <div class="monthly-modify-search">
@@ -41,7 +55,7 @@
             <button id="monthlyModifySearchButton" type="button">Search</button>
         </div>
         <div class="monthly-modify-suggestions" id="monthlyModifySuggestions" role="listbox"></div>
-        <form id="monthlyModifyForm" hidden>
+        <form id="monthlyModifyForm" data-session-active="{{ $monthlySession ? 'true' : 'false' }}" hidden>
             @csrf
             <input type="hidden" name="record_id" id="monthlyModifyRecordId">
             <div class="monthly-modify-fields">
@@ -163,6 +177,8 @@
     const successDialog = document.getElementById('monthlyModifySuccessDialog');
     const successText = document.getElementById('monthlyModifySuccessText');
     const closeSuccessButton = document.getElementById('monthlyModifySuccessClose');
+    const monthlySessionRequired = document.getElementById('monthlySessionRequired');
+    let hasMonthlySession = form.dataset.sessionActive === 'true';
     let selectedRecord = null;
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || form.querySelector('[name="_token"]').value;
     const setMessage = (text, type = '') => {
@@ -203,7 +219,7 @@
         setMessage('');
     };
     const refreshAction = () => {
-        const unavailable = !selectedRecord
+        const unavailable = !hasMonthlySession || !selectedRecord
             || (selectedRecord.status || '').toUpperCase() === 'INACTIVE'
             || Boolean(selectedRecord.monthly_code)
             || !['MS', 'UWP', 'MK'].includes((selectedRecord.status || '').toUpperCase());
@@ -227,7 +243,9 @@
         [...purok.options].forEach(option => {
             option.disabled = Boolean(option.value && selectedRecord?.purok_id && option.value === String(selectedRecord.purok_id));
         });
-        if (unavailable) {
+        if (!hasMonthlySession) {
+            rangeHelp.textContent = 'Start a monthly session before modifying records.';
+        } else if (unavailable) {
             rangeHelp.textContent = selectedRecord?.monthly_code
                 ? `Blocked: this record already has monthly code "${selectedRecord.monthly_code}". Clear it in Inquire / Modify before proceeding.`
                 : (selectedRecord?.status || '').toUpperCase() === 'INACTIVE'
@@ -244,6 +262,11 @@
                 || (changingToMk && !endorsementReasonInput.value.trim())));
         save.textContent = changingStatus ? 'Review status change' : 'Review transfer';
     };
+    window.addEventListener('monthly-session-state', event => {
+        hasMonthlySession = Boolean(event.detail?.active);
+        monthlySessionRequired.hidden = hasMonthlySession;
+        refreshAction();
+    });
     const showRecord = record => {
         selectedRecord = record;
         document.getElementById('monthlyModifyRecordId').value = record.id;
@@ -328,6 +351,10 @@
     grupo.addEventListener('input', refreshAction);
     form.addEventListener('submit', async event => {
         event.preventDefault();
+        if (!hasMonthlySession) {
+            setMessage('Start a monthly session before modifying records.', 'error');
+            return;
+        }
         if (!selectedRecord) return;
         const changeStatus = action.value === 'status';
         const isMkDemotion = changeStatus && selectedRecord.status === 'MK' && statusSelect.value !== 'MK';
@@ -376,4 +403,5 @@
     successDialog.addEventListener('close', () => searchInput.focus());
 })();
 </script>
+@include('forms.monthly-session-widget')
 @endsection

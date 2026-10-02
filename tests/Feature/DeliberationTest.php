@@ -2,12 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Models\MonthlyMovementSession;
+use App\Models\MonthlySessionMovement;
 use App\Models\Purok;
 use App\Models\Record;
 use App\Models\User;
-use App\Models\MonthlyRecordCodeHistory;
-use App\Models\MonthlyRecordMovementHistory;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class DeliberationTest extends TestCase
@@ -29,6 +30,12 @@ class DeliberationTest extends TestCase
             ->assertOk()
             ->assertSee('Deliberation Form')
             ->assertSee('data-registry-character="12"', false)
+            ->assertSee('data-suggestions-url=', false)
+            ->assertSee('data-registry-check-url=', false)
+            ->assertSee('id="addSuggestions"', false)
+            ->assertSee('id="registryDuplicatePopup"', false)
+            ->assertDontSee('scheduleSuggestions(registryInputs)', false)
+            ->assertSee('registryInputs.classList.toggle(\'is-disabled\', rfid.checked || Boolean(selectedAddRecord))', false)
             ->assertSee('This member has RFID instead of a registry number')
             ->assertSee('Select Grupo')
             ->assertSee('>Central (1-3)</option>', false)
@@ -36,12 +43,143 @@ class DeliberationTest extends TestCase
             ->assertSee('id="delib-description"', false)
             ->assertDontSee('<option value="E">E</option>', false)
             ->assertSee('new Map(result.records.map(record => [record.id, record]))', false)
-            ->assertSee('activeSubtractSearch?.abort()', false);
+            ->assertSee('activeSubtractSearch?.abort()', false)
+            ->assertSee('id="monthlySessionPrompt"', false)
+            ->assertDontSee('window.confirm(', false)
+            ->assertDontSee('window.prompt(', false)
+            ->assertDontSee('window.alert(', false)
+            ->assertSee('>Add</button>', false)
+            ->assertSee('>Subtract</button>', false)
+            ->assertSee('>Modify</a>', false);
 
         $unauthorized = $this->makeSecretary(['form_generator_allow' => false]);
         $this->withSession(['login_user' => ['id' => $unauthorized->id]])
             ->get(route('forms.monthly.deliberation'))
             ->assertForbidden();
+    }
+
+    public function test_monthly_changes_require_an_explicitly_started_session(): void
+    {
+        $user = User::query()->create([
+            'gmail' => 'session.required@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+            'form_generator_allow' => true,
+        ]);
+        $this->makePurok();
+        $session = ['login_user' => ['id' => $user->id]];
+        $record = Record::query()->create([
+            'full_name' => 'Session Required Member',
+            'status' => 'MS',
+            'purok' => '1',
+            'grupo' => '1',
+        ]);
+
+        $this->withSession($session)
+            ->get(route('forms.monthly.deliberation'))
+            ->assertOk()
+            ->assertSee('data-session-active="false"', false)
+            ->assertSee('Start the monthly session using the session control', false)
+            ->assertSee('id="delibSubmit" type="submit" disabled', false)
+            ->assertSee('type="submit" class="delib-submit" id="subtractSubmit" disabled', false);
+        $this->withSession($session)
+            ->get(route('forms.monthly.modify'))
+            ->assertOk()
+            ->assertSee('data-session-active="false"', false)
+            ->assertSee('Start the monthly session using the session control', false);
+
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.deliberation.store'), $this->validPayload())
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('session');
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.deliberation.subtract'), [
+                'record_id' => $record->id,
+                'code' => 'D',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('session');
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.modify.save'), [
+                'record_id' => $record->id,
+                'action' => 'status',
+                'status' => 'UWP',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('session');
+        $this->assertDatabaseHas('records', ['id' => $record->id, 'status' => 'MS']);
+        $this->assertDatabaseCount('monthly_session_movements', 0);
+        $this->assertDatabaseCount('records', 1);
+
+        Carbon::setTestNow(Carbon::parse('2026-10-20 10:00:00', 'Asia/Manila'));
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.session.start'))
+            ->assertOk()
+            ->assertJsonPath('session.movement_count', 0)
+            ->assertJsonPath('session.period_month', 'November 2026');
+        $this->withSession($session)
+            ->get(route('forms.monthly.deliberation'))
+            ->assertOk()
+            ->assertSee('data-session-active="true"', false)
+            ->assertDontSee('id="delibSubmit" type="submit" disabled', false)
+            ->assertDontSee('id="subtractSubmit" disabled', false);
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.deliberation.store'), $this->validPayload())
+            ->assertCreated();
+        $this->assertDatabaseCount('monthly_session_movements', 1);
+        Carbon::setTestNow();
+    }
+
+    public function test_monthly_session_is_available_once_per_period_and_changes_period_after_midmonth(): void
+    {
+        $user = User::query()->create([
+            'gmail' => 'period.session@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+            'form_generator_allow' => true,
+        ]);
+        $session = ['login_user' => ['id' => $user->id]];
+        $headSession = ['login_user' => ['id' => User::query()->create([
+            'gmail' => 'period.head@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ])->id, 'tungkulin' => 'Head Secretary']];
+
+        Carbon::setTestNow(Carbon::parse('2026-10-14 12:00:00', 'Asia/Manila'));
+        $this->withSession($session)
+            ->getJson(route('forms.monthly.session.status'))
+            ->assertOk()
+            ->assertJsonPath('start_availability.allowed', true)
+            ->assertJsonPath('start_availability.target_month', 'October 2026');
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.session.start'))
+            ->assertOk()
+            ->assertJsonPath('session.period_month', 'October 2026');
+        $this->withSession($session)->postJson(route('forms.monthly.session.finish'))->assertForbidden();
+        $this->withSession($headSession)->postJson(route('forms.monthly.session.finish'))->assertOk();
+
+        Carbon::setTestNow(Carbon::parse('2026-10-15 12:00:00', 'Asia/Manila'));
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.session.start'))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('session');
+
+        Carbon::setTestNow(Carbon::parse('2026-11-15 12:00:00', 'Asia/Manila'));
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.session.start'))
+            ->assertOk()
+            ->assertJsonPath('session.period_month', 'December 2026');
+        $this->withSession($headSession)
+            ->postJson(route('forms.monthly.session.finish'))
+            ->assertOk();
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.session.start'))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('session');
+        Carbon::setTestNow();
     }
 
     public function test_monthly_modify_can_change_status_only_and_requires_mk_demotion_confirmation(): void
@@ -97,15 +235,15 @@ class DeliberationTest extends TestCase
             'grupo' => null,
             'monthly_code' => 'MS: B',
         ]);
-        $this->assertDatabaseHas('monthly_record_movement_histories', [
+        $this->assertDatabaseHas('monthly_session_movements', [
             'record_id' => $member->id,
             'full_name' => 'MK Status Member',
+            'action' => 'status',
             'status' => 'MK',
             'monthly_code' => 'MK: G',
-            'destination_status' => 'MS',
-            'previous_purok' => null,
-            'previous_grupo' => null,
+            'destination_description' => 'MK -> MS',
         ]);
+        $this->assertDatabaseCount('monthly_record_movement_histories', 0);
     }
 
     public function test_monthly_modify_status_change_records_previous_code_and_sets_new_status_code(): void
@@ -132,7 +270,7 @@ class DeliberationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('record.status', 'UWP')
             ->assertJsonPath('record.monthly_code', 'UWP: B')
-            ->assertJsonPath('message', 'Status updated. Current monthly code: UWP: B; previous status movement is recorded in history.');
+            ->assertJsonPath('message', 'Status updated. Current monthly code: UWP: B; movement is in the active session.');
 
         $this->assertDatabaseHas('records', [
             'id' => $member->id,
@@ -142,7 +280,7 @@ class DeliberationTest extends TestCase
             'status' => 'UWP',
             'monthly_code' => 'UWP: B',
         ]);
-        $this->assertDatabaseHas('monthly_record_movement_histories', [
+        $this->assertDatabaseHas('monthly_session_movements', [
             'record_id' => $member->id,
             'full_name' => 'Juan Dela Cruz',
             'registry' => 'JUAN123456789',
@@ -151,48 +289,15 @@ class DeliberationTest extends TestCase
             'evangelist' => 'Juan Evangelist',
             'previous_purok' => '1',
             'previous_grupo' => '1',
+            'action' => 'status',
             'status' => 'MS',
             'monthly_code' => 'MS: G',
-            'destination_status' => 'UWP',
+            'destination_description' => 'MS -> UWP',
         ]);
-        $history = MonthlyRecordMovementHistory::query()->where('record_id', $member->id)->firstOrFail();
+        $history = MonthlySessionMovement::query()->where('record_id', $member->id)->firstOrFail();
         $this->assertSame('2001-02-03', $history->date_of_baptism?->format('Y-m-d'));
-        $deliberatedAt = now()->timezone('Asia/Manila')->toDateString();
-        $this->assertDatabaseHas('monthly_record_code_histories', [
-            'record_id' => $member->id,
-            'full_name' => 'Juan Dela Cruz',
-            'registry' => 'JUAN123456789',
-            'gender' => 'M',
-            'kapisanan' => 'K',
-            'evangelist' => 'Juan Evangelist',
-            'purok' => '1',
-            'grupo' => '1',
-            'status' => 'MS',
-            'monthly_code' => 'MS: G',
-        ]);
-        $this->assertDatabaseHas('monthly_record_code_histories', [
-            'record_id' => $member->id,
-            'full_name' => 'Juan Dela Cruz',
-            'registry' => 'JUAN123456789',
-            'gender' => 'M',
-            'kapisanan' => 'K',
-            'evangelist' => 'Juan Evangelist',
-            'purok' => '1',
-            'grupo' => '1',
-            'status' => 'UWP',
-            'monthly_code' => 'UWP: B',
-        ]);
-        $codeHistory = \App\Models\MonthlyRecordCodeHistory::query()
-            ->where('record_id', $member->id)
-            ->orderBy('id')
-            ->get();
-        $this->assertSame(['MS: G', 'UWP: B'], $codeHistory->pluck('monthly_code')->all());
-        $this->assertSame(['2001-02-03', '2001-02-03'], $codeHistory->map(
-            fn ($entry): ?string => $entry->date_of_baptism?->format('Y-m-d')
-        )->all());
-        $this->assertSame([$deliberatedAt, $deliberatedAt], $codeHistory->map(
-            fn ($entry): string => $entry->deliberated_at->format('Y-m-d')
-        )->all());
+        $this->assertDatabaseCount('monthly_record_code_histories', 0);
+        $this->assertDatabaseCount('permanent_history', 0);
     }
 
     public function test_monthly_modify_to_mk_stores_previous_e_code_and_leaves_record_monthly_code_empty(): void
@@ -215,7 +320,7 @@ class DeliberationTest extends TestCase
             ->assertOk()
             ->assertJsonPath('record.status', 'MK')
             ->assertJsonPath('record.monthly_code', null)
-            ->assertJsonPath('message', 'Status updated to MK. Previous status movement is recorded in history.');
+            ->assertJsonPath('message', 'Status updated to MK. Movement is in the active session.');
 
         $this->assertDatabaseHas('records', [
             'id' => $member->id,
@@ -227,20 +332,16 @@ class DeliberationTest extends TestCase
             now()->timezone('Asia/Manila')->format('d-m-Y').': (Reviewed for R2-10.)',
             $member->fresh()->reason_of_r2_10_endorsement
         );
-        $this->assertDatabaseHas('monthly_record_movement_histories', [
+        $this->assertDatabaseHas('monthly_session_movements', [
             'record_id' => $member->id,
+            'action' => 'status',
             'status' => 'UWP',
             'previous_purok' => '2',
             'previous_grupo' => '4',
             'monthly_code' => 'UWP: E',
-            'destination_status' => 'MK',
+            'destination_description' => 'UWP -> MK',
         ]);
-        $this->assertDatabaseHas('monthly_record_code_histories', [
-            'record_id' => $member->id,
-            'status' => 'UWP',
-            'monthly_code' => 'UWP: E',
-        ]);
-        $this->assertDatabaseCount('monthly_record_code_histories', 1);
+        $this->assertDatabaseCount('monthly_record_code_histories', 0);
     }
 
     public function test_monthly_modify_only_accepts_active_records_without_monthly_code_and_disallows_grupo_only_moves(): void
@@ -356,6 +457,9 @@ class DeliberationTest extends TestCase
             ->get(route('forms.monthly.modify'))
             ->assertOk()
             ->assertSee('Monthly Modify')
+            ->assertSee(route('forms.monthly.deliberation').'#add', false)
+            ->assertSee(route('forms.monthly.deliberation').'#subtract', false)
+            ->assertSee('aria-current="page">Modify</a>', false)
             ->assertSee('Purok 2a')
             ->assertSee('Purok 2b')
             ->assertSee('Purok Uno (1-24)')
@@ -444,7 +548,6 @@ class DeliberationTest extends TestCase
             'grupo' => '1',
             'status' => 'MS',
         ]);
-
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->postJson(route('forms.monthly.modify.save'), [
                 'record_id' => $member->id,
@@ -591,57 +694,24 @@ class DeliberationTest extends TestCase
             'monthly_code' => 'MS: C+',
             'log_section' => '01/01/2025: Existing entry, '.$today.': Monthly modify: Purok 1 Grupo 4 to Purok 2b Grupo 8 (MS: C- / MS: C+): Approved transfer,',
         ]);
-        $this->assertDatabaseHas('monthly_record_movement_histories', [
+        $this->assertDatabaseHas('monthly_session_movements', [
             'record_id' => $member->id,
             'full_name' => 'Monthly Transfer Member',
             'registry' => 'TRANSFER12345',
             'previous_purok' => '1',
             'previous_grupo' => '4',
+            'action' => 'transfer',
             'status' => 'MS',
-            'monthly_code' => 'MS: C-',
-            'destination_status' => 'MS',
+            'monthly_code' => 'MS: C- / MS: C+',
+            'destination_description' => '1-4 -> 2-8',
             'gender' => 'F',
             'kapisanan' => 'B',
             'evangelist' => 'Maria Evangelist',
         ]);
-        $history = MonthlyRecordMovementHistory::query()->where('record_id', $member->id)->firstOrFail();
+        $history = MonthlySessionMovement::query()->where('record_id', $member->id)->firstOrFail();
         $this->assertSame('1998-07-09', $history->date_of_baptism?->format('Y-m-d'));
-        $this->assertDatabaseHas('monthly_record_code_histories', [
-            'record_id' => $member->id,
-            'full_name' => 'Monthly Transfer Member',
-            'registry' => 'TRANSFER12345',
-            'gender' => 'F',
-            'kapisanan' => 'B',
-            'evangelist' => 'Maria Evangelist',
-            'purok' => '1',
-            'grupo' => '4',
-            'status' => 'MS',
-            'monthly_code' => 'MS: C-',
-        ]);
-        $this->assertDatabaseHas('monthly_record_code_histories', [
-            'record_id' => $member->id,
-            'full_name' => 'Monthly Transfer Member',
-            'registry' => 'TRANSFER12345',
-            'gender' => 'F',
-            'kapisanan' => 'B',
-            'evangelist' => 'Maria Evangelist',
-            'purok' => '2',
-            'grupo' => '8',
-            'status' => 'MS',
-            'monthly_code' => 'MS: C+',
-        ]);
-        $codeHistory = \App\Models\MonthlyRecordCodeHistory::query()
-            ->where('record_id', $member->id)
-            ->orderBy('id')
-            ->get();
-        $this->assertSame(['MS: C-', 'MS: C+'], $codeHistory->pluck('monthly_code')->all());
-        $this->assertSame(['1998-07-09', '1998-07-09'], $codeHistory->map(
-            fn ($entry): ?string => $entry->date_of_baptism?->format('Y-m-d')
-        )->all());
-        $this->assertSame([
-            now()->timezone('Asia/Manila')->toDateString(),
-            now()->timezone('Asia/Manila')->toDateString(),
-        ], $codeHistory->map(fn ($entry): string => $entry->deliberated_at->format('Y-m-d'))->all());
+        $this->assertDatabaseCount('monthly_record_code_histories', 0);
+        $this->assertDatabaseCount('permanent_history', 0);
     }
 
     public function test_registry_must_be_exactly_thirteen_characters_unless_rfid_is_selected(): void
@@ -815,7 +885,66 @@ class DeliberationTest extends TestCase
         ]);
     }
 
-    public function test_inactive_matching_record_can_be_found_but_not_reused_or_changed(): void
+    public function test_add_suggestions_find_partial_and_similarly_spelled_names_only(): void
+    {
+        $user = $this->makeSecretary();
+        $inactive = Record::query()->create([
+            'full_name' => 'Eniron Mercado',
+            'registry' => 'ABCD123456789',
+            'status' => 'INACTIVE',
+        ]);
+        Record::query()->create([
+            'full_name' => 'Eneron Member',
+            'registry' => 'ZXCV987654321',
+            'status' => 'UWP',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->getJson(route('forms.monthly.deliberation.suggestions', ['q' => 'eni']))
+            ->assertOk()
+            ->assertJsonPath('records.0.id', $inactive->id)
+            ->assertJsonPath('records.0.full_name', 'Eniron Mercado')
+            ->assertJsonPath('records.0.status', 'INACTIVE')
+            ->assertJsonPath('records.1.full_name', 'Eneron Member')
+            ->assertJsonCount(2, 'records');
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->getJson(route('forms.monthly.deliberation.suggestions', ['q' => '1234']))
+            ->assertOk()
+            ->assertJsonCount(0, 'records');
+    }
+
+    public function test_registry_checker_reports_exact_duplicates_but_ignores_rfid(): void
+    {
+        $user = $this->makeSecretary();
+        $existing = Record::query()->create([
+            'full_name' => 'Existing Registry Member',
+            'registry' => 'ABCD123456789',
+            'status' => 'UWP',
+        ]);
+        Record::query()->create([
+            'full_name' => 'RFID Member',
+            'registry' => 'RFID',
+            'status' => 'INACTIVE',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('forms.monthly.deliberation.registry-check'), [
+                'registry' => 'abcd123456789',
+                'is_rfid' => false,
+            ])
+            ->assertOk()
+            ->assertJsonPath('duplicates.0.id', $existing->id)
+            ->assertJsonCount(1, 'duplicates');
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('forms.monthly.deliberation.registry-check'), [
+                'registry' => 'ABCD123456789',
+                'is_rfid' => true,
+            ])
+            ->assertOk()
+            ->assertJsonCount(0, 'duplicates');
+    }
+
+    public function test_inactive_matching_record_can_be_reactivated_without_creating_a_duplicate(): void
     {
         $user = $this->makeSecretary();
         $this->makePurok();
@@ -829,8 +958,13 @@ class DeliberationTest extends TestCase
             'kapisanan' => 'K',
             'date_of_baptism' => '2000-01-01',
             'evangelist' => 'Original Evangelist',
+            'date_of_birth' => '1980-05-06',
+            'is_married' => false,
         ]);
 
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->postJson(route('forms.monthly.session.start'))
+            ->assertOk();
         $this->withSession(['login_user' => ['id' => $user->id]])
             ->postJson(route('forms.monthly.deliberation.store'), $this->validPayload([
                 'full_name' => 'Inactive Member',
@@ -838,18 +972,39 @@ class DeliberationTest extends TestCase
                 'status' => 'UWP',
                 'reuse_record_id' => $existing->id,
             ]))
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors('reuse_record_id');
+            ->assertOk()
+            ->assertJsonPath('reused', true)
+            ->assertJsonPath('record.status', 'UWP');
 
         $this->assertDatabaseHas('records', [
             'id' => $existing->id,
-            'status' => 'INACTIVE',
-            'monthly_code' => null,
+            'status' => 'UWP',
+            'monthly_code' => 'UWP: B',
             'gender' => 'L',
             'purok' => '9',
             'grupo' => '7',
             'kapisanan' => 'K',
             'evangelist' => 'Original Evangelist',
+            'date_of_birth' => '1980-05-06 00:00:00',
+            'date_of_baptism' => '2000-01-01 00:00:00',
+        ]);
+        $this->assertDatabaseHas('monthly_session_movements', [
+            'record_id' => $existing->id,
+            'action' => 'reactivate',
+            'monthly_code' => 'UWP: B',
+        ]);
+        $this->assertDatabaseCount('records', 1);
+
+        $movement = MonthlySessionMovement::query()->where('record_id', $existing->id)->firstOrFail();
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->deleteJson(route('forms.monthly.session.undo', $movement))
+            ->assertOk();
+        $this->assertDatabaseHas('records', [
+            'id' => $existing->id,
+            'status' => 'INACTIVE',
+            'monthly_code' => null,
+            'date_of_entry' => null,
+            'log_section' => null,
         ]);
     }
 
@@ -938,7 +1093,7 @@ class DeliberationTest extends TestCase
                 'is_married' => 'yes',
             ]))
             ->assertUnprocessable()
-                ->assertJsonValidationErrors('is_married');
+            ->assertJsonValidationErrors('is_married');
     }
 
     public function test_monthly_add_marks_buklod_as_married_even_without_birthday(): void
@@ -947,18 +1102,18 @@ class DeliberationTest extends TestCase
         $this->makePurok();
 
         $this->withSession(['login_user' => ['id' => $user->id]])
-                ->postJson(route('forms.monthly.deliberation.store'), $this->validPayload([
-                    'full_name' => 'Buklod Marriage Member',
-                    'date_of_birth' => null,
-                    'is_married' => 0,
-                    'kapisanan' => 'Buklod',
-                ]))
-                ->assertCreated();
+            ->postJson(route('forms.monthly.deliberation.store'), $this->validPayload([
+                'full_name' => 'Buklod Marriage Member',
+                'date_of_birth' => null,
+                'is_married' => 0,
+                'kapisanan' => 'Buklod',
+            ]))
+            ->assertCreated();
 
         $this->assertDatabaseHas('records', [
-                'full_name' => 'Buklod Marriage Member',
-                'kapisanan' => 'B',
-                'is_married' => 1,
+            'full_name' => 'Buklod Marriage Member',
+            'kapisanan' => 'B',
+            'is_married' => 1,
         ]);
     }
 
@@ -1140,6 +1295,210 @@ class DeliberationTest extends TestCase
         $this->assertDatabaseHas('records', ['id' => $mk->id, 'status' => 'MK']);
     }
 
+    public function test_add_and_subtract_movements_can_be_undone_and_are_removed_from_temporary_log(): void
+    {
+        $user = $this->makeSecretary();
+        $purok = $this->makePurok();
+        $session = ['login_user' => ['id' => $user->id]];
+
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.deliberation.store'), $this->validPayload())
+            ->assertCreated();
+        $added = Record::query()->where('full_name', 'New Member')->firstOrFail();
+        $addMovement = MonthlySessionMovement::query()->where('record_id', $added->id)->firstOrFail();
+        $this->assertSame('add', $addMovement->action);
+
+        $this->withSession($session)
+            ->deleteJson(route('forms.monthly.session.undo', $addMovement))
+            ->assertOk()
+            ->assertJsonPath('message', 'Movement undone and removed from the temporary session log.');
+        $this->assertDatabaseHas('records', [
+            'id' => $added->id,
+            'status' => 'INACTIVE',
+            'date_of_entry' => null,
+            'monthly_code' => null,
+        ]);
+        $this->assertDatabaseMissing('monthly_session_movements', ['id' => $addMovement->id]);
+        $this->assertDatabaseCount('permanent_history', 0);
+
+        $subtractRecord = Record::query()->create([
+            'full_name' => 'Restore Subtract Member',
+            'status' => 'UWP',
+            'purok' => (string) $purok->purok_number,
+            'grupo' => '2',
+            'reason_of_r2_10_endorsement' => 'Existing reason',
+            'log_section' => 'Existing log,',
+        ]);
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.deliberation.subtract'), [
+                'record_id' => $subtractRecord->id,
+                'code' => 'D',
+            ])
+            ->assertOk();
+        $subtractMovement = MonthlySessionMovement::query()->where('record_id', $subtractRecord->id)->firstOrFail();
+        $this->withSession($session)
+            ->deleteJson(route('forms.monthly.session.undo', $subtractMovement))
+            ->assertOk();
+        $this->assertDatabaseHas('records', [
+            'id' => $subtractRecord->id,
+            'status' => 'UWP',
+            'monthly_code' => null,
+            'reason_of_r2_10_endorsement' => 'Existing reason',
+            'log_section' => 'Existing log,',
+        ]);
+        $this->assertDatabaseCount('monthly_session_movements', 0);
+        $headSecretary = User::query()->create([
+            'gmail' => 'undo.finish@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $finishSession = ['login_user' => ['id' => $headSecretary->id]];
+        $this->withSession($finishSession)
+            ->postJson(route('forms.monthly.session.finish'))
+            ->assertOk();
+        $this->assertDatabaseCount('permanent_history', 0);
+    }
+
+    public function test_transfer_and_status_movements_restore_prior_values_on_undo(): void
+    {
+        $user = $this->makeSecretary();
+        $source = Purok::query()->create(['purok_number' => 1, 'purok_name' => 'Source', 'grupo_start' => 1, 'grupo_end' => 10]);
+        $destination = Purok::query()->create(['purok_number' => 2, 'purok_name' => 'Destination', 'grupo_start' => 1, 'grupo_end' => 10]);
+        $member = Record::query()->create([
+            'full_name' => 'Undo Transfer Member',
+            'purok' => '1',
+            'grupo' => '4',
+            'status' => 'MS',
+            'log_section' => 'Original log,',
+        ]);
+        $session = ['login_user' => ['id' => $user->id]];
+
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.modify.save'), [
+                'record_id' => $member->id,
+                'action' => 'transfer',
+                'purok_id' => $destination->id,
+                'grupo' => 8,
+            ])
+            ->assertOk();
+        $transfer = MonthlySessionMovement::query()->where('record_id', $member->id)->firstOrFail();
+        $this->assertSame('1-4 -> 2-8', $transfer->destination_description);
+        $this->withSession($session)
+            ->get(route('forms.monthly.session'))
+            ->assertOk()
+            ->assertSee('Undo Transfer Member')
+            ->assertSee('1-4 -> 2-8');
+        $this->withSession($session)->deleteJson(route('forms.monthly.session.undo', $transfer))->assertOk();
+        $this->assertDatabaseHas('records', [
+            'id' => $member->id,
+            'purok' => '1',
+            'grupo' => '4',
+            'status' => 'MS',
+            'monthly_code' => null,
+            'log_section' => 'Original log,',
+        ]);
+
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.modify.save'), [
+                'record_id' => $member->id,
+                'action' => 'status',
+                'status' => 'UWP',
+            ])
+            ->assertOk();
+        $statusChange = MonthlySessionMovement::query()->where('record_id', $member->id)->firstOrFail();
+        $this->assertSame('MS -> UWP', $statusChange->destination_description);
+        $this->withSession($session)->deleteJson(route('forms.monthly.session.undo', $statusChange))->assertOk();
+        $this->assertDatabaseHas('records', [
+            'id' => $member->id,
+            'purok' => '1',
+            'grupo' => '4',
+            'status' => 'MS',
+            'monthly_code' => null,
+            'log_section' => 'Original log,',
+        ]);
+        $this->assertDatabaseCount('monthly_session_movements', 0);
+    }
+
+    public function test_finishing_session_copies_only_remaining_movements_to_permanent_history_and_snapshots(): void
+    {
+        $user = $this->makeSecretary();
+        $purok = $this->makePurok();
+        $record = Record::query()->create([
+            'full_name' => 'Finalized Member',
+            'registry' => 'FINALIZED12345',
+            'gender' => 'L',
+            'kapisanan' => 'K',
+            'date_of_baptism' => '2000-01-02',
+            'evangelist' => 'Evangelist',
+            'purok' => (string) $purok->purok_number,
+            'grupo' => '2',
+            'status' => 'MS',
+        ]);
+        $otherCodedRecord = Record::query()->create([
+            'full_name' => 'Unrelated coded member',
+            'status' => 'UWP',
+            'monthly_code' => 'UWP: G',
+        ]);
+        $session = ['login_user' => ['id' => $user->id]];
+
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.deliberation.subtract'), [
+                'record_id' => $record->id,
+                'code' => 'DD',
+                'description' => 'Final movement',
+            ])
+            ->assertOk();
+        $headSecretary = User::query()->create([
+            'gmail' => 'finalize.monthly@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->postJson(route('forms.monthly.session.finish'))
+            ->assertOk()
+            ->assertJsonPath('movements', 1)
+            ->assertJsonPath('cleared_monthly_codes', 2);
+
+        $this->assertDatabaseHas('permanent_history', [
+            'record_id' => $record->id,
+            'period_month' => now()->timezone('Asia/Manila')->startOfMonth()->addMonthNoOverflow()->toDateString(),
+            'action' => 'subtract',
+            'full_name' => 'Finalized Member',
+            'monthly_code' => 'MS: DD',
+            'destination_description' => 'MS -> INACTIVE (DD)',
+            'date_of_baptism' => '2000-01-02',
+            'evangelist' => 'Evangelist',
+        ]);
+        $this->assertDatabaseHas('permanent_history', [
+            'record_id' => $record->id,
+            'monthly_code' => 'MS: DD',
+        ]);
+        $this->assertNull($record->fresh()->monthly_code);
+        $this->assertNull($otherCodedRecord->fresh()->monthly_code);
+        $this->assertDatabaseHas('system_maintenance_audits', [
+            'action' => 'finish_monthly_clear_codes',
+            'affected_count' => 2,
+        ]);
+        $this->assertDatabaseCount('monthly_session_movements', 0);
+        $this->assertDatabaseHas('monthly_movement_sessions', [
+            'status' => 'completed',
+            'active_key' => null,
+        ]);
+        $this->assertDatabaseHas('monthly_record_snapshots', [
+            'month' => now()->timezone('Asia/Manila')->startOfMonth()->addMonthNoOverflow()->toDateString(),
+            'purok_number' => $purok->purok_number,
+            'ms_count' => 0,
+            'session_generated' => true,
+        ]);
+        $this->assertDatabaseHas('monthly_record_snapshots', [
+            'month' => '2025-01-01',
+            'purok_number' => 1,
+            'ms_count' => 67,
+        ]);
+    }
+
     private function validPayload(array $overrides = []): array
     {
         return array_replace([
@@ -1171,12 +1530,24 @@ class DeliberationTest extends TestCase
 
     private function makeSecretary(array $attributes = []): User
     {
-        return User::query()->create($attributes + [
+        $user = User::query()->create($attributes + [
             'gmail' => fake()->unique()->safeEmail(),
             'password' => 'password',
             'tungkulin' => 'Secretary',
             'is_verified' => true,
             'form_generator_allow' => true,
         ]);
+
+        MonthlyMovementSession::query()->firstOrCreate(
+            ['active_key' => 'active'],
+            [
+                'status' => 'active',
+                'period_month' => now()->timezone('Asia/Manila')->startOfMonth()->addMonthNoOverflow()->toDateString(),
+                'started_by' => $user->gmail,
+                'started_at' => now(),
+            ]
+        );
+
+        return $user;
     }
 }

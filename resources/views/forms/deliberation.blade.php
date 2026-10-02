@@ -21,6 +21,7 @@
     .delib-error { min-height:1.05rem; margin:.25rem 0 0; color:var(--danger); font-size:.75rem; }
     .registry-inputs { display:grid; grid-template-columns:repeat(13,minmax(0,1fr)); gap:.28rem; max-width:700px; }
     .registry-inputs input { width:100%; min-width:0; height:48px; padding:.2rem; border:1px solid var(--border); border-radius:7px; background:var(--bg); color:var(--text); font:700 1rem ui-monospace,Consolas,monospace; text-align:center; text-transform:uppercase; }
+    .registry-inputs.is-disabled input { background:color-mix(in srgb,var(--border) 45%,var(--surface)); color:var(--text-muted); cursor:not-allowed; opacity:.7; }
     .registry-inputs input:focus { outline:2px solid color-mix(in srgb,var(--accent) 30%,transparent); border-color:var(--accent); }
     .registry-options { display:flex; align-items:center; gap:.55rem; margin-top:.65rem; color:var(--text-muted); font-size:.82rem; }
     .registry-options input { width:16px; height:16px; accent-color:var(--accent); }
@@ -33,15 +34,33 @@
     .duplicate-candidate { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:.75rem; padding:.85rem; border:1px solid var(--border); border-radius:10px; background:var(--bg); }
     .duplicate-candidate strong,.duplicate-candidate span { display:block; }
     .duplicate-candidate span { margin-top:.25rem; color:var(--text-muted); font-size:.78rem; }
+    .add-suggestion-popup { position:fixed; z-index:1300; display:grid; gap:.35rem; max-height:300px; overflow:auto; padding:.45rem; border:1px solid var(--border); border-radius:12px; background:var(--surface); box-shadow:0 14px 38px rgba(15,23,42,.2); }
+    .add-suggestion-popup[hidden] { display:none; }
+    .add-suggestion-option { width:100%; padding:.7rem .75rem; border:1px solid transparent; border-radius:8px; background:var(--surface); color:var(--text); text-align:left; font:inherit; cursor:pointer; }
+    .add-suggestion-option:hover,.add-suggestion-option:focus { border-color:var(--accent); background:var(--bg); outline:none; }
+    .add-suggestion-option strong,.add-suggestion-option span { display:block; }
+    .add-suggestion-option span { margin-top:.2rem; color:var(--text-muted); font-size:.78rem; }
+    .add-suggestion-message { padding:.7rem; color:var(--text-muted); font-size:.82rem; }
+    .add-selection-message { display:flex; align-items:center; justify-content:space-between; gap:.75rem; margin:1rem 0 0; padding:.75rem .85rem; border:1px solid var(--border); border-radius:10px; background:var(--bg); font-size:.84rem; }
+    .add-selection-message[hidden] { display:none; }
+    .add-selection-message button { flex-shrink:0; min-height:34px; padding:.4rem .65rem; border:1px solid var(--border); border-radius:7px; background:var(--surface); color:var(--text); font:inherit; font-weight:700; cursor:pointer; }
+    .registry-field { position:relative; }
+    .registry-duplicate-popup { position:absolute; z-index:15; top:5.2rem; left:0; width:min(100%,700px); padding:.75rem .85rem; border:1px solid #f3c56a; border-radius:10px; background:var(--surface); box-shadow:0 12px 30px rgba(15,23,42,.18); color:var(--text); font-size:.82rem; line-height:1.45; }
+    .registry-duplicate-popup[hidden] { display:none; }
+    .registry-duplicate-popup strong,.registry-duplicate-popup span { display:block; }
+    .registry-duplicate-popup span { margin-top:.25rem; color:var(--text-muted); }
     .delib-submit { min-height:44px; padding:.65rem 1rem; border:0; border-radius:9px; background:var(--accent); color:#fff; font:inherit; font-weight:750; cursor:pointer; }
     .delib-submit:disabled { opacity:.55; cursor:wait; }
     .delib-form-actions { display:flex; justify-content:flex-end; margin-top:1.2rem; padding-top:1rem; border-top:1px solid var(--border); }
     .delib-status { margin-top:.8rem; color:var(--text-muted); font-size:.84rem; }
     .delib-status.error { color:var(--danger); }
     .delib-status.success { color:#15803d; }
-    .deliberation-tabs { display:flex; gap:.5rem; margin-bottom:1rem; padding:.35rem; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
-    .deliberation-tab { padding:.65rem 1rem; border:0; border-radius:8px; background:transparent; color:var(--text-muted); font:inherit; font-weight:750; cursor:pointer; }
-    .deliberation-tab[aria-selected="true"] { background:var(--accent); color:#fff; }
+    .monthly-session-required { margin:0 0 1rem; padding:.85rem 1rem; border:1px solid #f3c56a; border-radius:10px; background:color-mix(in srgb,#f59e0b 9%,var(--surface)); color:var(--text); font-size:.88rem; line-height:1.5; }
+    .monthly-session-required[hidden] { display:none; }
+    .deliberation-tabs { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem; padding:.35rem; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+    .deliberation-tab,.deliberation-tab-link { display:inline-flex; align-items:center; min-height:42px; padding:.65rem 1rem; border:0; border-radius:8px; background:var(--bg); color:var(--text-muted); font:inherit; font-weight:750; text-decoration:none; cursor:pointer; }
+    .deliberation-tab[aria-selected="true"],.deliberation-tab-link[aria-current="page"] { background:var(--accent); color:#fff; }
+    .monthly-back-button { display:inline-flex; align-items:center; min-height:40px; padding:.5rem .85rem; border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--accent); font:inherit; font-size:.85rem; font-weight:750; text-decoration:none; }
     .subtract-panel { padding:clamp(1rem,3vw,1.6rem); border:1px solid var(--border); border-radius:16px; background:var(--surface); box-shadow:0 8px 24px rgba(15,23,42,.05); }
     .subtract-search { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.6rem; }
     .subtract-search input { min-height:44px; padding:.65rem .75rem; border:1px solid var(--border); border-radius:9px; background:var(--bg); color:var(--text); font:inherit; }
@@ -78,7 +97,7 @@
 
 <div class="deliberation-page">
     <header class="deliberation-hero">
-        <a href="{{ route('form-generator') }}">&larr; Back to Form Generator</a>
+        <a class="monthly-back-button" href="{{ route('form-generator') }}">&larr; Back to Form Generator</a>
         <h1>Deliberation Form</h1>
         <p>Enter a member's information. Asterisks mark required fields. Existing records can be found, but cannot be changed or reused in Add.</p>
     </header>
@@ -86,10 +105,17 @@
     <nav class="deliberation-tabs" aria-label="Deliberation action">
         <button class="deliberation-tab" type="button" id="addTab" aria-selected="true">Add</button>
         <button class="deliberation-tab" type="button" id="subtractTab" aria-selected="false">Subtract</button>
+        <a class="deliberation-tab-link" href="{{ route('forms.monthly.modify') }}">Modify</a>
     </nav>
+    <p class="monthly-session-required" id="monthlySessionRequired" @if ($monthlySession) hidden @endif>
+        Start the monthly session using the session control in the upper-right before adding, subtracting, or modifying records. Changes are locked until a session is active.
+    </p>
 
     <form class="deliberation-form" id="deliberationForm"
+        data-session-active="{{ $monthlySession ? 'true' : 'false' }}"
         data-duplicate-url="{{ route('forms.monthly.deliberation.duplicates') }}"
+        data-suggestions-url="{{ route('forms.monthly.deliberation.suggestions') }}"
+        data-registry-check-url="{{ route('forms.monthly.deliberation.registry-check') }}"
         data-store-url="{{ route('forms.monthly.deliberation.store') }}"
         data-subtract-search-url="{{ route('forms.monthly.deliberation.subtract.search') }}"
         data-subtract-url="{{ route('forms.monthly.deliberation.subtract') }}"
@@ -99,10 +125,11 @@
             <div class="delib-field full">
                 <label for="delib-full-name">Full Name <span class="required-mark" aria-label="required">*</span></label>
                 <input id="delib-full-name" name="full_name" type="text" maxlength="150" autocomplete="name" required>
+                <div class="add-suggestion-popup" id="addSuggestions" role="listbox" aria-label="Matching existing records" hidden></div>
                 <p class="delib-error" data-error="full_name"></p>
             </div>
 
-            <div class="delib-field full">
+            <div class="delib-field full registry-field">
                 <span class="delib-label">Registry <span class="required-mark" aria-label="required">*</span></span>
                 <div class="registry-inputs" id="registryInputs" aria-label="13-character registry number">
                     @for ($index = 0; $index < 13; $index++)
@@ -115,6 +142,7 @@
                     This member has RFID instead of a registry number
                 </label>
                 <p class="delib-help">Enter exactly 13 letters or numbers, or select RFID.</p>
+                <div class="registry-duplicate-popup" id="registryDuplicatePopup" role="alert" aria-live="assertive" hidden></div>
                 <p class="delib-error" data-error="registry"></p>
             </div>
 
@@ -150,6 +178,7 @@
                     <option value="Buklod">Buklod</option>
                     <option value="Kadiwa">Kadiwa</option>
                     <option value="Binhi">Binhi</option>
+                    <option value="Suliranin">Suliranin</option>
                 </select>
                 <p class="delib-help" id="kapisananHint">Kapisanan is auto-selected from Date of Birth and marital status; Not Married (0) is the default.</p>
                 <p class="delib-error" data-error="kapisanan"></p>
@@ -195,9 +224,14 @@
         </div>
 
         <div class="duplicate-panel" id="duplicatePanel" aria-live="polite"></div>
+        <div class="add-selection-message" id="addSelectionMessage" role="status" aria-live="polite" hidden>
+            <span id="addSelectionText"></span>
+            <button type="button" id="addSelectionClear">Clear selection</button>
+        </div>
+        <input type="hidden" id="reuseRecordId" name="reuse_record_id">
         <div class="delib-status" id="delibStatus" role="status" aria-live="polite"></div>
         <div class="delib-form-actions">
-            <button class="delib-submit" id="delibSubmit" type="submit">Add to Deliberation</button>
+            <button class="delib-submit" id="delibSubmit" type="submit" @disabled(! $monthlySession)>Add to Deliberation</button>
         </div>
     </form>
 
@@ -240,7 +274,7 @@
                 </div>
             </div>
             <div class="delib-status" id="subtractStatusMessage" role="status" aria-live="polite"></div>
-            <div class="subtract-form-actions"><button type="submit" class="delib-submit" id="subtractSubmit">Mark INACTIVE</button></div>
+            <div class="subtract-form-actions"><button type="submit" class="delib-submit" id="subtractSubmit" @disabled(! $monthlySession)>Mark INACTIVE</button></div>
         </form>
     </section>
 </div>
@@ -266,6 +300,7 @@
         </div>
     </div>
 </dialog>
+@include('forms.monthly-session-widget')
 @endsection
 
 @push('scripts')
@@ -276,7 +311,13 @@
     const registryValue = document.getElementById('delib-registry');
     const rfid = document.getElementById('delib-rfid');
     const registryInputs = document.getElementById('registryInputs');
+    const registryDuplicatePopup = document.getElementById('registryDuplicatePopup');
     const nameInput = document.getElementById('delib-full-name');
+    const addSuggestions = document.getElementById('addSuggestions');
+    const addSelectionMessage = document.getElementById('addSelectionMessage');
+    const addSelectionText = document.getElementById('addSelectionText');
+    const addSelectionClear = document.getElementById('addSelectionClear');
+    const reuseRecordId = document.getElementById('reuseRecordId');
     const purokInput = document.getElementById('delib-purok');
     const grupoInput = document.getElementById('delib-grupo');
     const birthInput = document.getElementById('delib-birth');
@@ -285,9 +326,17 @@
     const duplicatePanel = document.getElementById('duplicatePanel');
     const statusMessage = document.getElementById('delibStatus');
     const submitButton = document.getElementById('delibSubmit');
+    const monthlySessionRequired = document.getElementById('monthlySessionRequired');
+    let hasMonthlySession = form.dataset.sessionActive === 'true';
     const puroks = JSON.parse(form.dataset.puroks);
     let duplicates = [];
-    let duplicateTimer;
+    let suggestionTimer;
+    let suggestionSequence = 0;
+    let activeSuggestionRequest = null;
+    let registryCheckTimer;
+    let registryCheckSequence = 0;
+    let registryHasDuplicate = false;
+    let selectedAddRecord = null;
     let requestVersion = 0;
     const subtractPanel = document.getElementById('subtractPanel');
     const addTab = document.getElementById('addTab');
@@ -305,6 +354,25 @@
     let subtractSearchTimer;
     let subtractSearchSequence = 0;
     let activeSubtractSearch = null;
+    let selectedSubtractAllowed = false;
+
+    function updateSubtractAction() {
+        subtractSubmit.disabled = !hasMonthlySession || !selectedSubtractAllowed;
+    }
+
+    function updateAddAction() {
+        const selectedCanReactivate = selectedAddRecord?.status === 'INACTIVE'
+            && !selectedAddRecord.monthly_code;
+        submitButton.disabled = !hasMonthlySession
+            || (selectedAddRecord ? !selectedCanReactivate : duplicates.length > 0 || registryHasDuplicate);
+    }
+
+    window.addEventListener('monthly-session-state', event => {
+        hasMonthlySession = Boolean(event.detail?.active);
+        monthlySessionRequired.hidden = hasMonthlySession;
+        updateAddAction();
+        updateSubtractAction();
+    });
 
     function selectPanel(panel) {
         const isSubtract = panel === 'subtract';
@@ -368,6 +436,9 @@
             ['Marital status', marriedInput.value === '1' ? 'Married (1)' : 'Not Married (0)'],
             ['Brief Description', document.getElementById('delib-description').value.trim() || 'Not provided'],
         ];
+        if (selectedAddRecord) {
+            values.unshift(['Action', `Reactivate existing record: INACTIVE -> ${document.getElementById('delib-status').value}`]);
+        }
         const details = document.getElementById('addConfirmDetails');
         details.replaceChildren();
         values.forEach(([label, value]) => {
@@ -383,6 +454,211 @@
         const value = registryBoxes.map(box => box.value).join('').toUpperCase();
         registryValue.value = rfid.checked ? 'RFID' : value;
         return value;
+    }
+
+    function applyRegistryMode() {
+        registryInputs.classList.toggle('is-disabled', rfid.checked || Boolean(selectedAddRecord));
+        registryBoxes.forEach(box => { box.disabled = rfid.checked || Boolean(selectedAddRecord); });
+        syncRegistry();
+    }
+
+    function clearRegistryDuplicate() {
+        registryCheckSequence++;
+        clearTimeout(registryCheckTimer);
+        registryHasDuplicate = false;
+        registryDuplicatePopup.hidden = true;
+        registryDuplicatePopup.replaceChildren();
+        updateAddAction();
+    }
+
+    function showRegistryDuplicates(records) {
+        registryHasDuplicate = records.length > 0;
+        registryDuplicatePopup.replaceChildren();
+        if (!records.length) {
+            registryDuplicatePopup.hidden = true;
+            updateAddAction();
+            return;
+        }
+        const title = document.createElement('strong');
+        title.textContent = 'This registry number is already assigned.';
+        registryDuplicatePopup.append(title);
+        records.forEach(record => {
+            const match = document.createElement('span');
+            match.textContent = `${record.full_name} · ${record.status}`
+                + (record.purok ? ` · Purok ${record.purok}` : '')
+                + (record.grupo ? `-${record.grupo}` : '');
+            registryDuplicatePopup.append(match);
+        });
+        registryDuplicatePopup.hidden = false;
+        updateAddAction();
+    }
+
+    function checkRegistryDuplicate() {
+        clearTimeout(registryCheckTimer);
+        const registry = registryBoxes.map(box => box.value).join('').toUpperCase();
+        const sequence = ++registryCheckSequence;
+        if (rfid.checked || selectedAddRecord || !/^[A-Z0-9]{13}$/.test(registry)) {
+            clearRegistryDuplicate();
+            return;
+        }
+        registryCheckTimer = window.setTimeout(async () => {
+            try {
+                const result = await requestJson(form.dataset.registryCheckUrl, 'POST', {
+                    registry,
+                    is_rfid: false,
+                });
+                if (sequence === registryCheckSequence) showRegistryDuplicates(result.duplicates);
+            } catch (error) {
+                if (sequence !== registryCheckSequence) return;
+                registryHasDuplicate = false;
+                const message = document.createElement('span');
+                message.textContent = error.message || 'Could not verify the registry number.';
+                registryDuplicatePopup.replaceChildren(message);
+                registryDuplicatePopup.hidden = false;
+                updateAddAction();
+            }
+        }, 180);
+    }
+
+    function showSuggestionMessage(message) {
+        addSuggestions.replaceChildren();
+        const item = document.createElement('div');
+        item.className = 'add-suggestion-message';
+        item.textContent = message;
+        addSuggestions.append(item);
+        positionSuggestions();
+        addSuggestions.hidden = false;
+    }
+
+    function positionSuggestions() {
+        const bounds = nameInput.getBoundingClientRect();
+        addSuggestions.style.left = `${Math.max(8, bounds.left)}px`;
+        addSuggestions.style.top = `${Math.min(window.innerHeight - 310, bounds.bottom + 4)}px`;
+        addSuggestions.style.width = `${Math.max(280, bounds.width)}px`;
+    }
+
+    function scheduleSuggestions() {
+        clearTimeout(suggestionTimer);
+        const search = nameInput.value.trim();
+        const sequence = ++suggestionSequence;
+        activeSuggestionRequest?.abort();
+        activeSuggestionRequest = null;
+        if (search.length < 2 || selectedAddRecord) {
+            addSuggestions.hidden = true;
+            return;
+        }
+        suggestionTimer = window.setTimeout(async () => {
+            showSuggestionMessage('Searching existing records…');
+            const controller = new AbortController();
+            activeSuggestionRequest = controller;
+            try {
+                const url = new URL(form.dataset.suggestionsUrl, window.location.origin);
+                url.searchParams.set('q', search);
+                const response = await fetch(url, {
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json' },
+                    signal: controller.signal,
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.message || 'Could not search existing records.');
+                if (sequence !== suggestionSequence) return;
+                renderAddSuggestions(result.records, search);
+            } catch (error) {
+                if (error.name === 'AbortError' || sequence !== suggestionSequence) return;
+                showSuggestionMessage(error.message || 'Could not search existing records.');
+            } finally {
+                if (sequence === suggestionSequence) activeSuggestionRequest = null;
+            }
+        }, 220);
+    }
+
+    function renderAddSuggestions(records, query) {
+        addSuggestions.replaceChildren();
+        if (!records.length) {
+            showSuggestionMessage(`No records found for "${query}". Continue entering the new member's details.`);
+            return;
+        }
+        records.forEach(record => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'add-suggestion-option';
+            button.setAttribute('role', 'option');
+            const name = document.createElement('strong');
+            name.textContent = record.full_name || 'Unnamed record';
+            const details = document.createElement('span');
+            details.textContent = `Registry: ${record.registry || '—'} · Status: ${record.status || 'Unspecified'}`
+                + (record.status === 'INACTIVE' ? ' · Can be reactivated' : ' · Already in system');
+            button.append(name, details);
+            button.addEventListener('click', () => selectAddSuggestion(record));
+            addSuggestions.append(button);
+        });
+        positionSuggestions();
+        addSuggestions.hidden = false;
+    }
+
+    function selectAddSuggestion(record) {
+        clearTimeout(suggestionTimer);
+        suggestionSequence++;
+        activeSuggestionRequest?.abort();
+        activeSuggestionRequest = null;
+        selectedAddRecord = record;
+        clearRegistryDuplicate();
+        duplicates = [];
+        duplicatePanel.replaceChildren();
+        reuseRecordId.value = String(record.id);
+        nameInput.value = record.full_name || '';
+        nameInput.readOnly = true;
+        const registry = (record.registry || '').toUpperCase();
+        rfid.checked = registry === 'RFID';
+        registryBoxes.forEach((box, index) => { box.value = registry === 'RFID' ? '' : (registry[index] || ''); });
+        applyRegistryMode();
+        form.querySelectorAll('[name="gender"]').forEach(input => {
+            input.checked = input.value === record.gender;
+        });
+        purokInput.value = record.purok_id ? String(record.purok_id) : '';
+        purokInput.dispatchEvent(new Event('change'));
+        grupoInput.value = record.grupo || '';
+        kapisananInput.value = record.kapisanan || '';
+        birthInput.value = record.date_of_birth || '';
+        document.getElementById('delib-baptism').value = record.date_of_baptism || '';
+        document.getElementById('delib-evangelist').value = record.evangelist || '';
+        marriedInput.value = record.is_married ? '1' : '0';
+        document.getElementById('delib-status').value = record.status === 'INACTIVE' ? 'UWP' : record.status;
+        refreshKapisanan();
+        const canReactivate = record.status === 'INACTIVE' && !record.monthly_code;
+        form.querySelectorAll('input, select').forEach(control => {
+            if ([reuseRecordId, document.getElementById('delib-status'), document.getElementById('delib-description')].includes(control)) return;
+            control.disabled = true;
+        });
+        if (!canReactivate) document.getElementById('delib-status').disabled = true;
+        addSelectionText.textContent = canReactivate
+            ? `${record.full_name} is inactive. Choose MS or UWP to reactivate this existing record; no duplicate will be created.`
+            : `${record.full_name} is already in the system${record.monthly_code ? ` with pending code ${record.monthly_code}` : ''}. Active records cannot be added again.`;
+        addSelectionMessage.hidden = false;
+        addSuggestions.hidden = true;
+        updateAddAction();
+    }
+
+    function clearAddSuggestion() {
+        selectedAddRecord = null;
+        clearRegistryDuplicate();
+        reuseRecordId.value = '';
+        form.reset();
+        nameInput.readOnly = false;
+        form.querySelectorAll('input, select').forEach(control => { control.disabled = false; });
+        grupoInput.replaceChildren(new Option('Select Purok first', ''));
+        grupoInput.disabled = true;
+        registryBoxes.forEach(box => { box.value = ''; });
+        registryInputs.classList.remove('is-disabled');
+        registryInputs.hidden = false;
+        addSelectionMessage.hidden = true;
+        addSuggestions.hidden = true;
+        duplicatePanel.replaceChildren();
+        duplicates = [];
+        registryValue.value = '';
+        refreshKapisanan();
+        applyRegistryMode();
+        updateAddAction();
     }
 
     function refreshKapisanan() {
@@ -410,14 +686,18 @@
     function renderDuplicates(found) {
         duplicates = found;
         duplicatePanel.replaceChildren();
-        if (!found.length) {
-            submitButton.disabled = false;
+        if (selectedAddRecord) {
+            updateAddAction();
             return;
         }
-        submitButton.disabled = true;
+        if (!found.length) {
+            updateAddAction();
+            return;
+        }
+        updateAddAction();
         const alert = document.createElement('div');
         alert.className = 'duplicate-alert';
-        alert.textContent = 'This person is already in the system. Creating a duplicate or changing an existing record in Add is not allowed.';
+        alert.textContent = 'An existing match was found. Select an inactive suggestion to reactivate it; active records cannot be added again.';
         duplicatePanel.append(alert);
 
         found.forEach(record => {
@@ -432,7 +712,9 @@
             card.append(identity);
             const blocked = document.createElement('span');
             blocked.textContent = record.inactive
-                ? 'This Inactive record can be found but cannot be changed or reused here.'
+                ? (record.monthly_code
+                    ? `This inactive record has a pending monthly code (${record.monthly_code}) and cannot be reactivated yet.`
+                    : 'Select this inactive member from the suggestions to autofill and reactivate the existing record.')
                 : 'This existing record can be found but cannot be changed here.';
             card.append(blocked);
             duplicatePanel.append(card);
@@ -463,7 +745,8 @@
         subtractRecordForm.hidden = true;
         subtractRecordForm.reset();
         document.getElementById('subtractRecordId').value = '';
-        subtractSubmit.disabled = false;
+        selectedSubtractAllowed = false;
+        updateSubtractAction();
         subtractMessage.textContent = '';
         subtractMessage.className = 'delib-status';
     }
@@ -498,7 +781,8 @@
         subtractRecordForm.hidden = false;
         const normalizedStatus = (record.status || '').trim().toUpperCase();
         const allowed = ['MS', 'UWP'].includes(normalizedStatus) && !record.monthly_code;
-        subtractSubmit.disabled = !allowed;
+        selectedSubtractAllowed = allowed;
+        updateSubtractAction();
         if (record.monthly_code) {
             subtractMessage.textContent = `This record has pending monthly code "${record.monthly_code}". Clear it in Inquire / Modify before proceeding; Subtract will not overwrite it.`;
             subtractMessage.className = 'delib-status error';
@@ -600,33 +884,67 @@
     }
 
     async function submitRecord() {
+        if (!hasMonthlySession) {
+            setStatus('Start a monthly session before adding records.', 'error');
+            return;
+        }
         if (!form.reportValidity()) return;
         form.querySelectorAll('[data-error]').forEach(error => { error.textContent = ''; });
         syncRegistry();
-        if (!rfid.checked && !/^[A-Z0-9]{13}$/.test(registryValue.value)) {
+        if (!selectedAddRecord && !rfid.checked && !/^[A-Z0-9]{13}$/.test(registryValue.value)) {
             setError('registry', 'Registry must contain exactly 13 letters or numbers, or select RFID.');
             setStatus('Complete the registry number or select RFID.', 'error');
             registryBoxes[0].focus();
             return;
         }
-        const payload = Object.fromEntries(new FormData(form).entries());
-        payload.is_rfid = rfid.checked;
-        payload.registry = rfid.checked ? 'RFID' : registryValue.value;
-        payload.kapisanan = kapisananInput.value;
+        const payload = selectedAddRecord ? {
+            full_name: selectedAddRecord.full_name,
+            registry: selectedAddRecord.registry || '',
+            is_rfid: (selectedAddRecord.registry || '').toUpperCase() === 'RFID',
+            gender: selectedAddRecord.gender,
+            purok_id: selectedAddRecord.purok_id || '',
+            grupo: selectedAddRecord.grupo || '',
+            kapisanan: selectedAddRecord.kapisanan || 'Kadiwa',
+            date_of_baptism: selectedAddRecord.date_of_baptism || '',
+            evangelist: selectedAddRecord.evangelist || '',
+            status: document.getElementById('delib-status').value,
+            date_of_birth: selectedAddRecord.date_of_birth || '',
+            is_married: selectedAddRecord.is_married ? '1' : '0',
+            description: document.getElementById('delib-description').value,
+            reuse_record_id: String(selectedAddRecord.id),
+        } : Object.fromEntries(new FormData(form).entries());
+        payload.is_rfid = selectedAddRecord
+            ? (selectedAddRecord.registry || '').toUpperCase() === 'RFID'
+            : rfid.checked;
+        payload.registry = selectedAddRecord
+            ? selectedAddRecord.registry
+            : (rfid.checked ? 'RFID' : registryValue.value);
+        payload.kapisanan = selectedAddRecord?.kapisanan || kapisananInput.value;
         submitButton.disabled = true;
-        setStatus('Checking for duplicates…');
+        setStatus(selectedAddRecord ? 'Preparing to reactivate the existing member…' : 'Checking for duplicates…');
         try {
-            const duplicateCheck = await requestJson(form.dataset.duplicateUrl, 'POST', {
-                full_name: payload.full_name,
-                registry: payload.registry,
-                is_rfid: payload.is_rfid,
-            });
-            renderDuplicates(duplicateCheck.duplicates);
-            if (duplicateCheck.duplicates.length) {
-                setStatus('This person already has a record; existing records cannot be changed or reused in Add.', 'error');
-                return;
+            if (!selectedAddRecord) {
+                const duplicateCheck = await requestJson(form.dataset.duplicateUrl, 'POST', {
+                    full_name: payload.full_name,
+                    registry: payload.registry,
+                    is_rfid: payload.is_rfid,
+                });
+                renderDuplicates(duplicateCheck.duplicates);
+                if (duplicateCheck.duplicates.length) {
+                    setStatus('This person already has a record. Select an inactive match to reactivate it; active records cannot be added again.', 'error');
+                    return;
+                }
             }
             populateAddConfirmation();
+            document.getElementById('addConfirmTitle').textContent = selectedAddRecord
+                ? 'Confirm member reactivation'
+                : 'Confirm Add';
+            document.querySelector('#addConfirmDialog .confirmation-content > p').textContent = selectedAddRecord
+                ? 'Confirm the existing inactive record and new status. This updates the existing record; it will not create a duplicate.'
+                : 'Are you sure you want to add this member with the following details?';
+            document.getElementById('confirmAddButton').textContent = selectedAddRecord
+                ? 'Yes, reactivate member'
+                : 'Yes, add member';
             const confirmed = await confirmDialog(addConfirmDialog, document.getElementById('confirmAddButton'), 'add');
             if (!confirmed) {
                 setStatus('Adding the member was cancelled.');
@@ -635,18 +953,13 @@
             const result = await requestJson(form.dataset.storeUrl, 'POST', payload);
             renderDuplicates([]);
             setStatus(result.message, 'success');
-            if (!result.reused) form.reset();
-            registryBoxes.forEach(box => { box.value = ''; });
-            registryValue.value = '';
-            grupoInput.innerHTML = '<option value="">Select Purok first</option>';
-            grupoInput.disabled = true;
-            kapisananInput.disabled = false;
+            clearAddSuggestion();
             document.getElementById('kapisananHint').textContent = 'Kapisanan is auto-selected from Date of Birth and marital status; Not Married (0) is the default.';
         } catch (error) {
             setStatus(error.message, 'error');
             checkDuplicates();
         } finally {
-            submitButton.disabled = duplicates.length > 0;
+            updateAddAction();
         }
     }
 
@@ -655,8 +968,7 @@
             box.value = box.value.replace(/[^a-z0-9]/gi, '').slice(-1).toUpperCase();
             syncRegistry();
             if (box.value && index < registryBoxes.length - 1) registryBoxes[index + 1].focus();
-            clearTimeout(duplicateTimer);
-            duplicateTimer = window.setTimeout(checkDuplicates, 250);
+            checkRegistryDuplicate();
         });
         box.addEventListener('keydown', event => {
             if (event.key === 'Backspace' && !box.value && index > 0) registryBoxes[index - 1].focus();
@@ -672,21 +984,31 @@
             });
             syncRegistry();
             registryBoxes[Math.min(pasted.length, 12)].focus();
-            checkDuplicates();
+            checkRegistryDuplicate();
         });
     });
 
     rfid.addEventListener('change', () => {
-        registryInputs.hidden = rfid.checked;
-        registryBoxes.forEach(box => { box.disabled = rfid.checked; });
-        syncRegistry();
-        checkDuplicates();
+        applyRegistryMode();
+        clearRegistryDuplicate();
+        if (rfid.checked) addSuggestions.hidden = true;
     });
-    nameInput.addEventListener('blur', checkDuplicates);
     nameInput.addEventListener('input', () => {
-        clearTimeout(duplicateTimer);
-        duplicateTimer = window.setTimeout(checkDuplicates, 350);
+        scheduleSuggestions();
     });
+    addSelectionClear.addEventListener('click', clearAddSuggestion);
+    addSuggestions.addEventListener('click', event => event.stopPropagation());
+    document.addEventListener('click', event => {
+        if (!addSuggestions.contains(event.target) && event.target !== nameInput) {
+            addSuggestions.hidden = true;
+        }
+    });
+    window.addEventListener('resize', () => {
+        if (!addSuggestions.hidden) positionSuggestions();
+    });
+    window.addEventListener('scroll', () => {
+        if (!addSuggestions.hidden) positionSuggestions();
+    }, true);
     birthInput.addEventListener('change', refreshKapisanan);
     marriedInput.addEventListener('change', refreshKapisanan);
     kapisananInput.addEventListener('input', () => {
@@ -738,6 +1060,11 @@
     });
     subtractRecordForm.addEventListener('submit', async event => {
         event.preventDefault();
+        if (!hasMonthlySession) {
+            subtractMessage.textContent = 'Start a monthly session before subtracting records.';
+            subtractMessage.className = 'delib-status error';
+            return;
+        }
         if (!subtractRecordForm.reportValidity()) return;
         const recordId = document.getElementById('subtractRecordId').value;
         const selectedCode = subtractCode.value;
@@ -752,7 +1079,7 @@
             if (!confirmed) {
                 subtractMessage.textContent = 'Subtract was cancelled.';
                 subtractMessage.className = 'delib-status';
-                subtractSubmit.disabled = false;
+                updateSubtractAction();
                 return;
             }
             const result = await requestJson(form.dataset.subtractUrl, 'POST', {
@@ -768,11 +1095,15 @@
         } catch (error) {
             subtractMessage.textContent = error.message;
             subtractMessage.className = 'delib-status error';
-            subtractSubmit.disabled = false;
+            updateSubtractAction();
         }
     });
 
-    selectPanel(new URLSearchParams(window.location.search).get('mode') === 'subtract' ? 'subtract' : 'add');
+    selectPanel(
+        window.location.hash === '#subtract' || new URLSearchParams(window.location.search).get('mode') === 'subtract'
+            ? 'subtract'
+            : 'add'
+    );
 })();
 </script>
 @endpush

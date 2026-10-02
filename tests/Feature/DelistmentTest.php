@@ -2,9 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\GlobalVariable;
 use App\Models\DelistmentHistory;
+use App\Models\GlobalVariable;
 use App\Models\Record;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -62,6 +63,11 @@ class DelistmentTest extends TestCase
             'date_of_baptism' => '2020-01-01',
             'date_of_entry' => null,
         ]);
+        $baptizedAfterCutoff = $this->record([
+            'full_name' => 'Baptized After Cutoff',
+            'status' => 'MS',
+            'date_of_baptism' => '2025-12-26',
+        ]);
         $this->record([
             'full_name' => 'Inactive Member',
             'status' => 'INACTIVE',
@@ -82,21 +88,24 @@ class DelistmentTest extends TestCase
             ->assertSee('const PAGE_SIZE = 20;', false)
             ->assertSee('data-entry-years="1"', false)
             ->assertSee('id="delist-dialog"', false)
-            ->assertSee('baptism date must be on or before the configured cutoff')
+            ->assertSee('This list shows active MS, UWP, or MK records that have no baptism date recorded.')
+            ->assertDontSee('baptism date must be on or before the configured cutoff')
             ->assertDontSee('Date of entry</th>', false)
             ->assertDontSee('A date of entry is not needed here.')
-            ->assertViewHas('members', function (array $members) use ($eligible, $mk): bool {
-                $this->assertCount(3, $members);
+            ->assertViewHas('members', function (array $members) use ($eligible, $mk, $baptizedAfterCutoff): bool {
+                $this->assertCount(4, $members);
                 $byId = collect($members)->keyBy('id');
                 $this->assertTrue($byId[$eligible->id]['eligible']);
                 $this->assertTrue($byId[$mk->id]['eligible']);
                 $this->assertTrue($byId[$mk->id]['reported']);
+                $this->assertFalse($byId[$baptizedAfterCutoff->id]['eligible']);
 
                 return true;
             })
-            ->assertViewHas('missingRecords', function (array $missing) use ($notEligible): bool {
+            ->assertViewHas('missingRecords', function (array $missing) use ($notEligible, $baptizedAfterCutoff): bool {
                 $this->assertCount(1, $missing);
                 $this->assertSame([$notEligible->id], array_column($missing, 'id'));
+                $this->assertNotContains($baptizedAfterCutoff->id, array_column($missing, 'id'));
 
                 return true;
             });
@@ -193,7 +202,7 @@ class DelistmentTest extends TestCase
     public function test_only_endorsed_mk_can_be_delisted_and_history_and_record_log_are_saved(): void
     {
         $this->travelTo(now()->setDate(2026, 10, 1)->startOfDay());
-        $user = \App\Models\User::query()->create([
+        $user = User::query()->create([
             'gmail' => 'delister@example.test',
             'first_name' => 'Test',
             'last_name' => 'Secretary',

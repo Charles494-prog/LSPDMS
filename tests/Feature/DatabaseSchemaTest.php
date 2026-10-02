@@ -135,6 +135,26 @@ class DatabaseSchemaTest extends TestCase
             'updated_at',
         ]));
         $this->assertDatabaseCount('monthly_record_snapshots', 60);
+        $this->assertTrue(Schema::hasColumns('monthly_movement_sessions', [
+            'id',
+            'active_key',
+            'status',
+            'period_month',
+            'started_at',
+            'completed_at',
+        ]));
+        $this->assertTrue(Schema::hasColumns('permanent_history', [
+            'session_id',
+            'period_month',
+            'record_id',
+            'full_name',
+            'monthly_code',
+            'destination_description',
+            'changed_by',
+            'changed_at',
+            'date_of_baptism',
+            'evangelist',
+        ]));
 
         $user = new User;
         $purok = new Purok;

@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\GlobalVariable;
 use App\Models\DelistmentHistory;
+use App\Models\GlobalVariable;
 use App\Models\Record;
 use App\Models\User;
 use App\Services\R210Eligibility;
@@ -58,10 +58,7 @@ class DelistmentController extends Controller
 
         $requireBaptismDate = (bool) $globalVariables?->dateofbaptism_requirement_boolean;
         $missingRecords = $records
-            ->filter(fn (Record $record): bool => $requireBaptismDate
-                && (! $record->date_of_baptism
-                    || ($globalVariables?->baptism_requirement
-                        && $record->date_of_baptism->greaterThan($globalVariables->baptism_requirement))))
+            ->filter(fn (Record $record): bool => $requireBaptismDate && ! $record->date_of_baptism)
             ->map(fn (Record $record): array => [
                 'id' => $record->id,
                 'name' => trim((string) $record->full_name) ?: 'Unnamed record',
@@ -79,8 +76,6 @@ class DelistmentController extends Controller
                 ->orderByDesc('delisted_at')
                 ->orderByDesc('id')
                 ->get(),
-            'requireBaptismDate' => $requireBaptismDate,
-            'baptismCutoff' => $globalVariables?->baptism_requirement?->format('Y-m-d'),
             'entryYearsRequirement' => $globalVariables?->entry_years_requirement ?? 1,
         ]);
     }

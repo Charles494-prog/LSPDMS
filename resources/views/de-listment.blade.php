@@ -5,8 +5,6 @@
 @section('content')
 <div class="delist-page">
     <span id="delist-config"
-        data-require-baptism="{{ $requireBaptismDate ? '1' : '0' }}"
-        data-baptism-cutoff="{{ $baptismCutoff ?? '' }}"
         data-entry-years="{{ $entryYearsRequirement }}"
         data-endorse-url="{{ route('de-listment.endorse', ['record' => '__RECORD__']) }}"
         data-delist-url="{{ route('de-listment.delist', ['record' => '__RECORD__']) }}"
@@ -309,7 +307,7 @@
                     <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>
                 </button>
             </div>
-            <p class="modal-lead">When enabled by the administrator, the baptism date must be on or before the configured cutoff. MS and UWP records must also meet the configured years-in-system threshold; MK is always eligible.</p>
+            <p class="modal-lead">This list shows active MS, UWP, or MK records that have no baptism date recorded. Add the date here to update the member record.</p>
 
             <div class="table-scroll missing-scroll">
                 <table class="member-table missing-table" id="missing-table">
@@ -323,8 +321,8 @@
                     <tbody id="missing-rows"></tbody>
                 </table>
                 <div class="empty-state" id="missing-empty" hidden>
-                    <strong>No required dates are missing</strong>
-                    <span>Every applicable date requirement has a value in the Records table.</span>
+                    <strong>No baptism dates are missing</strong>
+                    <span>Every applicable active record has a baptism date in the Records table.</span>
                 </div>
             </div>
 
@@ -712,8 +710,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const config = document.getElementById('delist-config');
     const members = @json($members);
     const missingRecords = @json($missingRecords);
-    const requireBaptismDate = config.dataset.requireBaptism === '1';
-    const baptismCutoff = config.dataset.baptismCutoff;
     const PAGE_SIZE = 20;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -1481,8 +1477,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const missingRowsEl = document.getElementById('missing-rows');
     const missingSave = document.getElementById('missing-save');
     const missingHint = document.getElementById('missing-hint');
-    const isComplete = r => !requireBaptismDate
-        || Boolean(r.baptism && (!baptismCutoff || r.baptism <= baptismCutoff));
+    const isComplete = r => Boolean(r.baptism);
     const stillMissing = () => missingRecords.filter(r => !isComplete(r));
     let drafts = {}; // record id -> baptism date while editing
 

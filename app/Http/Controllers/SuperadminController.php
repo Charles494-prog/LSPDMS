@@ -4,10 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\GlobalVariable;
 use App\Models\Purok;
+use App\Models\Record;
+use App\Models\R402Hakbang;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -43,7 +46,72 @@ class SuperadminController extends Controller
             'users' => $users,
             'puroks' => $puroks,
             'globalVariables' => GlobalVariable::query()->first(),
+            'r402Hakbangs' => R402Hakbang::query()
+                ->orderBy('status')
+                ->orderBy('code')
+                ->get(),
         ]);
+    }
+
+    public function storeR402Hakbang(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(['MS', 'UWP'])],
+            'code' => [
+                'required',
+                'string',
+                'max:30',
+                'regex:/^\d+-\d+$/',
+                Rule::unique('r4_02_hakbangs', 'code')->where('status', $request->input('status')),
+            ],
+            'description' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $hakbang = R402Hakbang::query()->create([
+            ...$validated,
+            'code' => trim($validated['code']),
+            'description' => trim($validated['description']),
+        ]);
+
+        return response()->json([
+            'message' => "{$hakbang->status} hakbang {$hakbang->code} saved.",
+            'data' => $hakbang,
+        ], 201);
+    }
+
+    public function updateR402Hakbang(Request $request, R402Hakbang $hakbang): JsonResponse
+    {
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(['MS', 'UWP'])],
+            'code' => [
+                'required',
+                'string',
+                'max:30',
+                'regex:/^\d+-\d+$/',
+                Rule::unique('r4_02_hakbangs', 'code')
+                    ->where('status', $request->input('status'))
+                    ->ignore($hakbang->id),
+            ],
+            'description' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $hakbang->fill([
+            ...$validated,
+            'code' => trim($validated['code']),
+            'description' => trim($validated['description']),
+        ])->save();
+
+        return response()->json([
+            'message' => "{$hakbang->status} hakbang {$hakbang->code} updated.",
+            'data' => $hakbang->fresh(),
+        ]);
+    }
+
+    public function destroyR402Hakbang(R402Hakbang $hakbang): JsonResponse
+    {
+        $hakbang->delete();
+
+        return response()->json(['message' => 'R4-02 hakbang deleted.']);
     }
 
     public function updateUser(Request $request, User $user): JsonResponse
@@ -234,5 +302,85 @@ class SuperadminController extends Controller
                 'allow_forgot_password' => (bool) $globalVariables->allow_forgot_password,
             ],
         ]);
+    }
+
+    public function generateBnhResetCode(Request $request): JsonResponse
+    {
+        $previousCodeHash = $request->session()->get('bnh_reset_confirmation.hash');
+        $request->session()->forget('bnh_reset_confirmation');
+        $checkedCount = Record::query()
+            ->where(fn ($query) => $query->where('is_valid1', true)->orWhere('is_valid2', true))
+            ->count();
+        if ($checkedCount === 0) {
+            return response()->json([
+                'empty' => true,
+                'message' => 'BNH CHECKS is currently Empty.',
+            ], 409);
+        }
+
+        do {
+            $code = Str::lower(Str::random(12));
+            $codeHash = hash('sha256', $code);
+        } while ($previousCodeHash && hash_equals((string) $previousCodeHash, $codeHash));
+        $request->session()->put('bnh_reset_confirmation', [
+            'hash' => $codeHash,
+            'expires_at' => now()->addSeconds(45)->timestamp,
+        ]);
+
+        return response()->json([
+            'code' => $code,
+            'expires_in_seconds' => 45,
+            'message' => 'Type the generated code within 45 seconds to reset the BNH checks.',
+        ]);
+    }
+
+    public function resetBnhHelperChecks(Request $request): JsonResponse
+    {
+        $request->validate([
+            'confirmation' => ['required', 'string', 'size:12', 'regex:/^[a-z0-9]{12}$/'],
+        ]);
+
+        $affected = DB::transaction(function () use ($request): int {
+            $confirmation = $request->session()->pull('bnh_reset_confirmation');
+            if (
+                ! is_array($confirmation)
+                || (int) ($confirmation['expires_at'] ?? 0) <= now()->timestamp
+                || ! hash_equals((string) ($confirmation['hash'] ?? ''), hash('sha256', $request->string('confirmation')->toString()))
+            ) {
+                throw ValidationException::withMessages([
+                    'confirmation' => ['The generated code is invalid or expired. Generate a new code and try again.'],
+                ]);
+            }
+
+            $count = Record::query()
+                ->where(fn ($query) => $query->where('is_valid1', true)->orWhere('is_valid2', true))
+                ->count();
+            if ($count === 0) {
+                return 0;
+            }
+            Record::query()->update(['is_valid1' => false, 'is_valid2' => false]);
+            DB::table('system_maintenance_audits')->insert([
+                'action' => 'reset_bnh_helper_checks',
+                'affected_count' => $count,
+                'changed_by' => $this->changedBy($request),
+                'changed_at' => now(),
+            ]);
+
+            return $count;
+        });
+
+        if ($affected === 0) {
+            return response()->json(['empty' => true, 'message' => 'BNH CHECKS is currently Empty.'], 409);
+        }
+
+        return response()->json(['message' => "✓ BNH helper checks cleared for {$affected} record".($affected === 1 ? '' : 's').'.', 'affected' => $affected]);
+    }
+
+    private function changedBy(Request $request): ?string
+    {
+        return trim(implode(' ', array_filter([
+            (string) $request->session()->get('login_user.first_name', ''),
+            (string) $request->session()->get('login_user.last_name', ''),
+        ]))) ?: $request->session()->get('login_user.gmail');
     }
 }

@@ -4,8 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\GlobalVariable;
 use App\Models\Purok;
+use App\Models\Record;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class SuperadminDashboardTest extends TestCase
@@ -34,7 +37,16 @@ class SuperadminDashboardTest extends TestCase
             ->assertDontSee('name="password"')
             ->assertSee('id="saveSignatoriesBtn" disabled', false)
             ->assertSee('id="saToastContainer"', false)
+            ->assertSee('Mga R4-02 Hakbang')
+            ->assertSee('data-hakbang-status="MS"', false)
+            ->assertSee('data-hakbang-status="UWP"', false)
+            ->assertSee('BNH FORM RESET')
+            ->assertSee('bnhResetCountdownBar')
+            ->assertSee('setInterval(updateCountdown, 100)')
+            ->assertDontSee('Monthly session debug')
+            ->assertDontSee('startMonthlyDebugSessionButton')
             ->assertDontSee('id="signatoriesSuccessModal"', false);
+        $this->assertFalse(Route::has('superadmin.monthly-session.start-debug'));
     }
 
     public function test_superadmin_layout_keeps_authenticated_head_secretary_identity_after_user_loops(): void
@@ -518,5 +530,226 @@ class SuperadminDashboardTest extends TestCase
             ])
             ->assertOk()
             ->assertJsonPath('data.entry_years_requirement', 3);
+    }
+
+    public function test_bnh_reset_clears_only_helper_checks_for_all_records_and_is_head_secretary_only(): void
+    {
+        $admin = User::query()->create([
+            'gmail' => 'bnh.reset@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $checked = Record::query()->create([
+            'full_name' => 'Checked Member',
+            'status' => 'MK',
+            'monthly_code' => 'MK: E',
+            'is_valid1' => true,
+            'is_valid2' => true,
+        ]);
+        $unchecked = Record::query()->create([
+            'full_name' => 'Unchecked Member',
+            'status' => 'UWP',
+            'is_valid1' => false,
+            'is_valid2' => false,
+        ]);
+
+        $session = ['login_user' => ['id' => $admin->id]];
+        $generatedCodeResponse = $this->withSession($session)
+            ->postJson(route('superadmin.reset-bnh-helper-checks.code'))
+            ->assertOk()
+            ->assertJsonStructure(['code', 'expires_in_seconds'])
+            ->assertJsonPath('expires_in_seconds', 45);
+        $firstCode = json_decode($generatedCodeResponse->getContent(), true, flags: JSON_THROW_ON_ERROR)['code'];
+        $replacementCodeResponse = $this->withSession($session)
+            ->postJson(route('superadmin.reset-bnh-helper-checks.code'))
+            ->assertOk();
+        $confirmation = json_decode($replacementCodeResponse->getContent(), true, flags: JSON_THROW_ON_ERROR)['code'];
+        $this->assertNotSame($firstCode, $confirmation);
+        $this->withSession($session)
+            ->postJson(route('superadmin.reset-bnh-helper-checks'), ['confirmation' => $confirmation])
+            ->assertOk()
+            ->assertJsonPath('affected', 1);
+        $this->assertDatabaseHas('records', [
+            'id' => $checked->id,
+            'status' => 'MK',
+            'monthly_code' => 'MK: E',
+            'is_valid1' => false,
+            'is_valid2' => false,
+        ]);
+        $this->assertDatabaseHas('records', [
+            'id' => $unchecked->id,
+            'status' => 'UWP',
+            'is_valid1' => false,
+            'is_valid2' => false,
+        ]);
+        $this->assertDatabaseHas('system_maintenance_audits', [
+            'action' => 'reset_bnh_helper_checks',
+            'affected_count' => 1,
+        ]);
+
+        $secretary = User::query()->create([
+            'gmail' => 'bnh.secretary@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+        ]);
+        $this->withSession(['login_user' => ['id' => $secretary->id]])
+            ->postJson(route('superadmin.reset-bnh-helper-checks.code'))
+            ->assertForbidden();
+    }
+
+    public function test_bnh_reset_code_reports_empty_checks_and_rejects_unissued_codes(): void
+    {
+        $admin = User::query()->create([
+            'gmail' => 'bnh.empty@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $session = ['login_user' => ['id' => $admin->id]];
+
+        $this->withSession($session)
+            ->postJson(route('superadmin.reset-bnh-helper-checks.code'))
+            ->assertStatus(409)
+            ->assertJsonPath('empty', true)
+            ->assertJsonPath('message', 'BNH CHECKS is currently Empty.');
+        $this->withSession($session)
+            ->postJson(route('superadmin.reset-bnh-helper-checks'), ['confirmation' => 'asqlkgjs8579'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('confirmation');
+    }
+
+    public function test_bnh_reset_code_expires_after_45_seconds(): void
+    {
+        $admin = User::query()->create([
+            'gmail' => 'bnh.expiry@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        Record::query()->create([
+            'full_name' => 'Has BNH checks',
+            'is_valid1' => true,
+            'is_valid2' => false,
+        ]);
+        $session = ['login_user' => ['id' => $admin->id]];
+        Carbon::setTestNow(Carbon::parse('2026-10-02 10:00:00'));
+
+        $generatedCodeResponse = $this->withSession($session)
+            ->postJson(route('superadmin.reset-bnh-helper-checks.code'))
+            ->assertOk();
+        $confirmation = json_decode($generatedCodeResponse->getContent(), true, flags: JSON_THROW_ON_ERROR)['code'];
+        Carbon::setTestNow(Carbon::parse('2026-10-02 10:00:45'));
+
+        $this->withSession($session)
+            ->postJson(route('superadmin.reset-bnh-helper-checks'), ['confirmation' => $confirmation])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('confirmation');
+        $this->assertDatabaseHas('records', ['full_name' => 'Has BNH checks', 'is_valid1' => true]);
+
+        Carbon::setTestNow();
+    }
+
+    public function test_r402_hakbangs_are_managed_separately_for_ms_and_uwp(): void
+    {
+        $admin = User::query()->create([
+            'gmail' => 'hakbang.admin@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $session = ['login_user' => ['id' => $admin->id]];
+
+        $this->withSession($session)
+            ->postJson(route('superadmin.r4-02.hakbangs.store'), [
+                'status' => 'MS',
+                'code' => '1-7',
+                'description' => 'Dinalaw, Pinayuhan, Pinanalangin',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'MS')
+            ->assertJsonPath('data.code', '1-7');
+
+        $this->withSession($session)
+            ->postJson(route('superadmin.r4-02.hakbangs.store'), [
+                'status' => 'UWP',
+                'code' => '1-7',
+                'description' => 'UWP hakbang description',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.status', 'UWP');
+
+        $msHakbang = \App\Models\R402Hakbang::query()->where('status', 'MS')->firstOrFail();
+        $this->withSession($session)
+            ->putJson(route('superadmin.r4-02.hakbangs.update', $msHakbang), [
+                'status' => 'MS',
+                'code' => '1-8',
+                'description' => 'Updated MS description',
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.code', '1-8');
+
+        $this->assertDatabaseHas('r4_02_hakbangs', [
+            'status' => 'MS',
+            'code' => '1-8',
+            'description' => 'Updated MS description',
+        ]);
+        $this->assertDatabaseHas('r4_02_hakbangs', [
+            'status' => 'UWP',
+            'code' => '1-7',
+            'description' => 'UWP hakbang description',
+        ]);
+
+        $this->withSession($session)
+            ->deleteJson(route('superadmin.r4-02.hakbangs.destroy', $msHakbang))
+            ->assertOk();
+        $this->assertDatabaseMissing('r4_02_hakbangs', ['id' => $msHakbang->id]);
+    }
+
+    public function test_r402_hakbangs_reject_duplicate_codes_per_status_and_invalid_values(): void
+    {
+        $admin = User::query()->create([
+            'gmail' => 'hakbang.validation@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $session = ['login_user' => ['id' => $admin->id]];
+        $payload = ['status' => 'MS', 'code' => '1-7', 'description' => 'First description'];
+
+        $this->withSession($session)
+            ->postJson(route('superadmin.r4-02.hakbangs.store'), $payload)
+            ->assertCreated();
+        $this->withSession($session)
+            ->postJson(route('superadmin.r4-02.hakbangs.store'), $payload)
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('code');
+        $this->withSession($session)
+            ->postJson(route('superadmin.r4-02.hakbangs.store'), [
+                'status' => 'MK',
+                'code' => 'invalid',
+                'description' => '',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status', 'code', 'description']);
+    }
+
+    public function test_only_head_secretary_can_manage_r402_hakbangs(): void
+    {
+        $secretary = User::query()->create([
+            'gmail' => 'hakbang.secretary@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $secretary->id]])
+            ->postJson(route('superadmin.r4-02.hakbangs.store'), [
+                'status' => 'MS',
+                'code' => '1-7',
+                'description' => 'Unauthorized description',
+            ])
+            ->assertForbidden();
     }
 }

@@ -26,10 +26,13 @@
             .tagline { position: fixed; top: 50%; left: 50%; width: calc(100vw - 2rem); transform: translate(-50%, -50%); font-size: clamp(2rem, 5vw, 4.5rem); font-weight: 600; letter-spacing: .02em; opacity: 0; transition: opacity .6s ease; }
             .tagline.show { opacity: 1; }
             .fade { opacity: 0; pointer-events: none; }
+            .skip-intro { position:fixed; top:1rem; right:1rem; z-index:10; padding:.65rem 1rem; border:1px solid rgba(10,107,214,.25); border-radius:999px; background:#fff; color:#0a4a8a; font:600 .9rem 'Montserrat',sans-serif; text-decoration:none; box-shadow:0 5px 18px rgba(10,74,138,.12); }
+            .skip-intro:hover { background:var(--soft-blue); }
             @media (max-width: 480px) { .letter { width: 3.2rem; height: 3.2rem; font-size: 1.6rem; } }
         </style>
     </head>
     <body>
+        <a class="skip-intro" href="{{ url('/login') }}">Skip intro</a>
         <main class="intro">
             <div id="welcome" class="welcome">Welcome to</div>
             <div id="letters" class="letters" aria-label="LSPDMS">

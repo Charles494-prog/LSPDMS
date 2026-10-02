@@ -4,8 +4,8 @@ use App\Http\Controllers\BroadcastAuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeliberationController;
 use App\Http\Controllers\DelistmentController;
-use App\Http\Controllers\FormGeneratorController;
 use App\Http\Controllers\FilterBnhHelperController;
+use App\Http\Controllers\FormGeneratorController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\PasswordResetController;
@@ -23,9 +23,9 @@ Route::get('/', function () {
 
 Route::get('/intro', function () {
     return view('intro');
-});
+})->middleware('guest.redirect');
 
-Route::get('/login', [LoginController::class, 'showLogin'])->name('login.form');
+Route::get('/login', [LoginController::class, 'showLogin'])->middleware('guest.redirect')->name('login.form');
 
 Route::post('/login', [LoginController::class, 'login'])->name('login');
 Route::get('/password/reset', [PasswordResetController::class, 'requestForm'])->name('password.request');
@@ -83,6 +83,12 @@ Route::middleware('login.session')->group(function () {
         Route::post('/forms/monthly/deliberation/duplicates', [DeliberationController::class, 'duplicates'])
             ->middleware('throttle:30,1')
             ->name('forms.monthly.deliberation.duplicates');
+        Route::get('/forms/monthly/deliberation/suggestions', [DeliberationController::class, 'addSuggestions'])
+            ->middleware('throttle:120,1')
+            ->name('forms.monthly.deliberation.suggestions');
+        Route::post('/forms/monthly/deliberation/registry-check', [DeliberationController::class, 'checkRegistry'])
+            ->middleware('throttle:60,1')
+            ->name('forms.monthly.deliberation.registry-check');
         Route::get('/forms/monthly/deliberation/subtract/search', [DeliberationController::class, 'searchSubtractRecords'])
             ->middleware('throttle:60,1')
             ->name('forms.monthly.deliberation.subtract.search');
@@ -95,6 +101,13 @@ Route::middleware('login.session')->group(function () {
         Route::get('/forms/monthly/modify', [DeliberationController::class, 'modifyIndex'])->name('forms.monthly.modify');
         Route::get('/forms/monthly/modify/search', [DeliberationController::class, 'modifySearch'])->name('forms.monthly.modify.search');
         Route::post('/forms/monthly/modify', [DeliberationController::class, 'modify'])->middleware('throttle:15,1')->name('forms.monthly.modify.save');
+        Route::get('/forms/monthly/session', [DeliberationController::class, 'sessionMonitor'])->name('forms.monthly.session');
+        Route::get('/forms/monthly/session/status', [DeliberationController::class, 'sessionStatus'])->name('forms.monthly.session.status');
+        Route::post('/forms/monthly/session/start', [DeliberationController::class, 'startSession'])->name('forms.monthly.session.start');
+        Route::post('/forms/monthly/session/finish', [DeliberationController::class, 'finishSession'])
+            ->middleware('head.secretary')
+            ->name('forms.monthly.session.finish');
+        Route::delete('/forms/monthly/session/movements/{movement}', [DeliberationController::class, 'undoMovement'])->name('forms.monthly.session.undo');
         Route::get('/forms/notes', [FormGeneratorController::class, 'notes'])->name('forms.notes');
         Route::post('/forms/notes/records/{record}', [FormGeneratorController::class, 'appendNote'])->middleware('throttle:30,1')->name('forms.notes.append');
         Route::delete('/forms/notes/records/{record}/{noteIndex}', [FormGeneratorController::class, 'deleteNote'])
@@ -109,11 +122,20 @@ Route::middleware('login.session')->group(function () {
     });
     Route::middleware('head.secretary')->group(function (): void {
         Route::get('/superadmin-dashboard', [SuperadminController::class, 'index'])->name('superadmin-dashboard');
+        Route::post('/superadmin/r4-02/hakbangs', [SuperadminController::class, 'storeR402Hakbang'])->name('superadmin.r4-02.hakbangs.store');
+        Route::put('/superadmin/r4-02/hakbangs/{hakbang}', [SuperadminController::class, 'updateR402Hakbang'])->name('superadmin.r4-02.hakbangs.update');
+        Route::delete('/superadmin/r4-02/hakbangs/{hakbang}', [SuperadminController::class, 'destroyR402Hakbang'])->name('superadmin.r4-02.hakbangs.destroy');
         Route::put('/superadmin/users/{user}', [SuperadminController::class, 'updateUser'])->name('superadmin.users.update');
         Route::put('/superadmin/permissions', [SuperadminController::class, 'updatePermissions'])->name('superadmin.permissions.update');
         Route::put('/superadmin/signatories', [SuperadminController::class, 'updateSignatories'])->name('superadmin.signatories.update');
         Route::put('/superadmin/global-variables', [SuperadminController::class, 'updateGlobalVariables'])->name('superadmin.global-variables.update');
         Route::put('/superadmin/security-settings', [SuperadminController::class, 'updateSecuritySettings'])->name('superadmin.security-settings.update');
+        Route::post('/superadmin/reset-bnh-helper-checks/code', [SuperadminController::class, 'generateBnhResetCode'])
+            ->middleware('throttle:10,1')
+            ->name('superadmin.reset-bnh-helper-checks.code');
+        Route::post('/superadmin/reset-bnh-helper-checks', [SuperadminController::class, 'resetBnhHelperChecks'])
+            ->middleware('throttle:10,1')
+            ->name('superadmin.reset-bnh-helper-checks');
     });
     Route::post('/logout', [LoginController::class, 'logout']);
     Route::get('/session/status', function (Request $request) {

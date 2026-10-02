@@ -52,6 +52,19 @@
     .sa-tab-btn.active { color: var(--sa-accent); border-bottom-color: var(--sa-accent); }
     .sa-tab-panel { display: none; }
     .sa-tab-panel.active { display: block; }
+    #bnhResetGeneratedCode { display:inline-block; margin:.4rem 0; padding:.55rem .75rem; border:1px solid var(--sa-border); border-radius:8px; background:var(--sa-bg); font-size:1.1rem; font-weight:800; letter-spacing:.12em; user-select:none; -webkit-user-select:none; }
+    .bnh-reset-countdown { height:9px; overflow:hidden; border-radius:999px; background:color-mix(in srgb,var(--sa-accent) 14%,var(--sa-bg)); }
+    .bnh-reset-countdown > div { width:100%; height:100%; border-radius:inherit; background:var(--sa-accent); transition:width .12s linear; }
+    .hakbang-status-tabs { display:flex; gap:.5rem; margin:0 0 1rem; }
+    .hakbang-status-btn { border:1px solid var(--sa-border); border-radius:8px; padding:.55rem 1rem; color:var(--sa-ink-soft); background:var(--sa-bg); font:inherit; font-weight:700; cursor:pointer; }
+    .hakbang-status-btn.active { color:#fff; background:var(--sa-accent); border-color:var(--sa-accent); }
+    .hakbang-add-form { display:grid; grid-template-columns:minmax(110px, .7fr) minmax(220px, 2fr) auto; gap:.7rem; align-items:end; margin-bottom:1.2rem; }
+    .hakbang-field label { display:block; margin-bottom:.35rem; color:var(--sa-ink-soft); font-size:.8rem; font-weight:600; }
+    .hakbang-field input { width:100%; box-sizing:border-box; padding:.6rem .7rem; border:1px solid var(--sa-border); border-radius:8px; font:inherit; }
+    .hakbang-row-input { width:100%; min-width:100px; box-sizing:border-box; padding:.5rem .6rem; border:1px solid var(--sa-border); border-radius:7px; font:inherit; }
+    .hakbang-description-input { min-width:240px; }
+    .hakbang-actions { display:flex; gap:.4rem; }
+    @media (max-width:700px) { .hakbang-add-form { grid-template-columns:1fr; } }
 
     /* ===== Shared card ===== */
     .sa-card {
@@ -640,6 +653,8 @@
             <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7.3"/><path d="M2.7 10h14.6M10 2.7c2 2.2 3 5 3 7.3s-1 5.1-3 7.3c-2-2.2-3-5-3-7.3s1-5.1 3-7.3z"/></svg>
             Global Variables
         </button>
+        <button type="button" class="sa-tab-btn" data-tab="r402-hakbangs">Mga R4-02 Hakbang</button>
+        <button type="button" class="sa-tab-btn" data-tab="maintenance">BNH FORM RESET</button>
     </div>
 
     <!-- ============ USER MANAGEMENT ============ -->
@@ -1113,9 +1128,96 @@
         </div>
     </div>
 
+    <div class="sa-tab-panel" id="tab-r402-hakbangs">
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>Mga R4-02 Hakbang</h2>
+                    <p>Manage the code and description entries separately for MS and UWP. Codes are unique within each status.</p>
+                </div>
+            </div>
+            <div class="hakbang-status-tabs" role="tablist" aria-label="R4-02 status">
+                <button type="button" class="hakbang-status-btn active" data-hakbang-status="MS" role="tab" aria-selected="true">MS</button>
+                <button type="button" class="hakbang-status-btn" data-hakbang-status="UWP" role="tab" aria-selected="false">UWP</button>
+            </div>
+            <form class="hakbang-add-form" id="addHakbangForm">
+                <div class="hakbang-field">
+                    <label for="newHakbangCode">Code</label>
+                    <input id="newHakbangCode" name="code" type="text" placeholder="e.g. 1-7" pattern="[0-9]+-[0-9]+" maxlength="30" required>
+                </div>
+                <div class="hakbang-field">
+                    <label for="newHakbangDescription">Description</label>
+                    <input id="newHakbangDescription" name="description" type="text" maxlength="2000" placeholder="e.g. Dinalaw, Pinayuhan, Pinanalangin" required>
+                </div>
+                <button type="submit" class="sa-btn sa-btn-primary" id="addHakbangBtn">Add Hakbang</button>
+            </form>
+            <div class="sa-table-wrap">
+                <table class="sa-table">
+                    <thead><tr><th>Code</th><th>Description</th><th>Actions</th></tr></thead>
+                    <tbody id="hakbangRows">
+                        @foreach ($r402Hakbangs as $hakbang)
+                            <tr data-hakbang-id="{{ $hakbang->id }}" data-status="{{ $hakbang->status }}">
+                                <td><input class="hakbang-row-input hakbang-code-input" type="text" value="{{ $hakbang->code }}" pattern="[0-9]+-[0-9]+" maxlength="30" aria-label="Hakbang code"></td>
+                                <td><input class="hakbang-row-input hakbang-description-input" type="text" value="{{ $hakbang->description }}" maxlength="2000" aria-label="Hakbang description"></td>
+                                <td>
+                                    <div class="hakbang-actions">
+                                        <button type="button" class="sa-btn sa-btn-primary sa-btn-sm hakbang-save-btn" disabled>Save</button>
+                                        <button type="button" class="sa-btn sa-btn-danger sa-btn-sm hakbang-delete-btn">Delete</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+                <div class="sa-empty" id="hakbangEmptyState" @if ($r402Hakbangs->isNotEmpty()) style="display:none;" @endif>No hakbang codes configured for this status.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sa-tab-panel" id="tab-maintenance">
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>BNH FORM RESET</h2>
+                    <p>A fresh code appears when you open this tab and changes every 45 seconds.</p>
+                </div>
+            </div>
+            <div class="gv-grid">
+                <div class="gv-field">
+                    <div id="bnhResetCodePanel" hidden>
+                        <p class="gv-hint">Enter the code shown below. The checks reset automatically when all characters match.</p>
+                        <code id="bnhResetGeneratedCode" aria-label="Generated reset code"></code>
+                        <div class="bnh-reset-countdown" role="progressbar" aria-label="Code time remaining" aria-valuemin="0" aria-valuemax="45" aria-valuenow="45">
+                            <div id="bnhResetCountdownBar"></div>
+                        </div>
+                        <p class="gv-hint" id="bnhResetCountdownText">45 seconds remaining</p>
+                        <label for="bnhResetCodeInput">Confirmation code</label>
+                        <input id="bnhResetCodeInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="12" disabled>
+                    </div>
+                    <div class="gv-hint">Clears only <code>is_valid1</code> and <code>is_valid2</code> for all records. Status and all other record data remain unchanged.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <div class="sa-toast-container" id="saToastContainer" aria-live="polite" aria-atomic="false"></div>
+
+<div class="sa-modal-overlay" id="deleteHakbangModal" aria-hidden="true">
+    <div class="sa-modal" role="dialog" aria-modal="true" aria-labelledby="deleteHakbangTitle">
+        <div class="sa-modal-header">
+            <div>
+                <h2 id="deleteHakbangTitle">Delete Hakbang?</h2>
+                <p id="deleteHakbangMessage">This entry will be permanently removed.</p>
+            </div>
+        </div>
+        <div class="sa-modal-save-bar">
+            <button type="button" class="sa-btn sa-btn-ghost" id="cancelDeleteHakbang">Cancel</button>
+            <button type="button" class="sa-btn sa-btn-danger" id="confirmDeleteHakbang">Delete Hakbang</button>
+        </div>
+    </div>
+</div>
 
 <!-- ============ EDIT PERMISSIONS OF SECRETARIES (modal, launched from User Management) ============ -->
 <div class="sa-modal-overlay" id="permissionsModalOverlay">
@@ -1185,6 +1287,7 @@
         // ===== Tabs =====
         const tabBtns = document.querySelectorAll('.sa-tab-btn');
         const tabPanels = document.querySelectorAll('.sa-tab-panel');
+        let ensureBnhResetCode = null;
 
         function activateTab(tabName) {
             const button = Array.from(tabBtns).find(tab => tab.dataset.tab === tabName);
@@ -1201,6 +1304,7 @@
             btn.addEventListener('click', () => {
                 activateTab(btn.dataset.tab);
                 window.history.replaceState(null, '', `#${btn.dataset.tab}`);
+                if (btn.dataset.tab === 'maintenance') ensureBnhResetCode?.();
             });
         });
 
@@ -1235,6 +1339,9 @@
             signatories: @json(route('superadmin.signatories.update')),
             globalVariables: @json(route('superadmin.global-variables.update')),
             securitySettings: @json(route('superadmin.security-settings.update')),
+            generateBnhResetCode: @json(route('superadmin.reset-bnh-helper-checks.code')),
+            resetBnhChecks: @json(route('superadmin.reset-bnh-helper-checks')),
+            r402Hakbangs: @json(url('/superadmin/r4-02/hakbangs')),
         };
         const toastContainer = document.getElementById('saToastContainer');
         if (toastContainer && toastContainer.parentElement !== document.body) {
@@ -1278,6 +1385,124 @@
             const timer = window.setTimeout(dismiss, type === 'error' ? 7000 : 4500);
         }
 
+        async function sendDestructiveReset(url, confirmation) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({ confirmation }),
+            });
+            const body = await response.json();
+            if (!response.ok) {
+                const message = body.errors ? Object.values(body.errors).flat()[0] : body.message;
+                throw new Error(message || 'The reset could not be completed.');
+            }
+            return body;
+        }
+
+        const bnhCodePanel = document.getElementById('bnhResetCodePanel');
+        const bnhCodeDisplay = document.getElementById('bnhResetGeneratedCode');
+        const bnhCodeInput = document.getElementById('bnhResetCodeInput');
+        const bnhCountdownBar = document.getElementById('bnhResetCountdownBar');
+        const bnhCountdownTrack = bnhCountdownBar?.parentElement;
+        const bnhCountdownText = document.getElementById('bnhResetCountdownText');
+        const bnhCodeLifetime = 45;
+        let expectedBnhCode = '';
+        let submittingBnhCode = false;
+        let bnhCodeCycleActive = false;
+        let bnhCodeExpiresAt = 0;
+        let bnhCodeTimer = null;
+
+        async function generateBnhResetCode() {
+            window.clearInterval(bnhCodeTimer);
+            bnhCodeCycleActive = false;
+            expectedBnhCode = '';
+            bnhCodePanel.hidden = true;
+            bnhCodeInput.disabled = true;
+            bnhCodeInput.value = '';
+            const requestStartedAt = Date.now();
+            const response = await fetch(superadminUrls.generateBnhResetCode, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken, 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const body = await response.json();
+            if (!response.ok) {
+                bnhCodePanel.hidden = true;
+                if (body.empty) {
+                    window.alert('BNH CHECKS is currently Empty.');
+                    return;
+                }
+                throw new Error(body.message || Object.values(body.errors || {}).flat()[0] || 'Could not generate the BNH reset code.');
+            }
+
+            expectedBnhCode = body.code;
+            bnhCodeDisplay.textContent = expectedBnhCode;
+            bnhCodePanel.hidden = false;
+            bnhCodeInput.disabled = false;
+            bnhCodeCycleActive = true;
+            bnhCodeExpiresAt = requestStartedAt + bnhCodeLifetime * 1000;
+
+            const updateCountdown = () => {
+                const remaining = Math.max(0, bnhCodeExpiresAt - Date.now());
+                const seconds = Math.ceil(remaining / 1000);
+                bnhCountdownBar.style.width = `${(remaining / (bnhCodeLifetime * 1000)) * 100}%`;
+                bnhCountdownTrack.setAttribute('aria-valuenow', String(seconds));
+                bnhCountdownText.textContent = `${seconds} second${seconds === 1 ? '' : 's'} remaining`;
+                if (remaining === 0) {
+                    window.clearInterval(bnhCodeTimer);
+                    generateBnhResetCode().catch(error => showToast(error.message, 'error'));
+                }
+            };
+
+            updateCountdown();
+            bnhCodeTimer = window.setInterval(updateCountdown, 100);
+        }
+
+        ensureBnhResetCode = () => {
+            if (bnhCodeCycleActive || submittingBnhCode) return;
+            generateBnhResetCode().catch(error => showToast(error.message, 'error'));
+        };
+
+        bnhCodeDisplay.addEventListener('copy', event => event.preventDefault());
+        bnhCodeDisplay.addEventListener('cut', event => event.preventDefault());
+        bnhCodeDisplay.addEventListener('contextmenu', event => event.preventDefault());
+        bnhCodeInput.addEventListener('paste', event => {
+            event.preventDefault();
+            showToast('Please type the code manually; pasting is disabled.', 'error');
+        });
+        bnhCodeInput.addEventListener('copy', event => event.preventDefault());
+        bnhCodeInput.addEventListener('cut', event => event.preventDefault());
+        bnhCodeInput.addEventListener('input', async () => {
+            if (!expectedBnhCode || submittingBnhCode || bnhCodeInput.value !== expectedBnhCode) return;
+            submittingBnhCode = true;
+            bnhCodeCycleActive = false;
+            window.clearInterval(bnhCodeTimer);
+            bnhCodeInput.disabled = true;
+            try {
+                const result = await sendDestructiveReset(superadminUrls.resetBnhChecks, bnhCodeInput.value);
+                showToast(result.message);
+                expectedBnhCode = '';
+                bnhCodePanel.hidden = true;
+                bnhCodeInput.value = '';
+            } catch (error) {
+                if (error.message === 'BNH CHECKS is currently Empty.') window.alert(error.message);
+                else showToast(error.message, 'error');
+                expectedBnhCode = '';
+                bnhCodePanel.hidden = true;
+                bnhCodeInput.value = '';
+            } finally {
+                submittingBnhCode = false;
+            }
+        });
+
+        if (document.getElementById('tab-maintenance')?.classList.contains('active')) {
+            ensureBnhResetCode();
+        }
+
         async function sendUpdate(url, payload) {
             const response = await fetch(url, {
                 method: 'PUT',
@@ -1296,6 +1521,211 @@
             }
             return body;
         }
+
+        // ===== R4-02 Hakbang management =====
+        const hakbangRows = document.getElementById('hakbangRows');
+        const hakbangEmptyState = document.getElementById('hakbangEmptyState');
+        const hakbangStatusButtons = document.querySelectorAll('[data-hakbang-status]');
+        const hakbangAddForm = document.getElementById('addHakbangForm');
+        const deleteHakbangModal = document.getElementById('deleteHakbangModal');
+        const deleteHakbangMessage = document.getElementById('deleteHakbangMessage');
+        let selectedHakbangStatus = 'MS';
+        let pendingHakbangDelete = null;
+
+        if (deleteHakbangModal && deleteHakbangModal.parentElement !== document.body) {
+            document.body.appendChild(deleteHakbangModal);
+        }
+
+        function refreshHakbangRows() {
+            if (!hakbangRows) return;
+            const visibleRows = [...hakbangRows.querySelectorAll('tr[data-hakbang-id]')]
+                .filter(row => row.dataset.status === selectedHakbangStatus);
+            hakbangRows.querySelectorAll('tr[data-hakbang-id]').forEach(row => {
+                row.hidden = row.dataset.status !== selectedHakbangStatus;
+            });
+            if (hakbangEmptyState) hakbangEmptyState.style.display = visibleRows.length ? 'none' : 'block';
+        }
+
+        function setHakbangRowBaseline(row) {
+            row.querySelector('.hakbang-code-input').dataset.originalValue = row.querySelector('.hakbang-code-input').value;
+            row.querySelector('.hakbang-description-input').dataset.originalValue = row.querySelector('.hakbang-description-input').value;
+            row.querySelector('.hakbang-save-btn').disabled = true;
+        }
+
+        function createHakbangRow(item) {
+            const row = document.createElement('tr');
+            row.dataset.hakbangId = item.id;
+            row.dataset.status = item.status;
+
+            const codeCell = document.createElement('td');
+            const codeInput = document.createElement('input');
+            codeInput.className = 'hakbang-row-input hakbang-code-input';
+            codeInput.type = 'text';
+            codeInput.maxLength = 30;
+            codeInput.pattern = '[0-9]+-[0-9]+';
+            codeInput.setAttribute('aria-label', 'Hakbang code');
+            codeInput.value = item.code;
+            codeCell.appendChild(codeInput);
+
+            const descriptionCell = document.createElement('td');
+            const descriptionInput = document.createElement('input');
+            descriptionInput.className = 'hakbang-row-input hakbang-description-input';
+            descriptionInput.type = 'text';
+            descriptionInput.maxLength = 2000;
+            descriptionInput.setAttribute('aria-label', 'Hakbang description');
+            descriptionInput.value = item.description;
+            descriptionCell.appendChild(descriptionInput);
+
+            const actionsCell = document.createElement('td');
+            const actions = document.createElement('div');
+            actions.className = 'hakbang-actions';
+            const saveButton = document.createElement('button');
+            saveButton.type = 'button';
+            saveButton.className = 'sa-btn sa-btn-primary sa-btn-sm hakbang-save-btn';
+            saveButton.textContent = 'Save';
+            saveButton.disabled = true;
+            const deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.className = 'sa-btn sa-btn-danger sa-btn-sm hakbang-delete-btn';
+            deleteButton.textContent = 'Delete';
+            actions.append(saveButton, deleteButton);
+            actionsCell.appendChild(actions);
+            row.append(codeCell, descriptionCell, actionsCell);
+            setHakbangRowBaseline(row);
+            return row;
+        }
+
+        async function sendHakbangRequest(method, url, payload) {
+            const response = await fetch(url, {
+                method,
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                ...(payload ? { body: JSON.stringify(payload) } : {}),
+            });
+            const body = await response.json();
+            if (!response.ok) {
+                const message = body.errors ? Object.values(body.errors).flat()[0] : body.message;
+                throw new Error(message || 'The R4-02 hakbang could not be saved.');
+            }
+            return body;
+        }
+
+        hakbangRows?.querySelectorAll('tr[data-hakbang-id]').forEach(setHakbangRowBaseline);
+        hakbangStatusButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                selectedHakbangStatus = button.dataset.hakbangStatus;
+                hakbangStatusButtons.forEach(item => {
+                    const active = item === button;
+                    item.classList.toggle('active', active);
+                    item.setAttribute('aria-selected', String(active));
+                });
+                refreshHakbangRows();
+            });
+        });
+        refreshHakbangRows();
+
+        hakbangRows?.addEventListener('input', event => {
+            const row = event.target.closest('tr[data-hakbang-id]');
+            if (!row) return;
+            const code = row.querySelector('.hakbang-code-input');
+            const description = row.querySelector('.hakbang-description-input');
+            row.querySelector('.hakbang-save-btn').disabled =
+                code.value === code.dataset.originalValue &&
+                description.value === description.dataset.originalValue;
+        });
+
+        hakbangAddForm?.addEventListener('submit', async event => {
+            event.preventDefault();
+            const submitButton = document.getElementById('addHakbangBtn');
+            const code = document.getElementById('newHakbangCode');
+            const description = document.getElementById('newHakbangDescription');
+            submitButton.disabled = true;
+            try {
+                const { data, message } = await sendHakbangRequest('POST', superadminUrls.r402Hakbangs, {
+                    status: selectedHakbangStatus,
+                    code: code.value.trim(),
+                    description: description.value.trim(),
+                });
+                hakbangRows.appendChild(createHakbangRow(data));
+                hakbangAddForm.reset();
+                refreshHakbangRows();
+                showToast(message || 'Hakbang added.');
+            } catch (error) {
+                showToast(error.message, 'error');
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+
+        hakbangRows?.addEventListener('click', async event => {
+            const row = event.target.closest('tr[data-hakbang-id]');
+            if (!row) return;
+
+            if (event.target.closest('.hakbang-save-btn')) {
+                const button = event.target.closest('.hakbang-save-btn');
+                const code = row.querySelector('.hakbang-code-input').value.trim();
+                const description = row.querySelector('.hakbang-description-input').value.trim();
+                button.disabled = true;
+                try {
+                    const { data, message } = await sendHakbangRequest(
+                        'PUT',
+                        `${superadminUrls.r402Hakbangs}/${row.dataset.hakbangId}`,
+                        { status: row.dataset.status, code, description }
+                    );
+                    row.querySelector('.hakbang-code-input').value = data.code;
+                    row.querySelector('.hakbang-description-input').value = data.description;
+                    setHakbangRowBaseline(row);
+                    showToast(message || 'Hakbang updated.');
+                } catch (error) {
+                    button.disabled = false;
+                    showToast(error.message, 'error');
+                }
+                return;
+            }
+
+            if (event.target.closest('.hakbang-delete-btn')) {
+                const code = row.querySelector('.hakbang-code-input').value;
+                deleteHakbangMessage.textContent = `Delete ${row.dataset.status} hakbang ${code}? This cannot be undone.`;
+                deleteHakbangModal.classList.add('active');
+                deleteHakbangModal.setAttribute('aria-hidden', 'false');
+                pendingHakbangDelete = row;
+            }
+        });
+
+        function closeHakbangDeleteModal() {
+            deleteHakbangModal.classList.remove('active');
+            deleteHakbangModal.setAttribute('aria-hidden', 'true');
+            pendingHakbangDelete = null;
+        }
+
+        document.getElementById('cancelDeleteHakbang')?.addEventListener('click', closeHakbangDeleteModal);
+        deleteHakbangModal?.addEventListener('click', event => {
+            if (event.target === deleteHakbangModal) closeHakbangDeleteModal();
+        });
+        document.getElementById('confirmDeleteHakbang')?.addEventListener('click', async event => {
+            if (!pendingHakbangDelete) return;
+            const row = pendingHakbangDelete;
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+                const { message } = await sendHakbangRequest(
+                    'DELETE',
+                    `${superadminUrls.r402Hakbangs}/${row.dataset.hakbangId}`
+                );
+                row.remove();
+                closeHakbangDeleteModal();
+                refreshHakbangRows();
+                showToast(message || 'Hakbang deleted.');
+            } catch (error) {
+                showToast(error.message, 'error');
+            } finally {
+                button.disabled = false;
+            }
+        });
 
         // ===== Access and role updates =====
         const usersTableBody = document.getElementById('usersTableBody');

@@ -3,6 +3,7 @@
 use App\Http\Middleware\EnsureUserHasPermission;
 use App\Http\Middleware\EnsureUserIsHeadSecretary;
 use App\Http\Middleware\EnsureUserIsLoggedIn;
+use App\Http\Middleware\RedirectAuthenticatedUser;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -18,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'login.session' => EnsureUserIsLoggedIn::class,
             'permission' => EnsureUserHasPermission::class,
             'head.secretary' => EnsureUserIsHeadSecretary::class,
+            'guest.redirect' => RedirectAuthenticatedUser::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
