@@ -58,6 +58,20 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
 
+## Account registration
+
+People can request an account from `/register` or the link on the login page.
+New registrations are created as unverified Secretaries with all feature
+permissions disabled. The Head Secretary must grant account access before a
+new user can sign in. Passwords are stored using Laravel's hashed password
+cast, and duplicate email addresses are checked case-insensitively.
+
+Signing out, resetting a password, or changing a password increments the
+account's authentication version and revokes its remembered-device token.
+Other active browser sessions are redirected to sign in on their next
+10-second session check. Password reset and change show the message
+"Change of Password Detected, Please Login Again."
+
 ## Direct messaging (Laravel Reverb)
 
 Messaging is available to verified accounts from the **Messages** navigation item.
@@ -93,8 +107,10 @@ standard authenticated-user guard.
 ## R2-10 eligibility and MK delistment
 
 Run `php artisan migrate` to add the delistment history table, the R2-10
-endorsement reason column, and remove the obsolete date-of-entry requirement
-toggle. In the Superadmin dashboard, set the minimum years since date of entry
+endorsement reason column, remove the obsolete date-of-entry requirement
+toggle, and drop the obsolete stored R2-10 eligibility column from `records`.
+Eligibility is calculated from the current record data and configured rules,
+not stored in the records table. In the Superadmin dashboard, set the minimum years since date of entry
 (1–3 years) and choose whether the baptism cutoff applies. When enabled, an
 MS/UWP member's baptism date must be on or before the configured cutoff; the
 member must also meet the configured entry-age threshold. MK members are always
@@ -134,6 +150,38 @@ to `records.log_section`.
 Monthly Add and Subtract append the current dated monthly code to
 `records.log_section` using `DD-MM-YYYY: STATUS: CODE,`. If a brief description
 is provided, it is appended as a second dated entry.
+
+## R4-01 monthly report
+
+The Form Generator's Monthly Forms > R4-01 page uses the editable Word template
+at `resources/templates/R4-01-EDITABLE.docx`. The download preserves its
+landscape page setup, Tahoma text, and table layout. Select a Purok or All
+Purok and an MS/UWP status to preview matching records in ascending
+Purok–Grupo order. All-Purok exports keep each Purok on its own page sequence;
+they never place one Purok's remaining rows on the next Purok's page. Each
+page uses its Purok's configured Manggagawa and ministerial ID as the
+Maysakop and Assigned No. The report month comes from the latest monthly session;
+local, LCode, DCode, and static form labels come from the saved report settings
+and template. Split Purok labels such as `2A` and `2B` are consolidated under
+Purok 2, with PRK-GRP displayed as `2-Grupo`. BLG numbering runs 1–20, 21–40,
+and so on across pages in the same configured Purok range, then resets to 1
+for the next split range. Records without a monthly code use code A. Reports
+paginate at 20 entries per page and can be downloaded as DOCX or PDF with
+filenames such as `R4-01 (MS) Oct 2026.docx`. The DOCX centers the requested
+data columns and left-aligns member names.
+Generated DOCX and PDF downloads are retained in Form Generator > Monthly
+Forms > Resumen & R4-01 Snapshots, where they can be filtered by report type,
+month, and (for R4-01) status and downloaded again.
+
+## Monthly Resumen generator
+
+Form Generator > Monthly Forms > Resumen Generator builds the editable
+MS/UWP monthly movement summary from the selected month's snapshot or active
+monthly-session movements. Code A is the prior month's closing count; B and C+
+are added, while C-, D, DD, E, G, and H are deducted to calculate the new
+total. Split Puroks are shown separately by their configured Grupo ranges. The
+page previews the MS and UWP totals and exports the supplied editable Word form
+from `resources/templates/RESUMEN-EDITABLE.docx`.
 
 In Monthly Modify, changing an MS/UWP record to MK records the prior status's
 `E` code in the monthly history and requires an R2-10 reason. This does not

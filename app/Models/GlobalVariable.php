@@ -16,6 +16,7 @@ class GlobalVariable extends Model
         's_number',
         'pastor_destinado',
         'ksp_pd',
+        'head_lsp',
         'kalihim_ms',
         'kalihim_uwp',
         'baptism_requirement',

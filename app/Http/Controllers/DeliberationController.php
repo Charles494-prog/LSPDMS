@@ -752,10 +752,10 @@ class DeliberationController extends Controller
             'reuse_record_id' => ['nullable', 'integer', 'exists:records,id'],
         ]);
 
-        $name = trim($validated['full_name']);
+        $name = mb_strtoupper(trim($validated['full_name']));
         $registry = isset($validated['reuse_record_id'])
-            ? strtoupper(trim((string) ($validated['registry'] ?? '')))
-            : $this->normalizeRegistry($validated['registry'] ?? null, (bool) ($validated['is_rfid'] ?? false));
+            ? mb_strtoupper(trim((string) ($validated['registry'] ?? '')))
+            : mb_strtoupper($this->normalizeRegistry($validated['registry'] ?? null, (bool) ($validated['is_rfid'] ?? false)));
         $grupo = $validated['grupo'] ?? null;
         $purok = isset($validated['purok_id']) ? Purok::query()->findOrFail($validated['purok_id']) : null;
         if ($purok && $grupo !== null && ((int) $grupo < $purok->grupo_start || (int) $grupo > $purok->grupo_end)) {
@@ -788,6 +788,8 @@ class DeliberationController extends Controller
 
                 $session = $this->requireActiveMonthlySession($request);
                 $previousValues = $this->movementState($record);
+                $record->full_name = mb_strtoupper(trim((string) $record->full_name));
+                $record->registry = mb_strtoupper(trim((string) $record->registry));
                 $record->status = $validated['status'];
                 $record->monthly_code = $validated['status'].': B';
                 $this->appendLogEntry($record, $record->monthly_code, null, 'd-m-Y');

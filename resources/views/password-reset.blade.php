@@ -19,13 +19,14 @@
 <body>
 <main>
     <h1>Choose a new password</h1>
-    <p>Use at least 8 characters. Reset links expire after one hour.</p>
+    <p>Choose a strong password. Reset links expire after one hour.</p>
     <form method="POST" action="{{ route('password.reset') }}">
         @csrf
         <input type="hidden" name="token" value="{{ $token }}">
         <input type="hidden" name="email" value="{{ $email }}">
         <label for="password">New password</label>
         <input id="password" type="password" name="password" required autocomplete="new-password" minlength="8" autofocus>
+        @include('components.password-strength', ['inputId' => 'password'])
         @error('password') <p class="error">{{ $message }}</p> @enderror
         <label for="password_confirmation">Confirm new password</label>
         <input id="password_confirmation" type="password" name="password_confirmation" required autocomplete="new-password" minlength="8">

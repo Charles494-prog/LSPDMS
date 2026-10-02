@@ -270,6 +270,7 @@ class SuperadminController extends Controller
             's_number' => ['nullable', 'string', 'max:50'],
             'pastor_destinado' => ['nullable', 'string', 'max:255'],
             'ksp_pd' => ['nullable', 'string', 'max:255'],
+            'head_lsp' => ['nullable', 'string', 'max:255'],
             'kalihim_ms' => ['nullable', 'string', 'max:255'],
             'kalihim_uwp' => ['nullable', 'string', 'max:255'],
             'baptism_requirement' => ['required_if:dateofbaptism_requirement_boolean,1', 'nullable', 'date'],

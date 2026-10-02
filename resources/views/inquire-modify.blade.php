@@ -659,7 +659,7 @@ document.addEventListener('DOMContentLoaded', function () {
         $('rm-status-text').textContent = m.status;
         $('rm-purok-display').textContent = m.purok_name || (m.purok ? `Purok ${m.purok}` : '--');
         $('rm-entry-display').textContent = fmtDate(m.date_of_entry);
-        r210 = m.r2_10_eligibility || '--'; r210Shown = false;
+        r210 = m.r210_eligible || '--'; r210Shown = false;
         $('rm-r210-display').textContent = '••••••••••'; $('rm-r210-toggle').textContent = 'Show';
         input('grupo').min = m.grupo_min ?? 1;
         input('grupo').max = m.grupo_max ?? 24;

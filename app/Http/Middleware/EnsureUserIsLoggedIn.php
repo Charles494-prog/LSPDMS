@@ -27,8 +27,34 @@ class EnsureUserIsLoggedIn
                 ]);
             }
 
+            $storedAuthVersion = (int) ($sessionUser['auth_version'] ?? 0);
+            $currentAuthVersion = (int) $user->auth_version;
+            if ($storedAuthVersion !== 0 && $storedAuthVersion !== $currentAuthVersion
+                || $storedAuthVersion === 0 && $currentAuthVersion > 1) {
+                $notice = $user->auth_notice === 'password_changed'
+                    ? 'password_changed'
+                    : 'signed_out_elsewhere';
+                $request->session()->forget('login_user');
+                $request->session()->forget('pending_login_user');
+                Cookie::queue(Cookie::forget('remember_token'));
+
+                if ($request->routeIs('session.status') || $request->expectsJson()) {
+                    return response()->json([
+                        'session_invalid' => true,
+                        'reason' => $notice,
+                    ], 401);
+                }
+
+                $message = $notice === 'password_changed'
+                    ? 'Change of Password Detected, Please Login Again.'
+                    : 'You have been logged out because your account was signed out elsewhere.';
+
+                return redirect('/login')->with('status', $message);
+            }
+
             $freshUser = [
                 'id' => $user->id,
+                'auth_version' => $currentAuthVersion,
                 'gmail' => $user->gmail,
                 'tungkulin' => $user->tungkulin,
                 'first_name' => $user->first_name,
@@ -51,7 +77,8 @@ class EnsureUserIsLoggedIn
         }
 
         if ($this->attemptRememberLogin($request)) {
-            view()->share('authenticatedUser', $request->session()->get('login_user'));
+            $user = $request->session()->get('login_user', []);
+            view()->share('authenticatedUser', $user);
 
             return $next($request);
         }
@@ -86,6 +113,7 @@ class EnsureUserIsLoggedIn
         $request->session()->regenerate();
         $request->session()->put('login_user', [
             'id' => $user->id,
+            'auth_version' => (int) $user->auth_version,
             'gmail' => $user->gmail,
             'tungkulin' => $user->tungkulin,
             'first_name' => $user->first_name,

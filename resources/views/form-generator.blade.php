@@ -121,21 +121,21 @@
     </header>
 
     <nav class="form-tabs" role="tablist" aria-label="Form Generator sections">
-        <button class="form-tab" id="weekly-tab" type="button" role="tab" aria-selected="true" aria-controls="weekly-panel" data-panel="weekly">
+        <button class="form-tab" id="weekly-tab" type="button" role="tab" aria-selected="{{ $activePanel === 'weekly' ? 'true' : 'false' }}" aria-controls="weekly-panel" data-panel="weekly">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v4m8-4v4M4 9h16M5 5h14a1 1 0 0 1 1 1v13H4V6a1 1 0 0 1 1-1Z"/></svg>
             Weekly
         </button>
-        <button class="form-tab" id="monthly-tab" type="button" role="tab" aria-selected="false" aria-controls="monthly-panel" data-panel="monthly">
+        <button class="form-tab" id="monthly-tab" type="button" role="tab" aria-selected="{{ $activePanel === 'monthly' ? 'true' : 'false' }}" aria-controls="monthly-panel" data-panel="monthly">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v4m8-4v4M4 9h16M5 5h14a1 1 0 0 1 1 1v13H4V6a1 1 0 0 1 1-1Z"/><path d="M8 13h3m2 0h3m-8 4h3m2 0h3"/></svg>
             Monthly
         </button>
-        <button class="form-tab" id="notes-tab" type="button" role="tab" aria-selected="false" aria-controls="notes-panel" data-panel="notes">
+        <button class="form-tab" id="notes-tab" type="button" role="tab" aria-selected="{{ $activePanel === 'notes' ? 'true' : 'false' }}" aria-controls="notes-panel" data-panel="notes">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12a2 2 0 0 1 2 2v14l-4-2-4 2-4-2-4 2V5a2 2 0 0 1 2-2Z"/><path d="M8 8h8m-8 4h8m-8 4h4"/></svg>
             Notes Checker
         </button>
     </nav>
 
-    <section class="form-panel" id="weekly-panel" role="tabpanel" aria-labelledby="weekly-tab">
+    <section class="form-panel" id="weekly-panel" role="tabpanel" aria-labelledby="weekly-tab" @if ($activePanel !== 'weekly') hidden @endif>
         <div class="form-section-heading">
             <div><h2>Weekly generators</h2><p>Weekly reporting forms and summaries.</p></div>
         </div>
@@ -151,36 +151,36 @@
         </section>
     </section>
 
-    <section class="form-panel" id="monthly-panel" role="tabpanel" aria-labelledby="monthly-tab" hidden>
+    <section class="form-panel" id="monthly-panel" role="tabpanel" aria-labelledby="monthly-tab" @if ($activePanel !== 'monthly') hidden @endif>
         <div class="form-section-heading">
             <div><h2>Monthly generators</h2><p>Monthly reporting forms and summaries.</p></div>
         </div>
         <nav class="form-tabs monthly-tabs" role="tablist" aria-label="Monthly generator sections">
-            <button class="form-tab monthly-tab" id="deliberation-tab" type="button" role="tab" aria-selected="true" aria-controls="deliberation-panel" data-monthly-panel="deliberation">
+            <button class="form-tab monthly-tab" id="deliberation-tab" type="button" role="tab" aria-selected="{{ $activeMonthlyPanel === 'deliberation' ? 'true' : 'false' }}" aria-controls="deliberation-panel" data-monthly-panel="deliberation">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h4"/><path d="m16 16 1.5 1.5L21 14"/></svg>
                 Deliberation
             </button>
-            <button class="form-tab monthly-tab" id="monthly-forms-tab" type="button" role="tab" aria-selected="false" aria-controls="monthly-forms-panel" data-monthly-panel="monthly-forms">
+            <button class="form-tab monthly-tab" id="monthly-forms-tab" type="button" role="tab" aria-selected="{{ $activeMonthlyPanel === 'monthly-forms' ? 'true' : 'false' }}" aria-controls="monthly-forms-panel" data-monthly-panel="monthly-forms">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H5V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 13h8M8 17h8"/></svg>
                 Monthly Forms
             </button>
         </nav>
-        <section class="monthly-subpanel" id="deliberation-panel" role="tabpanel" aria-labelledby="deliberation-tab">
+        <section class="monthly-subpanel" id="deliberation-panel" role="tabpanel" aria-labelledby="deliberation-tab" @if ($activeMonthlyPanel !== 'deliberation') hidden @endif>
             <div class="generator-grid monthly">
                 <a class="generator-card" href="{{ route('forms.monthly.deliberation') }}"><div class="generator-card-top"><span class="generator-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14m-7-7h14"/></svg></span><h3>Add</h3></div><p>Add members to the monthly deliberation workflow.</p><span class="generator-tag">Open Deliberation Form</span></a>
                 <a class="generator-card" href="{{ route('forms.monthly.modify') }}"><div class="generator-card-top"><span class="generator-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5-10.5a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 7.5 4 4"/></svg></span><h3>Modify</h3></div><p>Move a member to another Purok or Grupo.</p><span class="generator-tag">Open Modify Form</span></a>
                 <a class="generator-card" href="{{ route('forms.monthly.deliberation', ['mode' => 'subtract']) }}"><div class="generator-card-top"><span class="generator-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 12h14"/></svg></span><h3>Subtract</h3></div><p>Search for an existing member and mark an eligible record inactive.</p><span class="generator-tag">Open Subtract Form</span></a>
             </div>
         </section>
-        <section class="monthly-subpanel" id="monthly-forms-panel" role="tabpanel" aria-labelledby="monthly-forms-tab" hidden>
+        <section class="monthly-subpanel" id="monthly-forms-panel" role="tabpanel" aria-labelledby="monthly-forms-tab" @if ($activeMonthlyPanel !== 'monthly-forms') hidden @endif>
             <div class="generator-grid monthly">
-                <article class="generator-card"><div class="generator-card-top"><span class="generator-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H5V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M8 13h8M8 17h8"/></svg></span><h3>R4-01 Generator</h3></div><p>Prepare the R4-01 monthly report.</p><span class="generator-tag">Monthly report</span></article>
-                <article class="generator-card"><div class="generator-card-top"><span class="generator-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-6"/></svg></span><h3>Resumen Generator</h3></div><p>Prepare the monthly Resumen.</p><span class="generator-tag">Monthly summary</span></article>
+                <a class="generator-card" href="{{ route('forms.monthly.generators') }}"><div class="generator-card-top"><span class="generator-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5m0 14h16M8 15l3-4 3 2 5-6"/></svg></span><h3>Resumen Generator &amp; R4-01 Generator</h3></div><p>Open both monthly generators together, with Resumen first and R4-01 below.</p><span class="generator-tag">Open Monthly Generators</span></a>
+                <a class="generator-card" href="{{ route('forms.monthly.r4-01.snapshots') }}"><div class="generator-card-top"><span class="generator-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></span><h3>Resumen &amp; R4-01 Snapshots</h3></div><p>Browse and re-download saved Resumen and R4-01 reports.</p><span class="generator-tag">Open Report Snapshots</span></a>
             </div>
         </section>
     </section>
 
-    <section class="form-panel" id="notes-panel" role="tabpanel" aria-labelledby="notes-tab" hidden>
+    <section class="form-panel" id="notes-panel" role="tabpanel" aria-labelledby="notes-tab" @if ($activePanel !== 'notes') hidden @endif>
         <div class="form-section-heading">
             <div><h2>Notes Checker</h2><p>Review, add, or remove entries in a record’s log section. New notes are dated automatically.</p></div>
         </div>

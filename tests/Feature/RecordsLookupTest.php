@@ -25,7 +25,6 @@ class RecordsLookupTest extends TestCase
             'grupo' => '3',
             'date_of_baptism' => '2020-02-03',
             'date_of_entry' => '2020-02-04',
-            'r2_10_eligibility' => 'ELIGIBLE',
             'status' => 'MS',
         ]);
         Record::query()->create([
@@ -49,13 +48,13 @@ class RecordsLookupTest extends TestCase
             ->assertJsonPath('data.0.grupo', '3')
             ->assertJsonPath('data.0.date_of_baptism', '2020-02-03')
             ->assertJsonPath('data.0.date_of_entry', '2020-02-04')
-            ->assertJsonPath('data.0.r2_10_eligibility', null)
+            ->assertJsonPath('data.0.r210_eligible', null)
             ->assertJsonPath('data.0.status', 'MS');
 
         $this->withSession(['login_user' => ['id' => $withDelistment->id]])
             ->getJson(route('records.search', ['q' => 'SAMPLE BUKLOD']))
             ->assertOk()
-            ->assertJsonPath('data.0.r2_10_eligibility', 'ELIGIBLE');
+            ->assertJsonPath('data.0.r210_eligible', 'ELIGIBLE');
 
         $this->withSession(['login_user' => ['id' => 1]])
             ->getJson(route('records.search', ['q' => 'REG-2030-0002']))
@@ -335,13 +334,13 @@ class RecordsLookupTest extends TestCase
                 'gender' => 'Female',
             ])
             ->assertOk()
-            ->assertJsonPath('data.name', 'After Name')
+            ->assertJsonPath('data.name', 'AFTER NAME')
             ->assertJsonPath('data.kapisanan', 'Kadiwa')
             ->assertJsonPath('data.gender', 'Female');
 
         $this->assertDatabaseHas('records', [
             'id' => $record->id,
-            'full_name' => 'After Name',
+            'full_name' => 'AFTER NAME',
             'kapisanan' => 'K',
             'registry' => 'REG-2030-0004',
             'gender' => 'B',
@@ -523,7 +522,8 @@ class RecordsLookupTest extends TestCase
 
         $this->withSession(['login_user' => ['id' => 1]])
             ->putJson(route('records.update', $record), [
-                'name' => 'Changed Name',
+                'name' => '  Charles Andrei Galvan ',
+                'registry_number' => 'rzl0932123abc',
                 'date_of_birth' => '1999-12-31',
                 'gender' => 'Female',
                 'grupo' => 2,
@@ -531,7 +531,8 @@ class RecordsLookupTest extends TestCase
                 'is_married' => 1,
             ])
             ->assertOk()
-            ->assertJsonPath('data.name', 'Changed Name')
+            ->assertJsonPath('data.name', 'CHARLES ANDREI GALVAN')
+            ->assertJsonPath('data.registry_number', 'RZL0932123ABC')
             ->assertJsonPath('data.is_married', true)
             ->assertJsonPath('data.kapisanan', 'Buklod')
             ->assertJsonPath('data.date_of_birth', '1999-12-31')
@@ -539,7 +540,8 @@ class RecordsLookupTest extends TestCase
 
         $this->assertDatabaseHas('records', [
             'id' => $record->id,
-            'full_name' => 'Changed Name',
+            'full_name' => 'CHARLES ANDREI GALVAN',
+            'registry' => 'RZL0932123ABC',
             'gender' => 'B',
             'grupo' => '2',
             'monthly_code' => 'MS: B',

@@ -150,6 +150,7 @@ class LoginController extends Controller
 
         $request->session()->put('login_user', [
             'id' => $freshUser->id,
+            'auth_version' => (int) $freshUser->auth_version,
             'gmail' => $freshUser->gmail,
             'tungkulin' => $freshUser->tungkulin,
             'first_name' => $freshUser->first_name,
@@ -249,6 +250,8 @@ class LoginController extends Controller
 
         if ($user) {
             DB::table('login_user')->where('id', $user['id'])->update([
+                'auth_version' => DB::raw('auth_version + 1'),
+                'auth_notice' => 'signed_out_elsewhere',
                 'remember_token' => null,
                 'remember_token_expires_at' => null,
             ]);

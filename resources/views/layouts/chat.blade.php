@@ -1,5 +1,6 @@
+@php($authenticatedUser = $authenticatedUser ?? [])
 <!DOCTYPE html>
-<html lang="en" data-theme="{{ ($authenticatedUser['dark_mode'] ?? false) ? 'dark' : 'light' }}">
+<html lang="en" data-theme="{{ (($authenticatedUser['dark_mode'] ?? false)) ? 'dark' : 'light' }}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">

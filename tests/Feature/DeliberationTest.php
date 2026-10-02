@@ -502,7 +502,7 @@ class DeliberationTest extends TestCase
 
         $payload = $this->validPayload([
             'full_name' => 'Purok 2b Member',
-            'registry' => 'PUROK2B123456',
+            'registry' => 'purok2b123456',
             'purok_id' => $purok2b->id,
             'grupo' => 8,
         ]);
@@ -511,7 +511,8 @@ class DeliberationTest extends TestCase
             ->assertCreated();
 
         $this->assertDatabaseHas('records', [
-            'full_name' => 'Purok 2b Member',
+            'full_name' => 'PUROK 2B MEMBER',
+            'registry' => 'PUROK2B123456',
             'purok' => '2',
             'grupo' => '8',
         ]);
@@ -1302,11 +1303,20 @@ class DeliberationTest extends TestCase
         $session = ['login_user' => ['id' => $user->id]];
 
         $this->withSession($session)
-            ->postJson(route('forms.monthly.deliberation.store'), $this->validPayload())
+            ->get(route('forms.monthly.session'))
+            ->assertOk()
+            ->assertSee('Only the Head Secretary can close the monthly session.');
+        $this->withSession($session)
+            ->postJson(route('forms.monthly.deliberation.store'), $this->validPayload([
+                'description' => 'Add note to undo',
+            ]))
             ->assertCreated();
         $added = Record::query()->where('full_name', 'New Member')->firstOrFail();
         $addMovement = MonthlySessionMovement::query()->where('record_id', $added->id)->firstOrFail();
         $this->assertSame('add', $addMovement->action);
+        $this->assertSame('Add note to undo', $addMovement->description);
+        $this->assertStringContainsString('Add note to undo', $added->log_section);
+        $this->assertStringContainsString('MS: B', $added->log_section);
 
         $this->withSession($session)
             ->deleteJson(route('forms.monthly.session.undo', $addMovement))
@@ -1318,6 +1328,8 @@ class DeliberationTest extends TestCase
             'date_of_entry' => null,
             'monthly_code' => null,
         ]);
+        $this->assertNull($added->fresh()->log_section);
+        $this->assertNull($added->fresh()->reason_of_r2_10_endorsement);
         $this->assertDatabaseMissing('monthly_session_movements', ['id' => $addMovement->id]);
         $this->assertDatabaseCount('permanent_history', 0);
 
@@ -1331,12 +1343,14 @@ class DeliberationTest extends TestCase
         ]);
         $this->withSession($session)
             ->postJson(route('forms.monthly.deliberation.subtract'), [
-                'record_id' => $subtractRecord->id,
-                'code' => 'D',
-            ])
-            ->assertOk();
-        $subtractMovement = MonthlySessionMovement::query()->where('record_id', $subtractRecord->id)->firstOrFail();
-        $this->withSession($session)
+                    'record_id' => $subtractRecord->id,
+                    'code' => 'D',
+                    'description' => 'Subtract note to undo',
+                ])
+                ->assertOk();
+            $subtractMovement = MonthlySessionMovement::query()->where('record_id', $subtractRecord->id)->firstOrFail();
+            $this->assertSame('Subtract note to undo', $subtractMovement->description);
+            $this->withSession($session)
             ->deleteJson(route('forms.monthly.session.undo', $subtractMovement))
             ->assertOk();
         $this->assertDatabaseHas('records', [
@@ -1345,6 +1359,10 @@ class DeliberationTest extends TestCase
             'monthly_code' => null,
             'reason_of_r2_10_endorsement' => 'Existing reason',
             'log_section' => 'Existing log,',
+        ]);
+        $this->assertDatabaseMissing('records', [
+            'id' => $subtractRecord->id,
+            'monthly_code' => 'UWP: D',
         ]);
         $this->assertDatabaseCount('monthly_session_movements', 0);
         $headSecretary = User::query()->create([
@@ -1370,6 +1388,7 @@ class DeliberationTest extends TestCase
             'purok' => '1',
             'grupo' => '4',
             'status' => 'MS',
+            'reason_of_r2_10_endorsement' => 'Original endorsement note',
             'log_section' => 'Original log,',
         ]);
         $session = ['login_user' => ['id' => $user->id]];
@@ -1380,10 +1399,13 @@ class DeliberationTest extends TestCase
                 'action' => 'transfer',
                 'purok_id' => $destination->id,
                 'grupo' => 8,
+                'description' => 'Transfer note to undo',
             ])
             ->assertOk();
         $transfer = MonthlySessionMovement::query()->where('record_id', $member->id)->firstOrFail();
         $this->assertSame('1-4 -> 2-8', $transfer->destination_description);
+        $this->assertSame('Transfer note to undo', $transfer->description);
+        $this->assertStringContainsString('Transfer note to undo', $member->fresh()->log_section);
         $this->withSession($session)
             ->get(route('forms.monthly.session'))
             ->assertOk()
@@ -1396,6 +1418,7 @@ class DeliberationTest extends TestCase
             'grupo' => '4',
             'status' => 'MS',
             'monthly_code' => null,
+            'reason_of_r2_10_endorsement' => 'Original endorsement note',
             'log_section' => 'Original log,',
         ]);
 
@@ -1404,10 +1427,13 @@ class DeliberationTest extends TestCase
                 'record_id' => $member->id,
                 'action' => 'status',
                 'status' => 'UWP',
+                'description' => 'Status note to undo',
             ])
             ->assertOk();
         $statusChange = MonthlySessionMovement::query()->where('record_id', $member->id)->firstOrFail();
         $this->assertSame('MS -> UWP', $statusChange->destination_description);
+        $this->assertSame('Status note to undo', $statusChange->description);
+        $this->assertStringContainsString('Status note to undo', $member->fresh()->log_section);
         $this->withSession($session)->deleteJson(route('forms.monthly.session.undo', $statusChange))->assertOk();
         $this->assertDatabaseHas('records', [
             'id' => $member->id,
@@ -1415,6 +1441,7 @@ class DeliberationTest extends TestCase
             'grupo' => '4',
             'status' => 'MS',
             'monthly_code' => null,
+            'reason_of_r2_10_endorsement' => 'Original endorsement note',
             'log_section' => 'Original log,',
         ]);
         $this->assertDatabaseCount('monthly_session_movements', 0);

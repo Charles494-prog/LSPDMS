@@ -51,14 +51,12 @@ class DelistmentTest extends TestCase
         $eligible = $this->record([
             'full_name' => 'Eligible MS Member',
             'status' => 'MS',
-            'r2_10_eligibility' => 'ELIGIBLE',
             'date_of_baptism' => '2025-12-25',
             'date_of_entry' => '2024-01-15',
         ]);
         $mk = $this->record([
             'full_name' => 'Automatic MK Member',
             'status' => 'MK',
-            'r2_10_eligibility' => 'NO NEED TO CHECK',
             'r2_10_endorsement' => 'ENDORSED',
             'date_of_baptism' => '2020-01-01',
             'date_of_entry' => null,
@@ -71,12 +69,10 @@ class DelistmentTest extends TestCase
         $this->record([
             'full_name' => 'Inactive Member',
             'status' => 'INACTIVE',
-            'r2_10_eligibility' => 'NOT APPLICABLE',
         ]);
         $notEligible = $this->record([
             'full_name' => 'Not Eligible UWP Member',
             'status' => 'UWP',
-            'r2_10_eligibility' => 'NOT ELIGIBLE',
         ]);
 
         $this->withSession(['login_user' => ['id' => 1, 'first_name' => 'Charles Andrei', 'last_name' => 'Galvan']])
@@ -122,28 +118,24 @@ class DelistmentTest extends TestCase
         $meetsRequirements = $this->record([
             'full_name' => 'Dynamically Eligible',
             'status' => 'MS',
-            'r2_10_eligibility' => 'NOT ELIGIBLE',
             'date_of_entry' => '2024-10-01',
             'date_of_baptism' => '2025-12-25',
         ]);
         $afterBaptismCutoff = $this->record([
             'full_name' => 'Baptized After Cutoff',
             'status' => 'UWP',
-            'r2_10_eligibility' => 'ELIGIBLE',
             'date_of_entry' => '2024-10-01',
             'date_of_baptism' => '2025-12-26',
         ]);
         $tooRecent = $this->record([
             'full_name' => 'Too Recent',
             'status' => 'MS',
-            'r2_10_eligibility' => 'ELIGIBLE',
             'date_of_entry' => '2025-10-02',
             'date_of_baptism' => '2025-12-25',
         ]);
         $mkWithoutDates = $this->record([
             'full_name' => 'MK Always Eligible',
             'status' => 'MK',
-            'r2_10_eligibility' => 'NOT ELIGIBLE',
             'date_of_entry' => null,
             'date_of_baptism' => null,
         ]);
@@ -172,13 +164,11 @@ class DelistmentTest extends TestCase
         ]);
         $notQualified = $this->record([
             'status' => 'MS',
-            'r2_10_eligibility' => 'ELIGIBLE',
             'date_of_entry' => '2025-10-01',
             'date_of_baptism' => '2025-12-25',
         ]);
         $qualified = $this->record([
             'status' => 'UWP',
-            'r2_10_eligibility' => 'NOT ELIGIBLE',
             'date_of_entry' => '2024-10-01',
             'date_of_baptism' => '2025-12-25',
         ]);
@@ -250,7 +240,6 @@ class DelistmentTest extends TestCase
         $record = $this->record([
             'full_name' => 'Endorsement Candidate',
             'status' => 'MS',
-            'r2_10_eligibility' => 'ELIGIBLE',
             'reason_of_r2_10_endorsement' => 'Existing reason.',
             'log_section' => 'Existing log history.',
         ]);
@@ -280,7 +269,6 @@ class DelistmentTest extends TestCase
         $user = ['id' => 1, 'first_name' => 'Charles Andrei', 'last_name' => 'Galvan'];
         $ms = $this->record([
             'status' => 'MS',
-            'r2_10_eligibility' => 'ELIGIBLE',
         ]);
         $this->withSession(['login_user' => $user])
             ->putJson(route('de-listment.endorse', ['record' => $ms->id]), [
@@ -296,7 +284,6 @@ class DelistmentTest extends TestCase
 
         $mk = $this->record([
             'status' => 'MK',
-            'r2_10_eligibility' => 'NO NEED TO CHECK',
         ]);
         $this->withSession(['login_user' => $user])
             ->putJson(route('de-listment.endorse', ['record' => $mk->id]), [
@@ -329,13 +316,11 @@ class DelistmentTest extends TestCase
     {
         $notEligible = $this->record([
             'status' => 'MS',
-            'r2_10_eligibility' => 'NOT ELIGIBLE',
             'date_of_entry' => now()->subDays(2)->toDateString(),
         ]);
-        $inactive = $this->record(['status' => 'INACTIVE', 'r2_10_eligibility' => 'ELIGIBLE']);
+        $inactive = $this->record(['status' => 'INACTIVE']);
         $endorsed = $this->record([
             'status' => 'UWP',
-            'r2_10_eligibility' => 'ELIGIBLE',
             'r2_10_endorsement' => 'ENDORSED',
         ]);
 
@@ -391,7 +376,6 @@ class DelistmentTest extends TestCase
         return Record::query()->create($attributes + [
             'full_name' => 'Test Record',
             'status' => 'MS',
-            'r2_10_eligibility' => 'NOT ELIGIBLE',
             'date_of_entry' => '2020-01-01',
         ]);
     }

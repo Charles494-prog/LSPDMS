@@ -1080,6 +1080,10 @@
                     <div class="gv-hint">Also used as the Pangulong Diakono in generated forms.</div>
                 </div>
                 <div class="gv-field">
+                    <label for="gvHeadLsp">Head LSP</label>
+                    <input type="text" id="gvHeadLsp" placeholder="Full name" value="{{ $globalVariables?->head_lsp }}">
+                </div>
+                <div class="gv-field">
                     <label for="gvKalihimMs">Kalihim ng MS</label>
                     <input type="text" id="gvKalihimMs" placeholder="Full name" value="{{ $globalVariables?->kalihim_ms }}">
                 </div>
@@ -2184,6 +2188,7 @@
             s_number: 'gvSNumber',
             pastor_destinado: 'gvPastor',
             ksp_pd: 'gvKsp',
+            head_lsp: 'gvHeadLsp',
             kalihim_ms: 'gvKalihimMs',
             kalihim_uwp: 'gvKalihimUwp',
             baptism_requirement: 'gvBaptismDate',

@@ -1,5 +1,21 @@
+@php
+    $authenticatedUser = $authenticatedUser ?? [];
+    $icons = [
+        'home' => '<path d="M3 10.5 10 4l7 6.5"/><path d="M5 9v7h10V9"/>',
+        'grid' => '<rect x="3" y="3" width="6" height="6" rx="1"/><rect x="11" y="3" width="6" height="6" rx="1"/><rect x="3" y="11" width="6" height="6" rx="1"/><rect x="11" y="11" width="6" height="6" rx="1"/>',
+        'file' => '<path d="M6 2h6l4 4v12H6z"/><path d="M12 2v4h4"/><path d="M8 11h6M8 14h6"/>',
+        'user-x' => '<circle cx="8" cy="7" r="3"/><path d="M2 17c0-3 2.5-5 6-5"/><path d="M14 8l4 4M18 8l-4 4"/>',
+        'shield' => '<path d="M10 2l7 3v5c0 4.5-3 7.5-7 8-4-.5-7-3.5-7-8V5l7-3z"/>',
+        'profile' => '<circle cx="10" cy="7" r="3.2"/><path d="M3.5 17c1-3.2 3.6-5 6.5-5s5.5 1.8 6.5 5"/>',
+        'logout' => '<path d="M8 17H4V3h4"/><path d="M13 13l4-3-4-3"/><path d="M17 10H8"/>',
+        'search-edit' => '<circle cx="8.5" cy="8.5" r="5.5"/><path d="M12.5 12.5 17 17"/><path d="M12 15.5l2-2 1.5 1.5-2 2H12v-1.5z"/>',
+        'filter' => '<path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z"/>',
+    ];
+    $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($authenticatedUser['tungkulin'] ?? '')) ?? ''));
+    $isHeadSecretary = in_array($role, ['head secretary', 'secretary head'], true);
+@endphp
 <!DOCTYPE html>
-<html lang="en" data-theme="{{ ($authenticatedUser['dark_mode'] ?? false) ? 'dark' : 'light' }}">
+<html lang="en" data-theme="{{ (($authenticatedUser['dark_mode'] ?? false)) ? 'dark' : 'light' }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -400,13 +416,6 @@
                     </a>
                 @endif
 
-                @if ($isHeadSecretary || ($authenticatedUser['Delistment_allow'] ?? false))
-                    <a data-feature="Delistment_allow" href="{{ route('de-listment') }}" class="{{ request()->routeIs('de-listment') ? 'active' : '' }}">
-                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['user-x'] !!}</svg>
-                        <span class="label">De-Listment</span>
-                    </a>
-                @endif
-
                 @if ($isHeadSecretary || ($authenticatedUser['Inquire_Allow'] ?? false))
                     <a data-feature="Inquire_Allow" href="{{ route('inquire-modify') }}" class="{{ request()->routeIs('inquire-modify') ? 'active' : '' }}">
                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['search-edit'] !!}</svg>
@@ -423,6 +432,13 @@
                     <a data-feature="filter_bnh_helper_allow" href="{{ route('filter-bnh-helper') }}" class="{{ request()->routeIs('filter-bnh-helper*') ? 'active' : '' }}">
                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['filter'] !!}</svg>
                         <span class="label">Filter &amp; BNH Helper</span>
+                    </a>
+                @endif
+
+                @if ($isHeadSecretary || ($authenticatedUser['Delistment_allow'] ?? false))
+                    <a data-feature="Delistment_allow" href="{{ route('de-listment') }}" class="{{ request()->routeIs('de-listment') ? 'active' : '' }}">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">{!! $icons['user-x'] !!}</svg>
+                        <span class="label">De-Listment</span>
                     </a>
                 @endif
             </nav>
@@ -597,7 +613,12 @@
                             cache: 'no-store',
                             credentials: 'same-origin',
                         });
-                        if (response.redirected || !response.ok) window.location.assign('/login?access=revoked');
+                        if (response.redirected) window.location.assign(response.url);
+                        else if (!response.ok) {
+                            const result = await response.json().catch(() => ({}));
+                            const reason = result.reason === 'password_changed' ? 'password_changed' : 'revoked';
+                            window.location.assign(`/login?access=${reason}`);
+                        }
                         else {
                             const { permissions } = await response.json();
                             document.querySelectorAll('[data-feature]').forEach(link => {

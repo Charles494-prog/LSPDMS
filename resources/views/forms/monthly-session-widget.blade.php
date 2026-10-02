@@ -21,6 +21,7 @@
     .monthly-session-dialog .monthly-undo { background:#b42318; }
     .monthly-session-empty { padding:1.5rem; color:var(--text-muted); text-align:center; }
     .monthly-session-footer { display:flex; justify-content:flex-end; gap:.55rem; margin-top:.8rem; padding-top:.8rem; border-top:1px solid var(--border); }
+    .monthly-session-finish-notice { align-self:center; margin:0!important; color:var(--text-muted); font-size:.78rem!important; }
     .monthly-session-footer .secondary { background:var(--bg); color:var(--text); }
     .monthly-session-prompt { width:min(520px,calc(100% - 2rem)); padding:0; overflow:hidden; border:1px solid var(--border); border-radius:16px; background:var(--surface); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.3); }
     .monthly-session-prompt::backdrop { background:rgba(15,23,42,.58); backdrop-filter:blur(3px); }
@@ -64,6 +65,7 @@
                 <button type="button" id="monthlySessionFinish">Finish monthly session</button>
             @else
                 <button type="button" id="monthlySessionFinish" hidden disabled>Finish monthly session</button>
+                <p class="monthly-session-finish-notice" id="monthlySessionFinishNotice">Only the Head Secretary can close the monthly session.</p>
             @endif
         </div>
     </div>
@@ -93,6 +95,7 @@
     const info = document.getElementById('monthlySessionDialogInfo');
     const movements = document.getElementById('monthlySessionMovements');
     const finish = document.getElementById('monthlySessionFinish');
+    const canFinish = @json($canFinishMonthlySession);
     const widget = document.getElementById('monthlySessionWidget');
     const minimize = document.getElementById('monthlySessionMinimize');
     const promptDialog = document.getElementById('monthlySessionPrompt');
@@ -239,8 +242,10 @@
         count.textContent = session.movement_count;
         start.hidden = true;
         open.hidden = false;
-        finish.disabled = false;
-        info.textContent = `For ${session.period_month}. Changes remain temporary until you finish this session.`;
+        finish.disabled = !canFinish;
+        info.textContent = canFinish
+            ? `For ${session.period_month}. Changes remain temporary until you finish this session.`
+            : `For ${session.period_month}. Changes remain temporary; only the Head Secretary can close this session.`;
     };
     async function refresh() {
         const response = await fetch(`${statusUrl}?include_movements=1`, { headers: { 'Accept': 'application/json' } });

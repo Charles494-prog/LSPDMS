@@ -16,10 +16,49 @@
         a { display: block; margin-top: 1rem; color: #1265b5; text-align: center; }
         .message { margin-top: 1rem; color: #146c43; }
         .error { color: #b42318; font-size: .82rem; }
+        .confirmation { text-align: center; }
+        .confirmation h1 { margin-bottom: .85rem; }
+        .confirmation p { margin: .45rem 0; }
+        .confirmation button:disabled { opacity: .58; cursor: not-allowed; }
+        .countdown { min-height: 1.4em; margin-top: .7rem!important; font-size: .84rem!important; }
     </style>
 </head>
 <body>
 <main>
+    @if ($isSentScreen)
+    <section class="confirmation" aria-live="polite">
+        <h1>Link sent!</h1>
+        <p>Please check your email inbox.</p>
+        @error('email') <p class="error">{{ $message }}</p> @enderror
+        <form method="POST" action="{{ route('password.email.resend') }}">
+            @csrf
+            <button id="resendButton" type="submit" disabled>Send link again</button>
+            <p class="countdown" id="resendCountdown" data-seconds="{{ $resendAvailableIn }}"></p>
+        </form>
+        <a href="{{ url('/login') }}">Go back to login</a>
+    </section>
+    <script>
+        (() => {
+            const button = document.getElementById('resendButton');
+            const countdown = document.getElementById('resendCountdown');
+            let remaining = Number(countdown.dataset.seconds) || 0;
+            const render = () => {
+                if (remaining <= 0) {
+                    button.disabled = false;
+                    countdown.textContent = 'You can request another link now.';
+                    return;
+                }
+                button.disabled = true;
+                const minutes = Math.floor(remaining / 60);
+                const seconds = remaining % 60;
+                countdown.textContent = `Send another link in ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                remaining -= 1;
+                window.setTimeout(render, 1000);
+            };
+            render();
+        })();
+    </script>
+    @else
     <h1>Reset your password</h1>
     <p>Enter the email address for your verified account. If it matches an active account, we’ll send a password reset link.</p>
     @if (session('status')) <p class="message">{{ session('status') }}</p> @endif
@@ -31,6 +70,7 @@
         <button type="submit">Send reset link</button>
     </form>
     <a href="{{ url('/login') }}">Back to login</a>
+    @endif
 </main>
 </body>
 </html>

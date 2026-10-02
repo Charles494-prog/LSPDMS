@@ -226,7 +226,8 @@ class SuperadminDashboardTest extends TestCase
             ->assertDontSee('delistEntryCheck')
             ->assertSee('<select id="gvEntryYears" required>', false)
             ->assertSee('type="text" class="signatory-input manggagawa-input"', false)
-            ->assertDontSee('<select class="signatory-input manggagawa-input">', false);
+            ->assertDontSee('<select class="signatory-input manggagawa-input">', false)
+            ->assertSee('label for="gvHeadLsp">Head LSP</label>', false);
 
         $this->withSession(['login_user' => ['id' => $admin->id]])
             ->putJson(route('superadmin.global-variables.update'), [
@@ -237,6 +238,7 @@ class SuperadminDashboardTest extends TestCase
                 's_number' => 'S-123',
                 'pastor_destinado' => 'Pastor Person',
                 'ksp_pd' => 'KSP Person',
+                'head_lsp' => 'Head LSP Person',
                 'kalihim_ms' => 'MS Secretary',
                 'kalihim_uwp' => 'UWP Secretary',
                 'baptism_requirement' => '2026-01-01 00:00:00',
@@ -253,6 +255,7 @@ class SuperadminDashboardTest extends TestCase
             's_number' => 'S-123',
             'pastor_destinado' => 'Pastor Person',
             'ksp_pd' => 'KSP Person',
+            'head_lsp' => 'Head LSP Person',
             'kalihim_ms' => 'MS Secretary',
             'kalihim_uwp' => 'UWP Secretary',
             'baptism_requirement' => '2026-01-01 00:00:00',

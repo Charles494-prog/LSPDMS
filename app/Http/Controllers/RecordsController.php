@@ -164,6 +164,13 @@ class RecordsController extends Controller
             'registry_number.regex' => 'Enter exactly 13 letters or numbers, or RFID.',
         ]);
 
+        if (array_key_exists('name', $validated)) {
+            $validated['name'] = mb_strtoupper(trim($validated['name']));
+        }
+        if (array_key_exists('registry_number', $validated)) {
+            $validated['registry_number'] = mb_strtoupper(trim($validated['registry_number']));
+        }
+
         $attributes = [];
             if (array_key_exists('registry_number', $validated)) {
                 $registry = mb_strtoupper(trim($validated['registry_number']));
@@ -308,7 +315,7 @@ class RecordsController extends Controller
             'is_married' => $record->is_married,
             'evangelist' => $record->evangelist ?? '',
             'date_of_entry' => $record->date_of_entry?->format('Y-m-d') ?? '',
-            'r2_10_eligibility' => $canViewEligibility
+            'r210_eligible' => $canViewEligibility
                 ? ($eligibility->forRecord($record, $requirements) ? 'ELIGIBLE' : 'NOT ELIGIBLE')
                 : null,
             'status' => $record->status ?? '',

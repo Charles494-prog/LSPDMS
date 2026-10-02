@@ -397,6 +397,30 @@
                 text-decoration: underline;
             }
 
+            .login-status {
+                position: fixed;
+                top: 1rem;
+                left: 50%;
+                z-index: 30;
+                width: min(calc(100% - 2rem), 520px);
+                padding: .9rem 1.1rem;
+                transform: translateX(-50%);
+                border: 1px solid rgba(10, 107, 214, .2);
+                border-radius: 12px;
+                color: var(--primary-deep);
+                background: #fff;
+                box-shadow: 0 12px 34px rgba(15, 76, 129, .18);
+                font-size: .88rem;
+                font-weight: 600;
+                line-height: 1.5;
+                text-align: center;
+                animation: login-status-in .2s ease-out;
+            }
+            @keyframes login-status-in {
+                from { opacity: 0; transform: translate(-50%, -8px); }
+                to { opacity: 1; transform: translate(-50%, 0); }
+            }
+
             @media (max-width: 480px) {
                 .login-card { padding: 1.7rem 1.3rem 1.4rem; }
                 .letter { width: 3.2rem; height: 3.2rem; font-size: 1.6rem; }
@@ -404,6 +428,13 @@
         </style>
     </head>
     <body>
+        @if (session('status') || request()->query('access'))
+            <div class="login-status" role="status" aria-live="polite">
+                {{ session('status') ?: (request()->query('access') === 'password_changed'
+                    ? 'Change of Password Detected, Please Login Again.'
+                    : 'Your account was signed out. Please log in again.') }}
+            </div>
+        @endif
         <main class="login-shell show" id="loginShell">
             <div class="login-card">
                 <div class="brand">
@@ -413,7 +444,7 @@
                     </div>
                 </div>
 
-                <form class="login-form" method="POST" action="{{ url('/login') }}">
+                <form class="login-form" id="loginForm" method="POST" action="{{ url('/login') }}" data-csrf-refresh-url="{{ route('login.csrf-token') }}">
                     @csrf
                     <div class="field">
                         <label for="email">Email address</label>
@@ -434,6 +465,7 @@
                     @error('login')
                         <p class="login-error">{{ $message }}</p>
                     @enderror
+                    <p class="login-error" id="loginRequestError" role="alert" hidden></p>
 
                     @if (request()->query('expired'))
                         <p class="login-error">Session expired. Please try again.</p>
@@ -466,6 +498,9 @@
             const togglePassword = document.getElementById('togglePassword');
             const passwordInput = document.getElementById('password');
             const eyeIcon = document.getElementById('eyeIcon');
+            const loginForm = document.getElementById('loginForm');
+            const loginRequestError = document.getElementById('loginRequestError');
+            const loginButton = loginForm.querySelector('button[type="submit"]');
 
             const eyeOpenPaths = `<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>`;
             const eyeClosedPaths = `<path d="M17.94 17.94A10.94 10.94 0 0112 19c-7 0-11-7-11-7a21.6 21.6 0 015.06-6.06"/><path d="M9.9 4.24A10.94 10.94 0 0112 4c7 0 11 7 11 7a21.6 21.6 0 01-3.22 4.44"/><path d="M14.12 14.12a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>`;
@@ -475,6 +510,62 @@
                 passwordInput.type = showing ? 'password' : 'text';
                 eyeIcon.innerHTML = showing ? eyeOpenPaths : eyeClosedPaths;
                 togglePassword.setAttribute('aria-label', showing ? 'Show password' : 'Hide password');
+            });
+
+            loginForm.addEventListener('submit', async event => {
+                event.preventDefault();
+                loginButton.disabled = true;
+                loginRequestError.hidden = true;
+
+                const submitLogin = formData => fetch(loginForm.action, {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'text/html' },
+                    redirect: 'follow',
+                    cache: 'no-store',
+                });
+
+                try {
+                    const formData = new FormData(loginForm);
+                    let response = await submitLogin(formData);
+                    let refreshAttempts = 0;
+
+                    while (response.status === 419 && refreshAttempts < 2) {
+                        refreshAttempts++;
+                        const tokenResponse = await fetch(loginForm.dataset.csrfRefreshUrl, {
+                            credentials: 'same-origin',
+                            headers: { 'Accept': 'application/json' },
+                            cache: 'no-store',
+                        });
+                        if (!tokenResponse.ok) throw new Error('Unable to refresh your sign-in session. Reload this page and try again.');
+
+                        const { token } = await tokenResponse.json();
+                        if (!token) throw new Error('A fresh security token could not be loaded. Reload this page and try again.');
+                        loginForm.querySelector('input[name="_token"]').value = token;
+                        formData.set('_token', token);
+                        response = await submitLogin(formData);
+                    }
+
+                    if (response.redirected) {
+                        window.location.assign(response.url);
+                        return;
+                    }
+
+                    if (response.status === 419) {
+                        throw new Error('Your sign-in session changed again. Reload this page and try once more.');
+                    }
+
+                    if (!response.ok) {
+                        throw new Error('Unable to sign in right now. Please try again.');
+                    }
+
+                    throw new Error('Sign-in could not be completed. Please try again.');
+                } catch (error) {
+                    loginRequestError.textContent = error.message || 'Unable to sign in right now. Please try again.';
+                    loginRequestError.hidden = false;
+                    loginButton.disabled = false;
+                }
             });
         </script>
     </body>

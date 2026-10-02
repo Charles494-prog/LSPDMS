@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\GlobalVariable;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class AuthenticationPolicyTest extends TestCase
@@ -39,6 +41,20 @@ class AuthenticationPolicyTest extends TestCase
         ])
             ->assertRedirect('/verify-code')
             ->assertSessionHas('pending_login_user.id', $user->id);
+    }
+
+    public function test_login_page_can_refresh_its_csrf_token_without_changing_session(): void
+    {
+        $response = $this->get(route('login.csrf-token'))
+            ->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonStructure(['token']);
+
+        $this->assertSame(session()->token(), $response->json('token'));
+        $this->get(route('login.form'))
+            ->assertOk()
+            ->assertSee('data-csrf-refresh-url', false)
+            ->assertSee('response.status === 419', false);
     }
 
     public function test_secretary_feature_permissions_are_enforced_on_routes_and_navigation(): void
@@ -107,6 +123,7 @@ class AuthenticationPolicyTest extends TestCase
             ->assertDontSee('Forgot password?');
         $this->get(route('password.request'))->assertNotFound();
         $this->post(route('password.email'), ['email' => 'person@example.test'])->assertNotFound();
+        $this->post(route('password.email.resend'))->assertNotFound();
     }
 
     public function test_password_reset_email_flow_updates_password_and_revokes_remember_token(): void
@@ -116,11 +133,11 @@ class AuthenticationPolicyTest extends TestCase
             'remember_token_expires_at' => now()->addDay(),
         ]);
         $resetUrl = null;
-        Mail::shouldReceive('raw')
+        Mail::shouldReceive('html')
             ->once()
-            ->withArgs(function (string $message, callable $callback) use (&$resetUrl): bool {
-                preg_match('/https?:\/\/\S+/', $message, $matches);
-                $resetUrl = $matches[0] ?? null;
+            ->withArgs(function (string $html, callable $callback) use (&$resetUrl): bool {
+                preg_match('/href="(https?:\/\/[^"]+\/password\/reset\/[^"]+)"/', $html, $matches);
+                $resetUrl = isset($matches[1]) ? html_entity_decode($matches[1], ENT_QUOTES | ENT_HTML5) : null;
                 $callback(new class
                 {
                     public function to(string $email): self
@@ -134,12 +151,20 @@ class AuthenticationPolicyTest extends TestCase
                     }
                 });
 
-                return str_contains($message, '/password/reset/');
+                return str_contains($html, 'Choose a new password')
+                    && str_contains($html, '60 minutes')
+                    && str_contains($html, 'If you did not request a password reset');
             });
 
         $this->post(route('password.email'), ['email' => $user->gmail])
-            ->assertRedirect()
-            ->assertSessionHas('status');
+            ->assertRedirect(route('password.request', ['sent' => 1]));
+        $this->get(route('password.request', ['sent' => 1]))
+            ->assertOk()
+            ->assertSee('Link sent!')
+            ->assertSee('Please check your email inbox.')
+            ->assertSee('Send link again')
+            ->assertSee('data-seconds="300"', false)
+            ->assertSee('Go back to login');
         $this->assertNotNull($resetUrl);
         $parts = parse_url($resetUrl);
         parse_str($parts['query'] ?? '', $query);
@@ -147,19 +172,130 @@ class AuthenticationPolicyTest extends TestCase
 
         $this->get($resetUrl)
             ->assertOk()
-            ->assertSee('Choose a new password');
+            ->assertSee('Choose a new password')
+            ->assertSee('At least one special character');
         $this->post(route('password.reset'), [
             'email' => $user->gmail,
             'token' => $token,
-            'password' => 'new-password-123',
-            'password_confirmation' => 'new-password-123',
+            'password' => 'New-password-123!',
+            'password_confirmation' => 'New-password-123!',
         ])
             ->assertRedirect('/login')
-            ->assertSessionHas('status');
+            ->assertSessionHas('status', 'Change of Password Detected, Please Login Again.');
 
-        $this->assertTrue(Hash::check('new-password-123', $user->fresh()->password));
+        $this->assertTrue(Hash::check('New-password-123!', $user->fresh()->password));
         $this->assertNull($user->fresh()->remember_token);
         $this->assertDatabaseMissing('password_reset_tokens', ['email' => $user->gmail]);
+        $this->assertSame(2, (int) $user->fresh()->auth_version);
+        $this->assertSame('password_changed', $user->fresh()->auth_notice);
+    }
+
+    public function test_expired_password_reset_link_shows_the_expired_link_page(): void
+    {
+        $user = $this->verifiedUser('expired-reset@example.test');
+        $token = str_repeat('a', 64);
+        DB::table('password_reset_tokens')->insert([
+            'email' => $user->gmail,
+            'token' => Hash::make($token),
+            'created_at' => now(),
+        ]);
+        $expiredUrl = URL::temporarySignedRoute(
+            'password.reset.form',
+            now()->subMinute(),
+            ['token' => $token, 'email' => $user->gmail]
+        );
+
+        $this->get($expiredUrl)
+            ->assertRedirect(route('password.reset.expired'));
+        $this->get(route('password.reset.expired'))
+            ->assertOk()
+            ->assertSee('Link expired')
+            ->assertSee('Request a new link');
+    }
+
+    public function test_password_reset_link_can_only_be_resent_after_five_minutes(): void
+    {
+        $user = $this->verifiedUser('resend-reset@example.test');
+        Mail::shouldReceive('html')->twice();
+
+        $this->post(route('password.email'), ['email' => $user->gmail])
+            ->assertRedirect(route('password.request', ['sent' => 1]));
+        $firstSentAt = DB::table('password_reset_tokens')->where('email', $user->gmail)->value('created_at');
+
+        $this->post(route('password.email.resend'))
+            ->assertRedirect(route('password.request', ['sent' => 1]));
+        $this->assertSame(
+            $firstSentAt,
+            DB::table('password_reset_tokens')->where('email', $user->gmail)->value('created_at')
+        );
+
+        $this->travel(5)->minutes();
+        $this->post(route('password.email.resend'))
+            ->assertRedirect(route('password.request', ['sent' => 1]));
+        $this->assertNotSame(
+            $firstSentAt,
+            DB::table('password_reset_tokens')->where('email', $user->gmail)->value('created_at')
+        );
+        $this->get(route('password.request', ['sent' => 1]))
+            ->assertOk()
+            ->assertSee('data-seconds="300"', false);
+    }
+
+    public function test_logout_invalidates_other_active_sessions_for_the_account(): void
+    {
+        $user = $this->verifiedUser('logout-all@example.test', [
+            'remember_token' => Hash::make('remember-me'),
+            'remember_token_expires_at' => now()->addDay(),
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id, 'auth_version' => 1]])
+            ->post('/logout')
+            ->assertRedirect('/login');
+
+        $this->assertSame(2, (int) $user->fresh()->auth_version);
+        $this->assertSame('signed_out_elsewhere', $user->fresh()->auth_notice);
+        $this->assertNull($user->fresh()->remember_token);
+
+        $this->withSession([
+            '_token' => 'preserve-this-csrf-token',
+            'login_user' => ['id' => $user->id, 'auth_version' => 1],
+        ])
+            ->getJson(route('session.status'))
+            ->assertUnauthorized()
+            ->assertJsonPath('session_invalid', true)
+            ->assertJsonPath('reason', 'signed_out_elsewhere')
+            ->assertSessionHas('_token', 'preserve-this-csrf-token');
+    }
+
+    public function test_password_reset_revokes_existing_sessions(): void
+    {
+        $user = $this->verifiedUser('reset-revokes@example.test');
+        $token = str_repeat('x', 64);
+        DB::table('password_reset_tokens')->insert([
+            'email' => $user->gmail,
+            'token' => Hash::make($token),
+            'created_at' => now(),
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id, 'auth_version' => 1]])
+            ->post(route('password.reset'), [
+                'email' => $user->gmail,
+                'token' => $token,
+                'password' => 'Changed-password-123!',
+                'password_confirmation' => 'Changed-password-123!',
+            ])
+            ->assertRedirect('/login');
+
+        $this->withSession(['login_user' => ['id' => $user->id, 'auth_version' => 1]])
+            ->getJson(route('session.status'))
+            ->assertUnauthorized()
+            ->assertJsonPath('reason', 'password_changed');
+
+        $this->withSession(['login_user' => ['id' => $user->id, 'auth_version' => 1]])
+            ->get(route('login.form'))
+            ->assertOk()
+            ->assertSee('Change of Password Detected, Please Login Again.')
+            ->assertSee('name="_token"', false);
     }
 
     private function verifiedUser(string $email, array $attributes = []): User

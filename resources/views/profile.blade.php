@@ -108,6 +108,19 @@
     .detail-row:last-child { border-bottom: none; }
     .detail-row .label { color: var(--p-ink-soft); }
     .detail-row .value { color: var(--p-navy); font-weight: 600; }
+    .password-card {
+        background: var(--p-surface);
+        border: 1px solid var(--p-border);
+        border-radius: 16px;
+        padding: 1.4rem 1.6rem;
+        margin-top: 1.5rem;
+    }
+    .password-card h2 { margin:0 0 .4rem; color:var(--p-navy); font-size:1rem; }
+    .password-card p { margin:0 0 1rem; color:var(--p-ink-soft); font-size:.86rem; line-height:1.5; }
+    .password-field { margin-bottom:1rem; }
+    .password-field label { display:block; margin-bottom:.4rem; color:var(--p-navy); font-size:.85rem; font-weight:600; }
+    .password-field input { width:100%; padding:.65rem .8rem; border:1px solid var(--p-border); border-radius:8px; background:var(--p-bg); color:var(--p-navy); font:inherit; }
+    .password-error { margin:.35rem 0 0; color:#b42318; font-size:.8rem; }
 
     /* ===== Modal ===== */
     .modal-overlay {
@@ -268,6 +281,31 @@
             <span class="value">{{ $user['tungkulin'] ?? 'Secretary' }}</span>
         </div>
     </div>
+
+    <section class="password-card" aria-labelledby="changePasswordHeading">
+        <h2 id="changePasswordHeading">Change Password</h2>
+        <p>Changing your password will sign out this account from all browsers and devices. You will need to log in again.</p>
+        <form method="POST" action="{{ route('profile.password.update') }}">
+            @csrf
+            @method('PUT')
+            <div class="password-field">
+                <label for="currentPassword">Current password</label>
+                <input id="currentPassword" type="password" name="current_password" autocomplete="current-password" required>
+                @error('current_password')<p class="password-error">{{ $message }}</p>@enderror
+            </div>
+            <div class="password-field">
+                <label for="newPassword">New password</label>
+                <input id="newPassword" type="password" name="password" minlength="8" autocomplete="new-password" required>
+                @include('components.password-strength', ['inputId' => 'newPassword'])
+                @error('password')<p class="password-error">{{ $message }}</p>@enderror
+            </div>
+            <div class="password-field">
+                <label for="newPasswordConfirmation">Confirm new password</label>
+                <input id="newPasswordConfirmation" type="password" name="password_confirmation" minlength="8" autocomplete="new-password" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Change Password</button>
+        </form>
+    </section>
 
 </div>
 

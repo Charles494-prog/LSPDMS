@@ -11,6 +11,7 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RecordsController;
+use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\SecretaryTodoController;
 use App\Http\Controllers\SuperadminController;
 use App\Http\Controllers\TarhetaStatusController;
@@ -26,11 +27,19 @@ Route::get('/intro', function () {
 })->middleware('guest.redirect');
 
 Route::get('/login', [LoginController::class, 'showLogin'])->middleware('guest.redirect')->name('login.form');
+Route::get('/login/csrf-token', fn (Request $request) => response()
+    ->json(['token' => $request->session()->token()])
+    ->header('Cache-Control', 'no-store, private'))
+    ->name('login.csrf-token');
+Route::get('/register', [RegistrationController::class, 'create'])->middleware('guest.redirect')->name('register');
+Route::post('/register', [RegistrationController::class, 'store'])->middleware('throttle:5,1')->name('register.store');
 
 Route::post('/login', [LoginController::class, 'login'])->name('login');
 Route::get('/password/reset', [PasswordResetController::class, 'requestForm'])->name('password.request');
 Route::post('/password/email', [PasswordResetController::class, 'sendLink'])->middleware('throttle:5,1')->name('password.email');
-Route::get('/password/reset/{token}', [PasswordResetController::class, 'resetForm'])->middleware('signed')->name('password.reset.form');
+Route::get('/password/reset/{token}', [PasswordResetController::class, 'resetForm'])->name('password.reset.form');
+Route::get('/password/link-expired', [PasswordResetController::class, 'expiredLink'])->name('password.reset.expired');
+Route::post('/password/email/resend', [PasswordResetController::class, 'resendLink'])->middleware('throttle:5,1')->name('password.email.resend');
 Route::post('/password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:5,1')->name('password.reset');
 Route::get('/verify-code', [LoginController::class, 'showVerificationForm'])->name('verify-code');
 Route::post('/verify-code', [LoginController::class, 'verifyCode']);
@@ -109,6 +118,14 @@ Route::middleware('login.session')->group(function () {
             ->name('forms.monthly.session.finish');
         Route::delete('/forms/monthly/session/movements/{movement}', [DeliberationController::class, 'undoMovement'])->name('forms.monthly.session.undo');
         Route::get('/forms/notes', [FormGeneratorController::class, 'notes'])->name('forms.notes');
+        Route::get('/forms/monthly/generators', [FormGeneratorController::class, 'monthlyGenerators'])->name('forms.monthly.generators');
+        Route::get('/forms/monthly/r4-01', [FormGeneratorController::class, 'r401'])->name('forms.monthly.r4-01');
+        Route::get('/forms/monthly/r4-01/snapshots', [FormGeneratorController::class, 'r401Snapshots'])->name('forms.monthly.r4-01.snapshots');
+        Route::get('/forms/monthly/r4-01/snapshots/{snapshot}/download', [FormGeneratorController::class, 'downloadR401Snapshot'])->name('forms.monthly.r4-01.snapshots.download');
+        Route::get('/forms/monthly/r4-01/download', [FormGeneratorController::class, 'downloadR401'])->name('forms.monthly.r4-01.download');
+        Route::get('/forms/monthly/r4-01/download/pdf', [FormGeneratorController::class, 'downloadR401Pdf'])->name('forms.monthly.r4-01.download.pdf');
+        Route::get('/forms/monthly/resumen', [FormGeneratorController::class, 'resumen'])->name('forms.monthly.resumen');
+        Route::get('/forms/monthly/resumen/download', [FormGeneratorController::class, 'downloadResumen'])->name('forms.monthly.resumen.download');
         Route::post('/forms/notes/records/{record}', [FormGeneratorController::class, 'appendNote'])->middleware('throttle:30,1')->name('forms.notes.append');
         Route::delete('/forms/notes/records/{record}/{noteIndex}', [FormGeneratorController::class, 'deleteNote'])
             ->whereNumber('noteIndex')
@@ -157,6 +174,7 @@ Route::middleware('login.session')->group(function () {
     })->name('session.status');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::put('/profile/password', [ProfileController::class, 'changePassword'])->middleware('throttle:5,1')->name('profile.password.update');
     Route::view('/home', 'home', ['title' => 'Home'])->name('home');
     Route::get('/inquire-modify', function (Request $request) {
         $user = $request->session()->get('login_user', []);

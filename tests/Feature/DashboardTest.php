@@ -32,7 +32,6 @@ class DashboardTest extends TestCase
             'date_of_baptism' => now()->subDays(20)->toDateString(),
             'evangelist' => 'Evangelist One',
             'date_of_entry' => now()->toDateString(),
-            'r2_10_eligibility' => 'ELIGIBLE',
             'r2_10_endorsement' => 'ENDORSED',
             'status' => 'MS',
         ]);
@@ -40,14 +39,12 @@ class DashboardTest extends TestCase
             'full_name' => 'Eligible Without Endorsement',
             'registry' => 'REG-1003',
             'date_of_entry' => now()->subYears(2)->toDateString(),
-            'r2_10_eligibility' => 'ELIGIBLE',
             'status' => 'MS',
         ]);
         Record::query()->create([
             'full_name' => 'No Check Needed',
             'registry' => 'REG-1004',
             'date_of_entry' => now()->subYears(2)->toDateString(),
-            'r2_10_eligibility' => 'NO NEED TO CHECK',
             'r2_10_endorsement' => 'ENDORSED',
             'status' => 'MS',
         ]);
@@ -55,7 +52,6 @@ class DashboardTest extends TestCase
             'full_name' => 'Not Eligible but Endorsed',
             'registry' => 'REG-1005',
             'date_of_entry' => now()->subYears(2)->toDateString(),
-            'r2_10_eligibility' => 'NOT ELIGIBLE',
             'r2_10_endorsement' => 'ENDORSED',
             'status' => 'MS',
         ]);
@@ -64,7 +60,6 @@ class DashboardTest extends TestCase
             'registry' => 'REG-1002',
             'gender' => 'L',
             'purok' => '2',
-            'r2_10_eligibility' => 'NOT APPLICABLE',
             'r2_10_endorsement' => 'ENDORSED',
             'status' => 'INACTIVE',
         ]);
@@ -323,7 +318,7 @@ class DashboardTest extends TestCase
         $this->withSession(['login_user' => ['id' => 1]])
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('Monthly MS, UWP, and MK snapshots.', false)
+            ->assertSee('Monthly total records by Purok, from the snapshot database.', false)
             ->assertSee('id="ot-current"', false)
             ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
                 $this->assertSame('Jan 2025', $metrics['monthLabels'][0]);
@@ -358,7 +353,7 @@ class DashboardTest extends TestCase
     {
         MonthlyRecordSnapshot::query()->create([
             'month' => '2025-11-01',
-            'purok_number' => 2,
+            'purok_number' => 11,
             'ms_count' => 25,
             'uwp_count' => 4,
             'mk_count' => 3,
@@ -369,13 +364,15 @@ class DashboardTest extends TestCase
             ->get(route('dashboard'))
             ->assertOk()
             ->assertSee('Nov 2025')
+            ->assertSee('ids.map((id, seriesIndex) =>', false)
             ->assertViewHas('dashboardMetrics', function (array $metrics): bool {
                 $this->assertSame('Nov 2025', $metrics['monthLabels'][10]);
                 $this->assertSame(25, $metrics['monthlyCounts'][10]['MS']);
-                $this->assertSame(25, $metrics['monthlyPurokCounts'][10]['2']['MS']);
+                $this->assertSame(25, $metrics['monthlyPurokCounts'][10]['11']['MS']);
+                $this->assertContains(11, $metrics['movementPuroks']);
                 $this->assertContains([
                     'month' => '2025-11',
-                    'purok' => 2,
+                    'purok' => 11,
                     'status' => 'MS',
                     'code' => 'B',
                     'count' => 2,

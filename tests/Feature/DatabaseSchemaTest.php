@@ -67,7 +67,6 @@ class DatabaseSchemaTest extends TestCase
             'date_of_baptism',
             'evangelist',
             'date_of_entry',
-            'r2_10_eligibility',
             'status',
             'tarheta_status',
             'monthly_code',
@@ -79,6 +78,7 @@ class DatabaseSchemaTest extends TestCase
             'reason_of_r2_10_endorsement',
             'log_section',
         ]));
+        $this->assertFalse(Schema::hasColumn('records', 'r2_10_eligibility'));
         $this->assertFalse(Schema::hasColumn('records', 'filing_status'));
         $this->assertFalse(Schema::hasColumn('puroks', 'created_at'));
         $this->assertFalse(Schema::hasColumn('puroks', 'updated_at'));
@@ -104,6 +104,7 @@ class DatabaseSchemaTest extends TestCase
             's_number',
             'pastor_destinado',
             'ksp_pd',
+            'head_lsp',
             'kalihim_ms',
             'kalihim_uwp',
             'baptism_requirement',

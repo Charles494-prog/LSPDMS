@@ -29,6 +29,19 @@ class RedirectAuthenticatedUser
             ]);
         }
 
+        $sessionAuthVersion = (int) ($sessionUser['auth_version'] ?? 0);
+        if ($sessionAuthVersion !== 0 && $sessionAuthVersion !== (int) $user->auth_version
+            || $sessionAuthVersion === 0 && (int) $user->auth_version > 1) {
+            $request->session()->forget(['login_user', 'pending_login_user']);
+            Cookie::queue(Cookie::forget('remember_token'));
+            $message = $user->auth_notice === 'password_changed'
+                ? 'Change of Password Detected, Please Login Again.'
+                : 'You have been logged out because your account was signed out elsewhere.';
+            $request->session()->flash('status', $message);
+
+            return $next($request);
+        }
+
         return redirect('/home');
     }
 }
