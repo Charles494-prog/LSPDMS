@@ -4,47 +4,77 @@
 
 @push('styles')
 <style>
-    .fbnh-page { display: grid; gap: 1.25rem; }
-    .fbnh-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 1.25rem; min-width: 0; }
-    .fbnh-card h2 { margin: 0; font-size: 1.12rem; }
-    .fbnh-subtitle { margin: .35rem 0 1rem; color: var(--text-muted); font-size: .88rem; }
-    .fbnh-filters { display: grid; grid-template-columns: repeat(2, minmax(180px, 1fr)); gap: 1rem; max-width: 720px; }
-    .fbnh-field label { display: block; font-size: .82rem; font-weight: 700; margin-bottom: .38rem; }
-    .fbnh-field select, .fbnh-field input { width: 100%; padding: .65rem .75rem; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--surface); font: inherit; }
-    .fbnh-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: .8rem; }
-    .fbnh-actions { display: flex; flex-wrap: wrap; gap: .55rem; }
-    .fbnh-button { border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); padding: .55rem .8rem; font: inherit; font-size: .82rem; font-weight: 700; text-decoration: none; cursor: pointer; }
-    .fbnh-button-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .fbnh-table-wrap { width: 100%; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
-    .fbnh-table { width: 100%; border-collapse: collapse; min-width: 540px; }
-    .fbnh-table th, .fbnh-table td { padding: .68rem .8rem; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
-    .fbnh-table th { background: color-mix(in srgb, var(--bg) 80%, var(--surface)); font-size: .76rem; text-transform: uppercase; letter-spacing: .035em; }
-    .fbnh-table tbody tr:last-child td { border-bottom: 0; }
-    .fbnh-table .number { text-align: center; }
-    .fbnh-count-link { min-width: 3rem; padding: .35rem .55rem; border: 0; border-radius: 7px; background: transparent; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; }
-    .fbnh-count-link:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
-    .fbnh-total-row { font-weight: 800; background: color-mix(in srgb, var(--bg) 80%, var(--surface)); }
-    .fbnh-purok-total-row { font-weight: 700; background: color-mix(in srgb, var(--bg) 48%, var(--surface)); }
-    .fbnh-status { min-height: 1.25rem; margin-top: .65rem; color: var(--text-muted); font-size: .83rem; }
-    .fbnh-status[data-error="true"] { color: #dc2626; }
-    .fbnh-check { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
-    .fbnh-verdict { font-size: .75rem; font-weight: 800; border-radius: 999px; padding: .32rem .55rem; display: inline-block; }
-    .fbnh-verdict.qualified { color: #067647; background: #dcfae6; }
-    .fbnh-verdict.not-qualified { color: #b42318; background: #fee4e2; }
-    .fbnh-empty { padding: 1.2rem; text-align: center; color: var(--text-muted); }
-    .fbnh-pagination { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: .8rem; color: var(--text-muted); font-size: .85rem; }
-    .fbnh-pagination-controls { display: flex; gap: .5rem; }
-    .fbnh-tabs { display: flex; flex-wrap: wrap; gap: .55rem; border-bottom: 1px solid var(--border); padding-bottom: .75rem; }
-    .fbnh-tab { border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text-muted); padding: .7rem 1rem; font: inherit; font-size: .86rem; font-weight: 700; cursor: pointer; }
-    .fbnh-tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .fbnh-tab-panel[hidden] { display: none; }
-    .fbnh-modal-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 1rem; background: rgba(15, 23, 42, .58); }
-    .fbnh-modal-overlay[hidden] { display: none; }
-    .fbnh-modal { width: min(680px, 100%); max-height: min(78vh, 760px); overflow: auto; padding: 1.25rem; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: 0 24px 70px rgba(0,0,0,.24); }
-    .fbnh-modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; margin-bottom: 1rem; }
-    .fbnh-modal-header h2 { margin: 0; font-size: 1.1rem; }
-    .fbnh-modal-header p { margin: .3rem 0 0; color: var(--text-muted); font-size: .85rem; }
-    @media (max-width: 600px) { .fbnh-filters { grid-template-columns: 1fr; } .fbnh-card { padding: 1rem; } }
+    .fbnh-page { --fbnh-accent: var(--accent, #1769d2); display:grid; gap:1.1rem; color:var(--text); }
+    .fbnh-card { min-width:0; padding:1.4rem; border:1px solid var(--border); border-radius:16px; background:var(--surface); box-shadow:0 5px 18px rgba(15,23,42,.045); }
+    .fbnh-card h2 { margin:0; font-size:1.15rem; line-height:1.35; letter-spacing:-.015em; }
+    .fbnh-subtitle { margin:.35rem 0 0; color:var(--text-muted); font-size:.9rem; line-height:1.5; }
+    .fbnh-filter-card { padding:clamp(1.15rem,2.4vw,1.8rem); background:linear-gradient(135deg,color-mix(in srgb,var(--fbnh-accent) 5%,var(--surface)),var(--surface) 62%); }
+    .fbnh-page-heading { align-items:center; margin-bottom:1.35rem; }
+    .fbnh-eyebrow { display:inline-flex; align-items:center; gap:.4rem; margin-bottom:.45rem; color:var(--fbnh-accent); font-size:.72rem; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }
+    .fbnh-page-title { margin:0; font-size:clamp(1.35rem,2.5vw,1.75rem)!important; }
+    .fbnh-filter-heading { display:flex; align-items:center; gap:.55rem; margin:0 0 .65rem; font-size:.91rem; font-weight:800; }
+    .fbnh-filter-heading small { margin-left:auto; color:var(--text-muted); font-size:.73rem; font-weight:600; }
+    .fbnh-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; max-width:1060px; }
+    .fbnh-field { min-width:0; }
+    .fbnh-field label { font-size:.84rem; font-weight:700; }
+    .fbnh-field input { color:var(--text); font:inherit; }
+    .fbnh-purok-picker { display:grid; gap:.55rem; padding:.8rem; border:1px solid var(--border); border-radius:12px; background:color-mix(in srgb,var(--bg) 68%,var(--surface)); }
+    .fbnh-purok-picker > label { display:flex; align-items:center; gap:.65rem; margin:0; padding:.25rem .35rem .65rem; border-bottom:1px solid var(--border); cursor:pointer; font-size:.9rem; }
+    .fbnh-purok-picker > label:first-child { font-weight:800; }
+    .fbnh-purok-picker input { flex:none; width:18px; height:18px; margin:0; accent-color:var(--fbnh-accent); }
+    .fbnh-purok-options { display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:.3rem .5rem; max-height:200px; overflow:auto; padding-top:.15rem; }
+    .fbnh-purok-options label { display:flex; align-items:center; gap:.6rem; min-height:38px; margin:0; padding:.35rem .45rem; border:1px solid transparent; border-radius:8px; cursor:pointer; font-size:.85rem; transition:background .15s,border-color .15s; }
+    .fbnh-purok-options label:hover { border-color:color-mix(in srgb,var(--fbnh-accent) 22%,var(--border)); background:color-mix(in srgb,var(--fbnh-accent) 5%,var(--surface)); }
+    .fbnh-purok-options label:has(input:disabled) { color:var(--text-muted); cursor:not-allowed; }
+    .fbnh-purok-options label:has(input:disabled):hover { border-color:transparent; background:transparent; }
+    .fbnh-locked-label { margin-left:auto; font-size:.69rem; font-weight:600; }
+    .fbnh-head { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:1rem; }
+    .fbnh-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; }
+    .fbnh-button { display:inline-flex; align-items:center; justify-content:center; gap:.55rem; min-height:40px; padding:.58rem .85rem; border:1px solid var(--border); border-radius:9px; background:var(--surface); color:var(--text); font:inherit; font-size:.84rem; font-weight:750; text-decoration:none; cursor:pointer; transition:transform .15s,box-shadow .15s,background .15s; }
+    .fbnh-button:hover:not(:disabled) { transform:translateY(-1px); box-shadow:0 5px 12px rgba(15,23,42,.1); }
+    .fbnh-button:focus-visible,.fbnh-tab:focus-visible,.fbnh-count-link:focus-visible { outline:3px solid color-mix(in srgb,var(--fbnh-accent) 42%,transparent); outline-offset:2px; }
+    .fbnh-button:disabled { opacity:.65; cursor:wait; }
+    .fbnh-button-primary { background:var(--fbnh-accent); color:#fff; border-color:var(--fbnh-accent); }
+    .fbnh-reload-button { min-height:46px; padding:.7rem 1rem; background:var(--fbnh-accent); border:1px solid var(--fbnh-accent); color:#fff; box-shadow:0 5px 14px color-mix(in srgb,var(--fbnh-accent) 25%,transparent); }
+    .fbnh-reload-button:hover:not(:disabled) { background:color-mix(in srgb,var(--fbnh-accent) 88%,#000); }
+    .fbnh-reload-icon { display:block; width:18px; height:18px; }
+    .fbnh-reload-button.is-loading .fbnh-reload-icon { animation:fbnh-spin .8s linear infinite; }
+    @keyframes fbnh-spin { to { transform:rotate(360deg); } }
+    .fbnh-table-wrap { width:100%; overflow:auto; border:1px solid var(--border); border-radius:12px; }
+    .fbnh-table { width:100%; border-collapse:separate; border-spacing:0; min-width:540px; }
+    .fbnh-table th,.fbnh-table td { padding:.76rem .9rem; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap; }
+    .fbnh-table th { position:sticky; top:0; z-index:1; background:color-mix(in srgb,var(--bg) 84%,var(--surface)); color:var(--text-muted); font-size:.72rem; font-weight:800; letter-spacing:.055em; text-transform:uppercase; }
+    .fbnh-table tbody tr:last-child td { border-bottom:0; }
+    .fbnh-table tbody tr:not(.fbnh-total-row):not(.fbnh-purok-total-row):hover { background:color-mix(in srgb,var(--fbnh-accent) 4%,var(--surface)); }
+    .fbnh-table .number { text-align:center; }
+    .fbnh-count-link { min-width:3rem; padding:.38rem .6rem; border:0; border-radius:7px; background:transparent; color:var(--fbnh-accent); font:inherit; font-weight:800; cursor:pointer; }
+    .fbnh-count-link:hover { background:color-mix(in srgb,var(--fbnh-accent) 10%,transparent); }
+    .fbnh-total-row { font-weight:800; background:color-mix(in srgb,var(--fbnh-accent) 8%,var(--surface)); }
+    .fbnh-purok-total-row { font-weight:750; background:color-mix(in srgb,var(--bg) 62%,var(--surface)); }
+    .fbnh-status { min-height:1.2rem; margin-top:.65rem; color:var(--text-muted); font-size:.82rem; }
+    .fbnh-status[data-error="true"] { color:#dc2626; }
+    .fbnh-check { width:18px; height:18px; accent-color:var(--fbnh-accent); cursor:pointer; }
+    .fbnh-verdict { display:inline-block; padding:.35rem .6rem; border-radius:999px; font-size:.72rem; font-weight:850; letter-spacing:.025em; }
+    .fbnh-verdict.qualified { color:#067647; background:#dcfae6; }
+    .fbnh-verdict.not-qualified { color:#b42318; background:#fee4e2; }
+    .fbnh-empty { padding:1.5rem!important; text-align:center!important; color:var(--text-muted); }
+    .fbnh-pagination { display:flex; justify-content:space-between; align-items:center; gap:1rem; margin-top:.9rem; color:var(--text-muted); font-size:.85rem; }
+    .fbnh-pagination-controls { display:flex; gap:.5rem; }
+    .fbnh-tabs { display:flex; flex-wrap:wrap; gap:.5rem; padding:.45rem; border:1px solid var(--border); border-radius:13px; background:color-mix(in srgb,var(--bg) 66%,var(--surface)); }
+    .fbnh-tab { display:inline-flex; align-items:center; min-height:42px; padding:.65rem 1rem; border:1px solid transparent; border-radius:9px; background:transparent; color:var(--text-muted); font:inherit; font-size:.85rem; font-weight:750; cursor:pointer; transition:background .15s,color .15s,box-shadow .15s; }
+    .fbnh-tab:hover:not([aria-selected="true"]) { background:var(--surface); color:var(--text); }
+    .fbnh-tab[aria-selected="true"] { background:var(--surface); border-color:var(--border); color:var(--fbnh-accent); box-shadow:0 2px 6px rgba(15,23,42,.08); }
+    .fbnh-tab-panel[hidden] { display:none; }
+    .fbnh-modal-overlay { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:1rem; background:rgba(15,23,42,.58); backdrop-filter:blur(3px); }
+    .fbnh-modal-overlay[hidden] { display:none; }
+    .fbnh-modal { width:min(720px,100%); max-height:min(82vh,800px); overflow:auto; padding:1.4rem; border:1px solid var(--border); border-radius:16px; background:var(--surface); color:var(--text); box-shadow:0 24px 70px rgba(0,0,0,.24); }
+    .fbnh-modal-header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1rem; }
+    .fbnh-modal-header h2 { margin:0; font-size:1.15rem; }
+    .fbnh-modal-header p { margin:.35rem 0 0; color:var(--text-muted); font-size:.85rem; }
+    #fbnhSearch { width:min(100%,420px); padding:.68rem .8rem; border:1px solid var(--border); border-radius:9px; background:var(--surface); font:inherit; }
+    #fbnhSearch:focus { border-color:var(--fbnh-accent); outline:3px solid color-mix(in srgb,var(--fbnh-accent) 15%,transparent); }
+    @media (max-width:700px) { .fbnh-filters { grid-template-columns:1fr; } .fbnh-card { padding:1rem; } .fbnh-page-heading { align-items:flex-start; } .fbnh-reload-button { width:100%; } }
+    @media (max-width:480px) { .fbnh-tabs { display:grid; grid-template-columns:1fr; } .fbnh-tab { justify-content:center; } .fbnh-pagination { align-items:flex-start; flex-direction:column; } }
 </style>
 @endpush
 
@@ -57,36 +87,55 @@
     data-checks-url="{{ url('/filter-bnh-helper/records') }}"
     data-word-url="{{ route('filter-bnh-helper.bnh-word') }}"
     data-counts-word-url="{{ route('filter-bnh-helper.counts-word') }}"
+    data-can-view-mk="{{ $canViewMk ? 'true' : 'false' }}"
     data-csrf="{{ csrf_token() }}">
 
-    <section class="fbnh-card">
-        <div class="fbnh-head">
+    <section class="fbnh-card fbnh-filter-card">
+        <div class="fbnh-head fbnh-page-heading">
             <div>
-                <h2>Filter &amp; BNH Helper</h2>
-                <p class="fbnh-subtitle">Filter active records by Purok and Kalagayan. Inactive records are excluded.</p>
+                <span class="fbnh-eyebrow">Records workspace</span>
+                <h1 class="fbnh-page-title">Filter &amp; BNH Helper</h1>
+                <p class="fbnh-subtitle">Explore active records, update BNH checks, and prepare your resumen. Inactive records are excluded.</p>
             </div>
+            <button type="button" class="fbnh-button fbnh-reload-button" id="fbnhReload" aria-label="Reload results without changing filters">
+                <svg class="fbnh-reload-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M5.6 9a7 7 0 0 1 11.7-2L20 12M4 12l2.7 5a7 7 0 0 0 11.7-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span id="fbnhReloadLabel">Reload Data</span>
+            </button>
         </div>
         <div class="fbnh-filters">
             <div class="fbnh-field">
-                <label for="fbnhPurok">Purok Filter</label>
-                <select id="fbnhPurok">
-                    <option value="all">All Puroks</option>
-                    @foreach ($puroks as $purok)
-                        <option value="{{ $purok->id }}">{{ $purok->purok_name ?: 'Purok '.$purok->purok_number }}</option>
-                    @endforeach
-                </select>
+                <div class="fbnh-filter-heading"><span>Purok</span><small id="fbnhPurokSelection">All selected</small></div>
+                <div class="fbnh-purok-picker" id="fbnhPurokPicker">
+                    <label><input id="fbnhAllPuroks" type="checkbox" checked>All Puroks</label>
+                    <div class="fbnh-purok-options" id="fbnhPurokOptions">
+                        @foreach ($puroks as $purok)
+                            <label>
+                                <input class="fbnh-purok-option" type="checkbox" value="{{ $purok->id }}" checked>
+                                {{ $purok->purok_name ?: 'Purok '.$purok->purok_number }}
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
             </div>
             <div class="fbnh-field">
-                <label for="fbnhStatus">Kalagayan Filter</label>
-                <select id="fbnhStatus">
-                    <option value="ALL">All</option>
-                    <option value="MS">MS</option>
-                    <option value="UWP">UWP</option>
-                    <option value="MK">MK</option>
-                </select>
+                <div class="fbnh-filter-heading"><span>Kalagayan</span><small id="fbnhStatusSelection">All selected</small></div>
+                <div class="fbnh-purok-picker" id="fbnhStatusPicker">
+                    <label><input id="fbnhAllStatuses" type="checkbox" checked>All</label>
+                    <div class="fbnh-purok-options" id="fbnhStatusOptions">
+                        @foreach (['MS', 'UWP', 'MK'] as $status)
+                            <label>
+                                <input class="fbnh-status-option" type="checkbox" value="{{ $status }}" @checked($status !== 'MK' || $canViewMk) @disabled($status === 'MK' && ! $canViewMk)>
+                                {{ $status }}@if ($status === 'MK' && ! $canViewMk) <span class="fbnh-locked-label">De-Listment access required</span> @endif
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="fbnh-status" id="fbnhPageStatus" role="status"></div>
+        <div class="fbnh-status" id="fbnhPageStatus" role="status" aria-live="polite"></div>
     </section>
 
     <div class="fbnh-tabs" role="tablist" aria-label="Filter and BNH tools">
@@ -186,19 +235,32 @@
     const app = document.getElementById('fbnhApp');
     if (!app) return;
 
-    const purokSelect = document.getElementById('fbnhPurok');
-    const statusSelect = document.getElementById('fbnhStatus');
+    const allPuroksCheckbox = document.getElementById('fbnhAllPuroks');
+    const purokCheckboxes = Array.from(document.querySelectorAll('.fbnh-purok-option'));
+    const allStatusesCheckbox = document.getElementById('fbnhAllStatuses');
+    const statusCheckboxes = Array.from(document.querySelectorAll('.fbnh-status-option'));
+    const availableStatusCheckboxes = statusCheckboxes.filter(checkbox => !checkbox.disabled);
     const searchInput = document.getElementById('fbnhSearch');
     const csrf = app.dataset.csrf;
     let currentPage = 1;
     let lastPage = 1;
     let searchTimer;
 
-    const query = (extra = {}) => new URLSearchParams({
-        purok_id: purokSelect.value,
-        status: statusSelect.value,
-        ...extra,
-    }).toString();
+    const query = (extra = {}) => {
+        const params = new URLSearchParams({
+            purok_selection: 'selected',
+            status_selection: 'selected',
+        });
+        purokCheckboxes.filter(checkbox => checkbox.checked).forEach(checkbox => params.append('purok_ids[]', checkbox.value));
+        availableStatusCheckboxes.filter(checkbox => checkbox.checked).forEach(checkbox => params.append('status_ids[]', checkbox.value));
+        Object.entries(extra).forEach(([key, value]) => {
+            params.delete(key);
+            params.delete(`${key}[]`);
+            if (Array.isArray(value)) value.forEach(item => params.append(`${key}[]`, item));
+            else params.set(key, String(value));
+        });
+        return params.toString();
+    };
 
     async function requestJson(url, options = {}) {
         const response = await fetch(url, {
@@ -283,7 +345,7 @@
         document.getElementById('fbnhMemberClose').focus();
         try {
             const params = query({
-                purok_id: group.purok_id === null ? 'all' : String(group.purok_id),
+                purok_ids: group.purok_id === null ? purokCheckboxes.filter(option => option.checked).map(option => option.value) : [String(group.purok_id)],
                 grupo: group.grupo ?? '',
                 gender,
             });
@@ -427,8 +489,20 @@
         document.getElementById('fbnhDownloadCounts').href = `${app.dataset.countsWordUrl}?${query()}`;
     }
 
+    function updateFilterSummary() {
+        const selectedPuroks = purokCheckboxes.filter(checkbox => checkbox.checked).length;
+        const selectedStatuses = availableStatusCheckboxes.filter(checkbox => checkbox.checked).length;
+        document.getElementById('fbnhPurokSelection').textContent = selectedPuroks === purokCheckboxes.length
+            ? 'All selected'
+            : `${selectedPuroks} of ${purokCheckboxes.length} selected`;
+        document.getElementById('fbnhStatusSelection').textContent = selectedStatuses === availableStatusCheckboxes.length
+            ? 'All selected'
+            : `${selectedStatuses} of ${availableStatusCheckboxes.length} selected`;
+    }
+
     function refreshFilters() {
         currentPage = 1;
+        updateFilterSummary();
         updateDownloadLinks();
         loadMatrix();
         loadBnhRecords();
@@ -436,8 +510,39 @@
         document.getElementById('fbnhMembersModal').hidden = true;
     }
 
-    purokSelect.addEventListener('change', refreshFilters);
-    statusSelect.addEventListener('change', refreshFilters);
+    async function reloadData() {
+        const button = document.getElementById('fbnhReload');
+        const label = document.getElementById('fbnhReloadLabel');
+        button.disabled = true;
+        button.classList.add('is-loading');
+        label.textContent = 'Reloading…';
+        updateDownloadLinks();
+        try {
+            await Promise.all([loadMatrix(), loadBnhRecords(), loadQualifiedCounts()]);
+        } finally {
+            button.disabled = false;
+            button.classList.remove('is-loading');
+            label.textContent = 'Reload Data';
+        }
+    }
+
+    document.getElementById('fbnhReload').addEventListener('click', reloadData);
+    allPuroksCheckbox.addEventListener('change', () => {
+        purokCheckboxes.forEach(checkbox => { checkbox.checked = allPuroksCheckbox.checked; });
+        refreshFilters();
+    });
+    purokCheckboxes.forEach(checkbox => checkbox.addEventListener('change', () => {
+        allPuroksCheckbox.checked = purokCheckboxes.every(option => option.checked);
+        refreshFilters();
+    }));
+    allStatusesCheckbox.addEventListener('change', () => {
+        availableStatusCheckboxes.forEach(checkbox => { checkbox.checked = allStatusesCheckbox.checked; });
+        refreshFilters();
+    });
+    availableStatusCheckboxes.forEach(checkbox => checkbox.addEventListener('change', () => {
+        allStatusesCheckbox.checked = availableStatusCheckboxes.every(option => option.checked);
+        refreshFilters();
+    }));
     searchInput.addEventListener('input', () => {
         window.clearTimeout(searchTimer);
         updateDownloadLinks();
@@ -476,6 +581,7 @@
     });
     document.getElementById('fbnhPrevious').addEventListener('click', () => { if (currentPage > 1) { currentPage--; loadBnhRecords(); } });
     document.getElementById('fbnhNext').addEventListener('click', () => { if (currentPage < lastPage) { currentPage++; loadBnhRecords(); } });
+    updateFilterSummary();
     updateDownloadLinks();
     loadMatrix();
     loadBnhRecords();

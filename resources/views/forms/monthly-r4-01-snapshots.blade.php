@@ -17,6 +17,7 @@
     .r401-snapshot-actions { display:flex; flex-wrap:wrap; gap:.4rem; }
     .r401-snapshot-actions form { margin:0; }
     .r401-snapshot-actions .delete { background:#a52b2b; }
+    .r401-snapshot-actions .summary { background:#344d73; }
     .r401-snapshot-table-wrap { overflow-x:auto; }
     .r401-snapshot-table { width:100%; border-collapse:collapse; }
     .r401-snapshot-table th,.r401-snapshot-table td { padding:.9rem .7rem; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap; }
@@ -30,6 +31,21 @@
     .r401-snapshot-viewer h2 { margin:0; overflow:hidden; font-size:1rem; text-overflow:ellipsis; white-space:nowrap; }
     .r401-snapshot-viewer header button { min-height:36px; padding:.45rem .75rem; border:0; border-radius:8px; background:var(--bg); color:var(--text); font:inherit; font-weight:700; cursor:pointer; }
     .r401-snapshot-viewer iframe { display:block; width:100%; height:calc(100% - 55px); border:0; background:#eef2f6; }
+    .r401-snapshot-summary { width:min(760px,calc(100% - 2rem)); max-height:min(82vh,760px); padding:0; overflow:hidden; border:1px solid var(--border); border-radius:14px; background:var(--surface); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.35); }
+    .r401-snapshot-summary::backdrop { background:rgba(15,23,42,.72); backdrop-filter:blur(3px); }
+    .r401-snapshot-summary header { display:flex; align-items:center; justify-content:space-between; gap:1rem; min-height:58px; padding:.7rem 1rem; border-bottom:1px solid var(--border); }
+    .r401-snapshot-summary h2 { margin:0; overflow:hidden; font-size:1rem; text-overflow:ellipsis; white-space:nowrap; }
+    .r401-snapshot-summary header button { min-height:36px; padding:.45rem .75rem; border:0; border-radius:8px; background:var(--bg); color:var(--text); font:inherit; font-weight:700; cursor:pointer; }
+    .r401-summary-tablist { display:flex; gap:.4rem; padding:.65rem 1rem 0; border-bottom:1px solid var(--border); }
+    .r401-summary-tab { padding:.6rem .9rem; border:1px solid transparent; border-bottom:0; border-radius:8px 8px 0 0; background:transparent; color:var(--text-muted); font:inherit; font-weight:750; }
+    .r401-summary-tab[aria-selected="true"] { border-color:var(--border); background:var(--surface); color:var(--accent); }
+    .r401-summary-panel { max-height:calc(min(82vh,760px) - 112px); overflow:auto; padding:1rem; }
+    .r401-summary-period { margin:0 0 .85rem; color:var(--text-muted); font-size:.86rem; }
+    .r401-summary-list { display:grid; gap:.55rem; margin:0; padding:0; list-style:none; }
+    .r401-summary-list li { padding:.75rem .85rem; border:1px solid var(--border); border-radius:9px; background:var(--bg); line-height:1.5; }
+    .r401-summary-list strong { color:var(--text); }
+    .r401-summary-empty,.r401-summary-error { padding:1.2rem; color:var(--text-muted); text-align:center; }
+    .r401-summary-error { color:#a52b2b; }
     .r401-snapshot-delete-dialog { width:min(520px,calc(100% - 2rem)); padding:0; border:1px solid var(--border); border-radius:16px; background:var(--surface); color:var(--text); box-shadow:0 24px 70px rgba(15,23,42,.35); }
     .r401-snapshot-delete-content { padding:1.25rem; }
     .r401-snapshot-delete-content h2 { margin:0 0 .6rem; font-size:1.15rem; }
@@ -89,6 +105,7 @@
                                 <td>{{ $snapshot->created_at->timezone('Asia/Manila')->format('d M Y, h:i A') }}</td>
                                 <td>
                                     <div class="r401-snapshot-actions">
+                                        <button type="button" class="r401-snapshot-download summary" data-snapshot-summary="{{ route('forms.monthly.r4-01.snapshots.summary', $snapshot) }}" data-snapshot-name="{{ $snapshot->file_name }}">Summary</button>
                                         <button type="button" class="r401-snapshot-download" data-snapshot-view="{{ route('forms.monthly.r4-01.snapshots.view', $snapshot) }}" data-snapshot-name="{{ $snapshot->file_name }}">View</button>
                                         <a class="r401-snapshot-download" href="{{ route('forms.monthly.r4-01.snapshots.download', $snapshot) }}">Download</a>
                                         @if ($canDeleteSnapshots)
@@ -117,6 +134,19 @@
         <button type="button" id="r401SnapshotViewerClose">Close</button>
     </header>
     <iframe id="r401SnapshotViewerFrame" title="Monthly report preview"></iframe>
+</dialog>
+<dialog class="r401-snapshot-summary" id="r401SnapshotSummary" aria-labelledby="r401SnapshotSummaryTitle">
+    <header>
+        <h2 id="r401SnapshotSummaryTitle">Monthly session summary</h2>
+        <button type="button" id="r401SnapshotSummaryClose">Close</button>
+    </header>
+    <div class="r401-summary-tablist" role="tablist" aria-label="Snapshot details">
+        <button type="button" class="r401-summary-tab" id="r401SummaryTab" role="tab" aria-selected="true" aria-controls="r401SummaryPanel">Summary</button>
+    </div>
+    <section class="r401-summary-panel" id="r401SummaryPanel" role="tabpanel" aria-labelledby="r401SummaryTab">
+        <p class="r401-summary-period" id="r401SummaryPeriod"></p>
+        <div id="r401SummaryContent" aria-live="polite"></div>
+    </section>
 </dialog>
 @if ($canDeleteSnapshots)
     <dialog class="r401-snapshot-delete-dialog" id="r401SnapshotDeleteDialog" aria-labelledby="r401SnapshotDeleteTitle">
@@ -166,6 +196,54 @@
     });
     document.getElementById('r401SnapshotViewerClose')?.addEventListener('click', () => viewer.close());
     viewer?.addEventListener('close', () => { viewerFrame.src = 'about:blank'; });
+
+    const summaryDialog = document.getElementById('r401SnapshotSummary');
+    const summaryTitle = document.getElementById('r401SnapshotSummaryTitle');
+    const summaryPeriod = document.getElementById('r401SummaryPeriod');
+    const summaryContent = document.getElementById('r401SummaryContent');
+    document.querySelectorAll('[data-snapshot-summary]').forEach(button => {
+        button.addEventListener('click', async () => {
+            summaryTitle.textContent = button.dataset.snapshotName;
+            summaryPeriod.textContent = '';
+            summaryContent.replaceChildren(Object.assign(document.createElement('p'), {
+                className: 'r401-summary-empty',
+                textContent: 'Loading session summary…',
+            }));
+            summaryDialog.showModal();
+            try {
+                const response = await fetch(button.dataset.snapshotSummary, {
+                    headers: { Accept: 'application/json' },
+                    credentials: 'same-origin',
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || 'Unable to load this snapshot summary.');
+                summaryPeriod.textContent = data.period;
+                if (!data.entries.length) {
+                    const empty = document.createElement('p');
+                    empty.className = 'r401-summary-empty';
+                    empty.textContent = 'No recorded monthly changes are available for this snapshot.';
+                    summaryContent.replaceChildren(empty);
+                    return;
+                }
+                const list = document.createElement('ul');
+                list.className = 'r401-summary-list';
+                data.entries.forEach(entry => {
+                    const item = document.createElement('li');
+                    const name = document.createElement('strong');
+                    name.textContent = `${entry.name} `;
+                    item.append(name, document.createTextNode(entry.summary));
+                    list.append(item);
+                });
+                summaryContent.replaceChildren(list);
+            } catch (error) {
+                const message = document.createElement('p');
+                message.className = 'r401-summary-error';
+                message.textContent = error.message;
+                summaryContent.replaceChildren(message);
+            }
+        });
+    });
+    document.getElementById('r401SnapshotSummaryClose')?.addEventListener('click', () => summaryDialog.close());
 
     const deleteDialog = document.getElementById('r401SnapshotDeleteDialog');
     if (!deleteDialog) return;

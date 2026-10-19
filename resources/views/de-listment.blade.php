@@ -67,7 +67,10 @@
                     </tbody>
                 </table>
             </div>
-            <div class="modal-actions"><button type="button" class="btn" data-close>Close</button></div>
+            <div class="modal-actions">
+                <a class="btn" href="{{ route('de-listment.history.download') }}">Download history (DOCX)</a>
+                <button type="button" class="btn" data-close>Close</button>
+            </div>
         </div>
     </dialog>
 

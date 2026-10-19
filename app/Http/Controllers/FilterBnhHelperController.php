@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Purok;
 use App\Models\Record;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,14 +15,17 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class FilterBnhHelperController extends Controller
 {
-    public function index()
+    public function index(Request $request): View
     {
+        $canViewMk = $this->canViewMk($request);
+
         return view('filter-bnh-helper', [
             'puroks' => Purok::query()
                 ->orderBy('purok_number')
                 ->orderBy('grupo_start')
                 ->orderBy('id')
                 ->get(),
+            'canViewMk' => $canViewMk,
         ]);
     }
 
@@ -40,13 +44,21 @@ class FilterBnhHelperController extends Controller
     public function members(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'purok_id' => ['required', 'string'],
+            'purok_id' => ['nullable', 'string'],
+            'purok_selection' => ['nullable', Rule::in(['all', 'selected'])],
+            'purok_ids' => ['nullable', 'array'],
+            'purok_ids.*' => ['integer', 'distinct', 'exists:puroks,id'],
             'grupo' => ['nullable', 'integer', 'min:0'],
             'gender' => ['required', Rule::in(['male', 'female', 'all'])],
-            'status' => ['required', Rule::in(['MS', 'UWP', 'MK', 'ALL'])],
+            'status' => ['nullable', Rule::in(['MS', 'UWP', 'MK', 'ALL'])],
+            'status_selection' => ['nullable', Rule::in(['selected'])],
+            'status_ids' => ['nullable', 'array'],
+            'status_ids.*' => ['string', 'distinct', Rule::in(['MS', 'UWP', 'MK'])],
         ]);
-        $puroks = $this->selectedPuroks($validated['purok_id']);
-        $records = $this->recordsFor($puroks, $validated['status'])
+        $puroks = ($validated['purok_selection'] ?? null) === 'selected'
+            ? $this->selectedPuroks($validated['purok_ids'] ?? [])
+            : $this->selectedPuroks($validated['purok_id'] ?? 'all');
+        $records = $this->recordsFor($puroks, $this->selectedStatuses($validated, $request))
             ->filter(fn (Record $record): bool => (! isset($validated['grupo']) || (int) $record->grupo === (int) $validated['grupo'])
                 && ($validated['gender'] === 'all' || $this->normalizeGender($record->gender) === $validated['gender']))
             ->sortBy(fn (Record $record): string => mb_strtolower((string) $record->full_name))
@@ -161,14 +173,54 @@ class FilterBnhHelperController extends Controller
     {
         $validated = $request->validate([
             'purok_id' => ['nullable', 'string'],
+            'purok_selection' => ['nullable', Rule::in(['all', 'selected'])],
+            'purok_ids' => ['nullable', 'array'],
+            'purok_ids.*' => ['integer', 'distinct', 'exists:puroks,id'],
             'status' => ['nullable', Rule::in(['MS', 'UWP', 'MK', 'ALL'])],
+            'status_selection' => ['nullable', Rule::in(['selected'])],
+            'status_ids' => ['nullable', 'array'],
+            'status_ids.*' => ['string', 'distinct', Rule::in(['MS', 'UWP', 'MK'])],
             'page' => ['nullable', 'integer', 'min:1'],
             'q' => ['nullable', 'string', 'max:150'],
         ]);
-        $puroks = $this->selectedPuroks($validated['purok_id'] ?? 'all');
-        $records = $this->recordsFor($puroks, $validated['status'] ?? 'ALL');
+        $puroks = ($validated['purok_selection'] ?? null) === 'selected'
+            ? $this->selectedPuroks($validated['purok_ids'] ?? [])
+            : $this->selectedPuroks($validated['purok_id'] ?? 'all');
+        $records = $this->recordsFor($puroks, $this->selectedStatuses($validated, $request));
 
         return [$puroks, $records];
+    }
+
+    /**
+     * @param  array<string, mixed>  $validated
+     * @return string|list<string>
+     */
+    private function selectedStatuses(array $validated, Request $request): string|array
+    {
+        $canViewMk = $this->canViewMk($request);
+
+        if (($validated['status_selection'] ?? null) !== 'selected') {
+            $status = $validated['status'] ?? 'ALL';
+            abort_if($status === 'MK' && ! $canViewMk, 403, 'You do not have permission to view MK records.');
+
+            return $status === 'ALL' && ! $canViewMk ? ['MS', 'UWP'] : $status;
+        }
+
+        $statuses = array_values(array_filter(
+            $validated['status_ids'] ?? [],
+            fn (string $status): bool => $canViewMk || $status !== 'MK'
+        ));
+
+        return $statuses;
+    }
+
+    private function canViewMk(Request $request): bool
+    {
+        $user = $request->session()->get('login_user', []);
+        $role = mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) ($user['tungkulin'] ?? '')) ?? ''));
+
+        return in_array($role, ['head secretary', 'secretary head'], true)
+            || (bool) ($user['Delistment_allow'] ?? false);
     }
 
     /**
@@ -188,12 +240,16 @@ class FilterBnhHelperController extends Controller
         ))->values();
     }
 
-    private function selectedPuroks(string $purokId): Collection
+    private function selectedPuroks(string|array $purokId): Collection
     {
         $query = Purok::query()
             ->orderBy('purok_number')
             ->orderBy('grupo_start')
             ->orderBy('id');
+
+        if (is_array($purokId)) {
+            return $query->whereIn('id', $purokId)->get();
+        }
 
         if ($purokId !== 'all') {
             abort_unless(ctype_digit($purokId), 422, 'Choose a valid Purok.');
@@ -207,9 +263,9 @@ class FilterBnhHelperController extends Controller
      * @param  Collection<int, Purok>  $puroks
      * @return Collection<int, Record>
      */
-    private function recordsFor(Collection $puroks, string $status): Collection
+    private function recordsFor(Collection $puroks, string|array $status): Collection
     {
-        if ($puroks->isEmpty()) {
+        if ($puroks->isEmpty() || $status === []) {
             return collect();
         }
 
@@ -221,7 +277,13 @@ class FilterBnhHelperController extends Controller
 
         return Record::query()
             ->whereRaw("UPPER(TRIM(COALESCE(status, ''))) != 'INACTIVE'")
-            ->when($status !== 'ALL', fn (Builder $query): Builder => $query->whereRaw('UPPER(TRIM(COALESCE(status, \'\'))) = ?', [$status]))
+            ->when($status !== 'ALL', function (Builder $query) use ($status): Builder {
+                if (is_array($status)) {
+                    return $query->whereIn(\Illuminate\Support\Facades\DB::raw('UPPER(TRIM(COALESCE(status, \'\')))'), $status);
+                }
+
+                return $query->whereRaw('UPPER(TRIM(COALESCE(status, \'\'))) = ?', [$status]);
+            })
             ->get([
                 'id',
                 'full_name',
@@ -426,14 +488,35 @@ class FilterBnhHelperController extends Controller
      */
     private function filterLabels(Request $request): array
     {
-        $purokId = (string) $request->query('purok_id', 'all');
-        $purok = $purokId === 'all'
-            ? 'All Puroks'
-            : (Purok::query()->find($purokId)?->purok_name ?: 'Selected Purok');
+        $purokIds = $request->query('purok_ids', []);
+        $purok = ($request->query('purok_selection') === 'selected' && is_array($purokIds))
+            ? Purok::query()->whereIn('id', $purokIds)->orderBy('purok_number')->orderBy('grupo_start')->pluck('purok_name')->implode(', ')
+            : (((string) $request->query('purok_id', 'all')) === 'all'
+                ? 'All Puroks'
+                : (Purok::query()->find($request->query('purok_id'))?->purok_name ?: 'Selected Purok'));
+        if ($purok === '') {
+            $purok = 'No Puroks';
+        }
+
+        $statuses = $request->query('status_ids', []);
+        if ($request->query('status_selection') === 'selected' && is_array($statuses)) {
+            $canViewMk = $this->canViewMk($request);
+            $statuses = array_values(array_filter($statuses, fn (string $status): bool => $canViewMk || $status !== 'MK'));
+            $statusLabel = count($statuses) === ($canViewMk ? 3 : 2)
+                ? 'ALL'
+                : implode(', ', $statuses);
+        } else {
+            $statusLabel = (string) $request->query('status', 'ALL');
+        }
+        if ($statusLabel === '') {
+            $statusLabel = 'None';
+        } elseif ($statusLabel === 'ALL' && ! $this->canViewMk($request)) {
+            $statusLabel = 'MS, UWP';
+        }
 
         return [
             'purok' => $purok,
-            'status' => (string) $request->query('status', 'ALL'),
+            'status' => $statusLabel,
         ];
     }
 }

@@ -249,7 +249,7 @@ class DeliberationController extends Controller
                 ->orderBy('id')
                 ->lockForUpdate()
                 ->get();
-            $snapshot = $snapshotExporter->generate($session);
+            $snapshot = $snapshotExporter->generate($session, true);
             foreach ($codedRecords as $record) {
                 [$codeStatus, $code] = $this->monthlyCodeParts(
                     (string) $record->monthly_code,

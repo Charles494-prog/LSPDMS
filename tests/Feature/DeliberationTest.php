@@ -3,11 +3,13 @@
 namespace Tests\Feature;
 
 use App\Models\MonthlyMovementSession;
+use App\Models\MonthlyRecordSnapshot;
 use App\Models\MonthlySessionActivity;
 use App\Models\MonthlySessionMovement;
 use App\Models\Purok;
 use App\Models\R401Snapshot;
 use App\Models\Record;
+use App\Models\RecordAuditLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -59,6 +61,34 @@ class DeliberationTest extends TestCase
         $this->withSession(['login_user' => ['id' => $unauthorized->id]])
             ->get(route('forms.monthly.deliberation'))
             ->assertForbidden();
+    }
+
+    public function test_monthly_finish_closes_activity_dialog_before_confirmations_and_loading(): void
+    {
+        $user = $this->makeSecretary();
+        $this->makePurok();
+
+        $html = $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.deliberation'))
+            ->assertOk()
+            ->assertSee("Yay, I understand there's no redos!", false)
+            ->assertSee('blockerTitle.textContent = `Monthly ${periodLabel} done`', false)
+            ->assertSee('successAcknowledge.addEventListener', false)
+            ->getContent();
+        $finishHandler = strpos($html, "finish.addEventListener('click', async () => {");
+        $dialogClose = strpos($html, 'dialog.close();', $finishHandler);
+        $warnings = strpos($html, 'const warnings = [', $finishHandler);
+        $confirmation = strpos($html, 'if (!confirmation) return;', $warnings);
+        $showLoading = strpos($html, 'showFinishing();', $confirmation);
+
+        $this->assertNotFalse($finishHandler);
+        $this->assertNotFalse($confirmation);
+        $this->assertNotFalse($dialogClose);
+        $this->assertNotFalse($warnings);
+        $this->assertNotFalse($showLoading);
+        $this->assertLessThan($warnings, $dialogClose);
+        $this->assertLessThan($showLoading, $dialogClose);
+        $this->assertStringNotContainsString('setTimeout(resolve, 2200)', $html);
     }
 
     public function test_monthly_changes_require_an_explicitly_started_session(): void
@@ -890,6 +920,9 @@ class DeliberationTest extends TestCase
             'gender' => 'B',
             'kapisanan' => 'B',
         ]);
+        $audit = RecordAuditLog::query()->where('action', 'created')->sole();
+        $this->assertSame($user->gmail, $audit->actor_email);
+        $this->assertSame('Added FEMALE RFID BUKLOD as MS.', $audit->summary);
     }
 
     public function test_add_suggestions_find_partial_and_similarly_spelled_names_only(): void
@@ -1329,11 +1362,11 @@ class DeliberationTest extends TestCase
         ]);
         $this->withSession($session)
             ->postJson(route('forms.monthly.deliberation.subtract'), [
-                    'record_id' => $subtractRecord->id,
-                    'code' => 'D',
-                    'description' => 'Subtract note to undo',
-                ])
-                ->assertOk();
+                'record_id' => $subtractRecord->id,
+                'code' => 'D',
+                'description' => 'Subtract note to undo',
+            ])
+            ->assertOk();
         $this->assertDatabaseHas('records', [
             'id' => $subtractRecord->id,
             'status' => 'INACTIVE',
@@ -1628,13 +1661,13 @@ class DeliberationTest extends TestCase
             'ms_count' => 0,
             'session_generated' => true,
         ]);
-        $snapshot = \App\Models\MonthlyRecordSnapshot::query()
+        $snapshot = MonthlyRecordSnapshot::query()
             ->whereDate('month', now()->timezone('Asia/Manila')->startOfMonth()->addMonthNoOverflow()->toDateString())
             ->where('purok_number', $purok->purok_number)
             ->where('purok_id', $purok->id)
             ->firstOrFail();
         $this->assertSame(1, $snapshot->movement_counts['MS']['DD'] ?? 0);
-        $secondSegmentSnapshot = \App\Models\MonthlyRecordSnapshot::query()
+        $secondSegmentSnapshot = MonthlyRecordSnapshot::query()
             ->whereDate('month', now()->timezone('Asia/Manila')->startOfMonth()->addMonthNoOverflow()->toDateString())
             ->where('purok_id', $secondPurokSegment->id)
             ->firstOrFail();

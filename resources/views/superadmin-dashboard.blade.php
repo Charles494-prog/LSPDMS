@@ -53,8 +53,33 @@
     .sa-tab-panel { display: none; }
     .sa-tab-panel.active { display: block; }
     #bnhResetGeneratedCode { display:inline-block; margin:.4rem 0; padding:.55rem .75rem; border:1px solid var(--sa-border); border-radius:8px; background:var(--sa-bg); font-size:1.1rem; font-weight:800; letter-spacing:.12em; user-select:none; -webkit-user-select:none; }
-    .bnh-reset-countdown { height:9px; overflow:hidden; border-radius:999px; background:color-mix(in srgb,var(--sa-accent) 14%,var(--sa-bg)); }
+    .bnh-reset-grid { grid-template-columns:1fr; }
+    .bnh-reset-field { width:100%; }
+    .bnh-reset-state[hidden], .bnh-reset-code-panel[hidden] { display:none !important; }
+    .bnh-reset-state { display:flex; width:100%; min-height:300px; box-sizing:border-box; flex-direction:column; align-items:center; justify-content:center; gap:1rem; padding:2rem; border:1px solid color-mix(in srgb,var(--sa-accent) 24%,var(--sa-border)); border-radius:12px; background:linear-gradient(145deg,color-mix(in srgb,var(--sa-accent) 7%,var(--sa-surface)),var(--sa-surface) 74%); color:var(--sa-navy); text-align:center; }
+    .bnh-reset-state-copy { width:min(100%,680px); }
+    .bnh-reset-state-title { margin:0 0 .4rem; color:var(--sa-navy); font-size:1.1rem; font-weight:750; line-height:1.35; }
+    .bnh-reset-state p { margin:0; color:var(--sa-ink-soft); font-size:.92rem; line-height:1.6; }
+    .bnh-reset-state-icon { display:grid; width:3.25rem; height:3.25rem; flex:0 0 3.25rem; place-items:center; border-radius:50%; background:color-mix(in srgb,var(--sa-accent) 13%,var(--sa-surface)); color:var(--sa-accent); }
+    .bnh-reset-state-icon svg { width:1.25rem; height:1.25rem; }
+    .bnh-reset-code-panel { display:flex; width:100%; min-height:300px; box-sizing:border-box; flex-direction:column; align-items:center; justify-content:center; padding:clamp(1.25rem,3vw,2rem); border:1px solid var(--sa-border); border-radius:12px; background:var(--sa-bg); text-align:center; }
+    .bnh-reset-code-title { width:min(100%,680px); margin:0 auto 1.5rem; color:var(--sa-navy); font-size:1.15rem; font-weight:750; line-height:1.45; }
+    .bnh-reset-code-content { display:flex; width:100%; flex-direction:column; gap:1.25rem; align-items:center; }
+    .bnh-reset-code-display { width:min(100%,560px); min-width:0; }
+    .bnh-reset-code-label { display:block; margin-bottom:.55rem; color:var(--sa-ink-soft); font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; }
+    #bnhResetGeneratedCode { display:block; width:100%; box-sizing:border-box; margin:0; padding:1rem 1.1rem; border:1px solid var(--sa-border); border-radius:9px; background:var(--sa-surface); color:var(--sa-navy); font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:clamp(1.25rem,3vw,1.75rem); font-weight:800; letter-spacing:.18em; text-align:center; user-select:none; -webkit-user-select:none; }
+    .bnh-reset-countdown { height:8px; margin-top:.85rem; overflow:hidden; border-radius:999px; background:color-mix(in srgb,var(--sa-accent) 14%,var(--sa-bg)); }
     .bnh-reset-countdown > div { width:100%; height:100%; border-radius:inherit; background:var(--sa-accent); transition:width .12s linear; }
+    .bnh-reset-code-timer { margin:.45rem 0 0; color:var(--sa-ink-soft); font-size:.82rem; text-align:center; }
+    .bnh-reset-confirmation { width:min(100%,420px); }
+    .bnh-reset-confirmation label { display:block; margin-bottom:.55rem; color:var(--sa-navy); font-size:.86rem; font-weight:700; text-align:center; }
+    .bnh-reset-confirmation input { box-sizing:border-box; width:100%; min-height:48px; padding:.7rem .8rem; border:1px solid var(--sa-border); border-radius:9px; background:var(--sa-surface); color:var(--sa-navy); font:inherit; letter-spacing:.08em; text-align:center; }
+    .bnh-reset-confirmation input:focus { outline:3px solid color-mix(in srgb,var(--sa-accent) 20%,transparent); border-color:var(--sa-accent); }
+    .bnh-reset-confirmation input:disabled { background:var(--sa-surface); opacity:.7; }
+    @media (max-width:700px) { .bnh-reset-state, .bnh-reset-code-panel { min-height:240px; padding:1.25rem; } }
+    #tab-maintenance .sa-card-head { justify-content:center; text-align:center; }
+    #tab-maintenance.sa-tab-panel.active { min-height:calc(100vh - 14rem); display:flex; align-items:center; justify-content:center; }
+    #tab-maintenance > .sa-card { width:min(100%,760px); margin:0 auto; box-sizing:border-box; }
     .hakbang-status-tabs { display:flex; gap:.5rem; margin:0 0 1rem; }
     .hakbang-status-btn { border:1px solid var(--sa-border); border-radius:8px; padding:.55rem 1rem; color:var(--sa-ink-soft); background:var(--sa-bg); font:inherit; font-weight:700; cursor:pointer; }
     .hakbang-status-btn.active { color:#fff; background:var(--sa-accent); border-color:var(--sa-accent); }
@@ -97,6 +122,36 @@
         justify-content: flex-start;
         margin-bottom: 0.9rem;
     }
+    .sa-audit-filters {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 0.8rem;
+        align-items: end;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        border: 1px solid var(--sa-border);
+        border-radius: 10px;
+        background: var(--sa-bg);
+    }
+    .sa-audit-filters label span {
+        display: block;
+        margin-bottom: 0.35rem;
+        color: var(--sa-ink-soft);
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .sa-audit-filters input {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        padding: 0.55rem 0.65rem;
+        border: 1px solid var(--sa-border);
+        border-radius: 7px;
+        background: var(--sa-surface);
+        color: var(--sa-navy);
+        font: inherit;
+    }
+    .sa-audit-filter-error { grid-column: 1 / -1; margin: 0; color: var(--sa-danger); font-size: 0.85rem; }
 
     .sa-btn {
         font-family: inherit;
@@ -393,6 +448,8 @@
         grid-template-columns: 1fr 1fr;
         gap: 1.1rem 1.4rem;
     }
+    #tab-maintenance .bnh-reset-grid { grid-template-columns:minmax(0,1fr); }
+    #tab-maintenance .bnh-reset-field { grid-column:1 / -1; }
     @media (max-width: 720px) {
         .gv-grid { grid-template-columns: 1fr; }
     }
@@ -655,6 +712,7 @@
         </button>
         <button type="button" class="sa-tab-btn" data-tab="r402-hakbangs">Mga R4-02 Hakbang</button>
         <button type="button" class="sa-tab-btn" data-tab="maintenance">BNH FORM RESET</button>
+        <button type="button" class="sa-tab-btn" data-tab="record-audit">Record Activity</button>
     </div>
 
     <!-- ============ USER MANAGEMENT ============ -->
@@ -733,6 +791,73 @@
                 </table>
                 <div class="sa-empty" id="usersEmptyState" style="display:none;">No users match your search.</div>
             </div>
+        </div>
+    </div>
+
+    <div class="sa-tab-panel" id="tab-record-audit">
+        <div class="sa-card">
+            <div class="sa-card-head">
+                <div>
+                    <h2>Record Activity Log</h2>
+                    <p>Record changes with the acting account, date and changed values. Newest actions appear first.</p>
+                </div>
+                <a class="sa-btn sa-btn-primary" href="{{ route('superadmin.record-activity.download', array_filter($auditFilters, fn ($value) => $value !== null && $value !== '')) }}">
+                    Download Word
+                </a>
+            </div>
+            <form method="GET" action="{{ route('superadmin-dashboard') }}#record-audit" class="sa-audit-filters" id="recordAuditFilters">
+                <input type="hidden" name="tab" value="record-audit">
+                <label class="gv-field">
+                    <span>From date</span>
+                    <input type="date" name="date_from" value="{{ $auditFilters['date_from'] ?? '' }}">
+                </label>
+                <label class="gv-field">
+                    <span>To date</span>
+                    <input type="date" name="date_to" value="{{ $auditFilters['date_to'] ?? '' }}">
+                </label>
+                <label class="gv-field">
+                    <span>Record name</span>
+                    <input type="search" name="record_name" value="{{ $auditFilters['record_name'] ?? '' }}" maxlength="150" placeholder="Search member name">
+                </label>
+                <label class="gv-field">
+                    <span>Secretary email</span>
+                    <input type="search" name="actor_email" value="{{ $auditFilters['actor_email'] ?? '' }}" maxlength="255" placeholder="Search account email">
+                </label>
+                <div class="sa-card-head-actions">
+                    <button type="submit" class="sa-btn sa-btn-primary">Apply filters</button>
+                    <a class="sa-btn sa-btn-ghost" href="{{ route('superadmin-dashboard') }}#record-audit">Clear</a>
+                </div>
+                @if ($errors->any())
+                    <p class="sa-audit-filter-error" role="alert">{{ $errors->first() }}</p>
+                @endif
+            </form>
+            <div class="sa-table-wrap">
+                <table class="sa-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Date of action</th>
+                            <th scope="col">Account</th>
+                            <th scope="col">Record</th>
+                            <th scope="col">Action details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($recordAuditLogs as $auditLog)
+                            <tr>
+                                <td>{{ $auditLog->created_at?->timezone('Asia/Manila')->format('M d, Y h:i:s A') }}</td>
+                                <td>{{ $auditLog->actor_email ?: 'System / background task' }}</td>
+                                <td>{{ $auditLog->record_name ?: 'Deleted record' }}{{ $auditLog->record_id ? ' (#'.$auditLog->record_id.')' : '' }}</td>
+                                <td>{{ $auditLog->summary }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="sa-empty">No record changes have been logged yet.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+            @if ($recordAuditLogs->hasPages())
+                <div class="sa-audit-pagination">{{ $recordAuditLogs->links() }}</div>
+            @endif
         </div>
     </div>
 
@@ -1183,22 +1308,39 @@
             <div class="sa-card-head">
                 <div>
                     <h2>BNH FORM RESET</h2>
-                    <p>A fresh code appears when you open this tab and changes every 45 seconds.</p>
                 </div>
             </div>
-            <div class="gv-grid">
-                <div class="gv-field">
-                    <div id="bnhResetCodePanel" hidden>
-                        <p class="gv-hint">Enter the code shown below. The checks reset automatically when all characters match.</p>
-                        <code id="bnhResetGeneratedCode" aria-label="Generated reset code"></code>
-                        <div class="bnh-reset-countdown" role="progressbar" aria-label="Code time remaining" aria-valuemin="0" aria-valuemax="45" aria-valuenow="45">
-                            <div id="bnhResetCountdownBar"></div>
+            <div class="gv-grid bnh-reset-grid">
+                <div class="gv-field bnh-reset-field">
+                    <div class="bnh-reset-state" id="bnhResetEmptyState" role="status" hidden>
+                        <span class="bnh-reset-state-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 3.5 20 7v5.5c0 4.2-3.1 7.1-8 8.5-4.9-1.4-8-4.3-8-8.5V7l8-3.5Z"/>
+                                <path d="M12 8v4.5M12 16h.01"/>
+                            </svg>
+                        </span>
+                        <div class="bnh-reset-state-copy">
+                            <h3 class="bnh-reset-state-title">No BNH code has been detected</h3>
+                            <p>If a code becomes available, it will appear here instead.</p>
                         </div>
-                        <p class="gv-hint" id="bnhResetCountdownText">45 seconds remaining</p>
-                        <label for="bnhResetCodeInput">Confirmation code</label>
-                        <input id="bnhResetCodeInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="12" disabled>
                     </div>
-                    <div class="gv-hint">Clears only <code>is_valid1</code> and <code>is_valid2</code> for all records. Status and all other record data remain unchanged.</div>
+                    <div class="bnh-reset-code-panel" id="bnhResetCodePanel" hidden>
+                        <h3 class="bnh-reset-code-title">Enter the code below to reset the BNH Form Helper</h3>
+                        <div class="bnh-reset-code-content">
+                            <div class="bnh-reset-code-display">
+                                <span class="bnh-reset-code-label">Reset code</span>
+                                <code id="bnhResetGeneratedCode" aria-label="Reset code"></code>
+                                <div class="bnh-reset-countdown" role="progressbar" aria-label="Code time remaining" aria-valuemin="0" aria-valuemax="45" aria-valuenow="45">
+                                    <div id="bnhResetCountdownBar"></div>
+                                </div>
+                                <p class="bnh-reset-code-timer" id="bnhResetCountdownText">45 seconds remaining</p>
+                            </div>
+                            <div class="bnh-reset-confirmation">
+                                <label for="bnhResetCodeInput">Enter reset code</label>
+                                <input id="bnhResetCodeInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="12" disabled>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1301,7 +1443,8 @@
             tabPanels.forEach(tabPanel => tabPanel.classList.toggle('active', tabPanel === panel));
         }
 
-        const requestedTab = window.location.hash.replace(/^#/, '');
+        const requestedTab = window.location.hash.replace(/^#/, '')
+            || new URLSearchParams(window.location.search).get('tab');
         if (requestedTab) activateTab(requestedTab);
 
         tabBtns.forEach(btn => {
@@ -1409,6 +1552,7 @@
         }
 
         const bnhCodePanel = document.getElementById('bnhResetCodePanel');
+        const bnhEmptyState = document.getElementById('bnhResetEmptyState');
         const bnhCodeDisplay = document.getElementById('bnhResetGeneratedCode');
         const bnhCodeInput = document.getElementById('bnhResetCodeInput');
         const bnhCountdownBar = document.getElementById('bnhResetCountdownBar');
@@ -1426,6 +1570,7 @@
             bnhCodeCycleActive = false;
             expectedBnhCode = '';
             bnhCodePanel.hidden = true;
+            bnhEmptyState.hidden = true;
             bnhCodeInput.disabled = true;
             bnhCodeInput.value = '';
             const requestStartedAt = Date.now();
@@ -1437,7 +1582,7 @@
             if (!response.ok) {
                 bnhCodePanel.hidden = true;
                 if (body.empty) {
-                    window.alert('BNH CHECKS is currently Empty.');
+                    bnhEmptyState.hidden = false;
                     return;
                 }
                 throw new Error(body.message || Object.values(body.errors || {}).flat()[0] || 'Could not generate the BNH reset code.');
@@ -1491,9 +1636,10 @@
                 showToast(result.message);
                 expectedBnhCode = '';
                 bnhCodePanel.hidden = true;
+                bnhEmptyState.hidden = false;
                 bnhCodeInput.value = '';
             } catch (error) {
-                if (error.message === 'BNH CHECKS is currently Empty.') window.alert(error.message);
+                if (error.message === 'BNH CHECKS is currently Empty.') bnhEmptyState.hidden = false;
                 else showToast(error.message, 'error');
                 expectedBnhCode = '';
                 bnhCodePanel.hidden = true;

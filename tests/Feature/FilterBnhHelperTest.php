@@ -50,6 +50,11 @@ class FilterBnhHelperTest extends TestCase
             ->get(route('filter-bnh-helper'))
             ->assertOk()
             ->assertSee('Filter &amp; BNH Helper', false)
+            ->assertSee('fbnhReload', false)
+            ->assertSee('Reload Data')
+            ->assertSee('fbnhAllStatuses', false)
+            ->assertSee('value="MK"', false)
+            ->assertSee('type="checkbox" value="MK"  disabled', false)
             ->assertSee('Purok Group Filter')
             ->assertSee('BNH Form Helper')
             ->assertSee('BNH Helper Form Resumen')
@@ -167,6 +172,149 @@ class FilterBnhHelperTest extends TestCase
         $this->assertNotSame($male->id, $inactive->id);
     }
 
+    public function test_filter_accepts_multiple_puroks_and_an_explicit_empty_selection(): void
+    {
+        [$purok2a, $purok2b] = $this->makeSplitPuroks();
+        $this->makeRecord([
+            'full_name' => 'Member 2A',
+            'purok' => '2',
+            'grupo' => '1',
+            'gender' => 'Male',
+            'status' => 'MS',
+        ]);
+        $this->makeRecord([
+            'full_name' => 'Member 2B',
+            'purok' => '2',
+            'grupo' => '7',
+            'gender' => 'Female',
+            'status' => 'MK',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 9001]])
+            ->getJson(route('filter-bnh-helper.matrix', [
+                'purok_selection' => 'selected',
+                'purok_ids' => [$purok2a->id, $purok2b->id],
+                'status' => 'ALL',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('rows.0.label', '2a-1')
+            ->assertJsonPath('rows.3.label', '2b-7')
+            ->assertJsonPath('rows.2.label', 'Total 2a')
+            ->assertJsonPath('rows.5.label', 'Total 2b')
+            ->assertJsonPath('rows.6.total', 2);
+
+        $this->withSession(['login_user' => ['id' => 9001]])
+            ->getJson(route('filter-bnh-helper.bnh-records', [
+                'purok_selection' => 'selected',
+                'purok_ids' => [$purok2b->id],
+                'status_selection' => 'selected',
+                'status_ids' => ['MK'],
+            ]))
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonPath('records.0.name', 'Member 2B');
+
+        $this->withSession(['login_user' => ['id' => 9001]])
+            ->getJson(route('filter-bnh-helper.matrix', [
+                'purok_selection' => 'selected',
+                'purok_ids' => [$purok2a->id, $purok2b->id],
+                'status_selection' => 'selected',
+                'status_ids' => ['MS'],
+            ]))
+            ->assertOk()
+            ->assertJsonPath('rows.0.total', 1)
+            ->assertJsonPath('rows.5.total', 0)
+            ->assertJsonPath('rows.6.total', 1);
+
+        $this->withSession(['login_user' => ['id' => 9001]])
+            ->getJson(route('filter-bnh-helper.matrix', [
+                'purok_selection' => 'selected',
+                'status' => 'ALL',
+                'status_selection' => 'selected',
+            ]))
+            ->assertOk()
+            ->assertJsonCount(1, 'rows')
+            ->assertJsonPath('rows.0.type', 'grand_total')
+            ->assertJsonPath('rows.0.total', 0);
+    }
+
+    public function test_mk_filter_requires_delistment_permission_or_head_secretary_role(): void
+    {
+        [$purok2a] = $this->makeSplitPuroks();
+        $this->makeRecord([
+            'full_name' => 'MS Member',
+            'purok' => '2',
+            'grupo' => '1',
+            'gender' => 'Male',
+            'status' => 'MS',
+        ]);
+        $this->makeRecord([
+            'full_name' => 'MK Member',
+            'purok' => '2',
+            'grupo' => '2',
+            'gender' => 'Female',
+            'status' => 'MK',
+        ]);
+        $regularSecretary = User::query()->create([
+            'gmail' => 'mk-filter-regular@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+            'filter_bnh_helper_allow' => true,
+            'Delistment_allow' => false,
+        ]);
+        $delistmentSecretary = User::query()->create([
+            'gmail' => 'mk-filter-delistment@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+            'filter_bnh_helper_allow' => true,
+            'Delistment_allow' => true,
+        ]);
+        $headSecretary = User::query()->create([
+            'gmail' => 'mk-filter-head@example.test',
+            'password' => 'password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+            'filter_bnh_helper_allow' => false,
+            'Delistment_allow' => false,
+        ]);
+        $purokSelection = [
+            'purok_selection' => 'selected',
+            'purok_ids' => [$purok2a->id],
+            'status_selection' => 'selected',
+            'status_ids' => ['MS', 'UWP', 'MK'],
+        ];
+
+        $this->withSession(['login_user' => ['id' => $regularSecretary->id]])
+            ->getJson(route('filter-bnh-helper.matrix', $purokSelection))
+            ->assertOk()
+            ->assertJsonPath('totals.total', 1);
+
+        $this->withSession(['login_user' => ['id' => $regularSecretary->id]])
+            ->getJson(route('filter-bnh-helper.matrix', [
+                'purok_id' => $purok2a->id,
+                'status' => 'MK',
+            ]))
+            ->assertForbidden();
+
+        $this->withSession(['login_user' => ['id' => $delistmentSecretary->id]])
+            ->getJson(route('filter-bnh-helper.matrix', [
+                'purok_id' => $purok2a->id,
+                'status' => 'MK',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('totals.total', 1);
+
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->getJson(route('filter-bnh-helper.matrix', [
+                'purok_id' => $purok2a->id,
+                'status' => 'MK',
+            ]))
+            ->assertOk()
+            ->assertJsonPath('totals.total', 1);
+    }
+
     public function test_bnh_checks_qualified_totals_and_word_exports_work(): void
     {
         [$purok2a] = $this->makeSplitPuroks();
@@ -241,6 +389,13 @@ class FilterBnhHelperTest extends TestCase
             ]));
         $listWord->assertOk()->assertHeader('content-type', 'application/msword; charset=UTF-8');
         $this->assertStringContainsString('Unqualified Member', $listWord->streamedContent());
+        $this->assertStringContainsString('Authorized and Confidential Information Ahead', $listWord->streamedContent());
+        $this->assertStringContainsString('page-break-after:always', $listWord->streamedContent());
+        $this->assertStringContainsString('securely delete this copy', $listWord->streamedContent());
+        $this->assertLessThan(
+            strpos($listWord->streamedContent(), '<h1>BNH Form Helper</h1>'),
+            strpos($listWord->streamedContent(), 'Authorized and Confidential Information Ahead')
+        );
         $this->assertStringNotContainsString('Qualified Member', $listWord->streamedContent());
         $this->assertStringNotContainsString('Other Purok UWP', $listWord->streamedContent());
         $this->assertStringNotContainsString('NOT QUALIFIED', $listWord->streamedContent());
@@ -260,6 +415,12 @@ class FilterBnhHelperTest extends TestCase
             ->get(route('filter-bnh-helper.counts-word', ['purok_id' => $purok2a->id, 'status' => 'MS']));
         $countsWord->assertOk();
         $this->assertStringContainsString('2a-1', $countsWord->streamedContent());
+        $this->assertStringContainsString('Authorized and Confidential Information Ahead', $countsWord->streamedContent());
+        $this->assertStringContainsString('page-break-after:always', $countsWord->streamedContent());
+        $this->assertLessThan(
+            strpos($countsWord->streamedContent(), '<h1>BNH Helper Form Resumen</h1>'),
+            strpos($countsWord->streamedContent(), 'Authorized and Confidential Information Ahead')
+        );
         $this->assertStringContainsString('BNH Helper Form Resumen', $countsWord->streamedContent());
         $this->assertStringContainsString('Total 2a', $countsWord->streamedContent());
         $this->assertStringNotContainsString('2b-7', $countsWord->streamedContent());

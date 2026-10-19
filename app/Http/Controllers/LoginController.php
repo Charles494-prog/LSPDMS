@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 
 class LoginController extends Controller
@@ -24,10 +25,17 @@ class LoginController extends Controller
 
     public function login(Request $request)
     {
-        $credentials = $request->validate([
+        $validator = Validator::make($request->all(), [
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
+        if ($validator->fails()) {
+            return redirect()
+                ->route('login.form')
+                ->withInput($request->only('email'))
+                ->withErrors(['login' => 'Invalid username or password.']);
+        }
+        $credentials = $validator->validated();
 
         $email = strtolower(trim($credentials['email']));
 
@@ -52,13 +60,15 @@ class LoginController extends Controller
         }
 
         if (! $passwordMatches) {
-            return back()
+            return redirect()
+                ->route('login.form')
                 ->withInput($request->only('email'))
                 ->withErrors(['login' => 'Invalid username or password.']);
         }
 
         if ((int) $user->is_verified !== 1) {
-            return back()
+            return redirect()
+                ->route('login.form')
                 ->withInput($request->only('email'))
                 ->withErrors(['login' => 'Account has not been granted access by the head secretary.']);
         }
@@ -76,7 +86,8 @@ class LoginController extends Controller
                 'message' => $exception->getMessage(),
             ]);
 
-            return back()
+            return redirect()
+                ->route('login.form')
                 ->withInput($request->only('email'))
                 ->withErrors(['login' => 'Unable to send the verification code. Please check your internet connection and try again.']);
         }

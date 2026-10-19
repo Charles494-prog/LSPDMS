@@ -44,6 +44,8 @@
     .monthly-session-blocker { position:fixed; z-index:100000; inset:0; display:grid; place-items:center; padding:1rem; background:rgba(15,23,42,.76); color:#fff; text-align:center; }
     .monthly-session-blocker[hidden] { display:none; }
     .monthly-session-blocker-card { width:min(400px,100%); padding:2rem; border:1px solid rgba(255,255,255,.2); border-radius:20px; background:#172033; box-shadow:0 25px 80px rgba(0,0,0,.38); }
+    .monthly-session-success-button { min-height:42px; margin-top:1.25rem; padding:.65rem 1rem; border:0; border-radius:10px; background:#74df9b; color:#10251a; font:inherit; font-weight:800; cursor:pointer; }
+    .monthly-session-success-button[hidden] { display:none; }
     .monthly-session-spinner { width:52px; height:52px; margin:0 auto 1.25rem; border:5px solid rgba(255,255,255,.25); border-top-color:#fff; border-radius:50%; animation:monthly-session-spin .8s linear infinite; }
     .monthly-session-success-check { display:grid; width:68px; height:68px; margin:0 auto 1.1rem; place-items:center; border:3px solid #74df9b; border-radius:50%; color:#74df9b; font-size:2.8rem; font-weight:800; line-height:1; animation:monthly-session-check .45s ease-out both; }
     .monthly-session-blocker h2 { margin:0; font-size:1.55rem; }
@@ -108,6 +110,7 @@
         <div class="monthly-session-success-check" aria-hidden="true">✓</div>
         <h2 id="monthlySessionBlockerTitle">Finishing monthly session…</h2>
         <p id="monthlySessionBlockerMessage">Please wait. Do not close or leave this page.</p>
+        <button type="button" class="monthly-session-success-button" id="monthlySessionSuccessAcknowledge" hidden>Yay, I understand there's no redos!</button>
     </div>
 </div>
 <script>
@@ -138,6 +141,7 @@
     const blocker = document.getElementById('monthlySessionBlocker');
     const blockerTitle = document.getElementById('monthlySessionBlockerTitle');
     const blockerMessage = document.getElementById('monthlySessionBlockerMessage');
+    const successAcknowledge = document.getElementById('monthlySessionSuccessAcknowledge');
     let blockedElements = [];
 
     const setBlocked = blocked => {
@@ -160,14 +164,15 @@
         blocker.dataset.state = 'loading';
         blockerTitle.textContent = 'Finishing monthly session…';
         blockerMessage.textContent = 'Please wait. Do not close or leave this page.';
+        successAcknowledge.hidden = true;
         setBlocked(true);
     };
-    const showFinished = async periodLabel => {
+    const showFinished = periodLabel => {
         blocker.dataset.state = 'success';
-        blockerTitle.textContent = `Monthly ${periodLabel}`;
-        blockerMessage.textContent = 'Session finalized successfully.';
-        await new Promise(resolve => window.setTimeout(resolve, 2200));
-        setBlocked(false);
+        blockerTitle.textContent = `Monthly ${periodLabel} done`;
+        blockerMessage.textContent = 'Session finalized. No changes can be made to this session.';
+        successAcknowledge.hidden = false;
+        successAcknowledge.focus();
     };
 
     const ask = ({ title, message, confirmText = 'Continue', cancelText = 'Cancel', requiredText = null, kind = 'confirm' }) => new Promise(resolve => {
@@ -344,11 +349,20 @@
 
     document.getElementById('monthlySessionClose').addEventListener('click', () => dialog.close());
     document.getElementById('monthlySessionRefresh').addEventListener('click', () => refresh().catch(error => notify('Could not refresh session', error.message, 'danger')));
+    successAcknowledge.addEventListener('click', async () => {
+        setBlocked(false);
+        try {
+            await refresh();
+        } catch (error) {
+            await notify('Session finished, but the activity view could not refresh', error.message, 'danger');
+        }
+    });
     open.addEventListener('click', async () => {
         dialog.showModal();
         try { await refresh(); } catch (error) { await notify('Could not load session', error.message, 'danger'); }
     });
     finish.addEventListener('click', async () => {
+        dialog.close();
         const warnings = [
             ['Before you finish', 'Strict rule: finish the monthly session only after you are completely done. Print R4-01 and the Resumen first. Do not proceed if any movement, pahabol, or late submission is still expected.'],
             ['Confirm reports and submissions', 'Confirm that R4-01 and the Resumen are printed, and there are no remaining or late submissions to encode?'],
@@ -377,13 +391,7 @@
             finish.disabled = false;
             return;
         }
-        dialog.close();
-        await showFinished(result.period_label || 'session');
-        try {
-            await refresh();
-        } catch (error) {
-            await notify('Session finished, but the activity view could not refresh', error.message, 'danger');
-        }
+        showFinished(result.period_label || 'session');
     });
     start.addEventListener('click', async () => {
         const confirmed = await ask({

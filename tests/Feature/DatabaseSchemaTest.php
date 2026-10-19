@@ -124,6 +124,16 @@ class DatabaseSchemaTest extends TestCase
             'reason',
             'delisted_at',
         ], Schema::getColumnListing('delistment_histories'));
+        $this->assertTrue(Schema::hasColumns('record_audit_logs', [
+            'id',
+            'record_id',
+            'record_name',
+            'actor_email',
+            'action',
+            'summary',
+            'changes',
+            'created_at',
+        ]));
         $this->assertTrue(Schema::hasColumns('monthly_record_snapshots', [
             'id',
             'month',

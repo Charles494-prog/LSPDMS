@@ -43,6 +43,24 @@ class AuthenticationPolicyTest extends TestCase
             ->assertSessionHas('pending_login_user.id', $user->id);
     }
 
+    public function test_invalid_credentials_return_to_login_with_an_error_even_if_referred_from_intro(): void
+    {
+        $this->withHeader('Referer', url('/intro'))
+            ->post(route('login'), [
+                'email' => 'unknown@example.test',
+                'password' => 'incorrect-password',
+            ])
+            ->assertRedirect(route('login.form'))
+            ->assertSessionHasErrors([
+                'login' => 'Invalid username or password.',
+            ]);
+
+        $this->get(route('login.form'))
+            ->assertOk()
+            ->assertSee('Invalid username or password.')
+            ->assertSee('value="unknown@example.test"', false);
+    }
+
     public function test_login_page_can_refresh_its_csrf_token_without_changing_session(): void
     {
         $response = $this->get(route('login.csrf-token'))
@@ -54,7 +72,9 @@ class AuthenticationPolicyTest extends TestCase
         $this->get(route('login.form'))
             ->assertOk()
             ->assertSee('data-csrf-refresh-url', false)
-            ->assertSee('response.status === 419', false);
+            ->assertSee('response.status === 419', false)
+            ->assertSee('responseDocument.querySelector(\'.login-error:not([hidden])\')', false)
+            ->assertSee('Invalid username or password.', false);
     }
 
     public function test_secretary_feature_permissions_are_enforced_on_routes_and_navigation(): void

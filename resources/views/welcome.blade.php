@@ -444,7 +444,7 @@
                     </div>
                 </div>
 
-                <form class="login-form" id="loginForm" method="POST" action="{{ url('/login') }}" data-csrf-refresh-url="{{ route('login.csrf-token') }}">
+                <form class="login-form" id="loginForm" method="POST" action="{{ url('/login') }}" data-login-url="{{ route('login.form') }}" data-csrf-refresh-url="{{ route('login.csrf-token') }}">
                     @csrf
                     <div class="field">
                         <label for="email">Email address</label>
@@ -548,6 +548,17 @@
                     }
 
                     if (response.redirected) {
+                        const responseUrl = new URL(response.url);
+                        const loginUrl = new URL(loginForm.dataset.loginUrl, window.location.href);
+                        if (responseUrl.pathname === loginUrl.pathname) {
+                            const responseDocument = new DOMParser().parseFromString(await response.text(), 'text/html');
+                            const responseError = responseDocument.querySelector('.login-error:not([hidden])');
+                            loginRequestError.textContent = responseError?.textContent.trim()
+                                || 'Invalid username or password.';
+                            loginRequestError.hidden = false;
+                            loginButton.disabled = false;
+                            return;
+                        }
                         window.location.assign(response.url);
                         return;
                     }

@@ -22,7 +22,7 @@ class MonthlySessionSnapshotExporter
         private readonly R401DocxExporter $r401DocxExporter
     ) {}
 
-    public function generate(MonthlyMovementSession $session): array
+    public function generate(MonthlyMovementSession $session, bool $reconcileToCurrentRecords = false): array
     {
         if ($session->period_month === null) {
             throw new RuntimeException('Cannot create a monthly archive without a session month.');
@@ -35,7 +35,7 @@ class MonthlySessionSnapshotExporter
             'ksp_pd' => trim((string) ($globalVariables?->ksp_pd ?? '')),
             'pastor_destinado' => trim((string) ($globalVariables?->pastor_destinado ?? '')),
         ];
-        $report = $this->resumenReport->generate($month, true);
+        $report = $this->resumenReport->generate($month, true, $reconcileToCurrentRecords);
         $locale = trim((string) ($globalVariables?->locale ?? ''));
         $lcode = trim((string) ($globalVariables?->lcode ?? ''));
         $resumenData = [

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\GlobalVariable;
 use App\Models\Purok;
 use App\Models\Record;
+use App\Models\RecordAuditLog;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -42,11 +43,169 @@ class SuperadminDashboardTest extends TestCase
             ->assertSee('data-hakbang-status="UWP"', false)
             ->assertSee('BNH FORM RESET')
             ->assertSee('bnhResetCountdownBar')
+            ->assertSee('id="bnhResetEmptyState"', false)
+            ->assertSee('.bnh-reset-state[hidden], .bnh-reset-code-panel[hidden] { display:none !important; }', false)
+            ->assertSee('#tab-maintenance.sa-tab-panel.active { min-height:calc(100vh - 14rem); display:flex; align-items:center; justify-content:center; }', false)
+            ->assertSee('#tab-maintenance > .sa-card { width:min(100%,760px); margin:0 auto; box-sizing:border-box; }', false)
+            ->assertSee('#tab-maintenance .bnh-reset-grid { grid-template-columns:minmax(0,1fr); }', false)
+            ->assertSee('#tab-maintenance .bnh-reset-field { grid-column:1 / -1; }', false)
+            ->assertSee('No BNH code has been detected')
+            ->assertSee('If a code becomes available, it will appear here instead.')
+            ->assertSee('Enter the code below to reset the BNH Form Helper')
+            ->assertDontSee('The checks reset automatically when all characters match.')
             ->assertSee('setInterval(updateCountdown, 100)')
             ->assertDontSee('Monthly session debug')
             ->assertDontSee('startMonthlyDebugSessionButton')
             ->assertDontSee('id="signatoriesSuccessModal"', false);
+        $this->assertStringNotContainsString(
+            "window.alert('BNH CHECKS is currently Empty.')",
+            file_get_contents(resource_path('views/superadmin-dashboard.blade.php'))
+        );
         $this->assertFalse(Route::has('superadmin.monthly-session.start-debug'));
+    }
+
+    public function test_record_activity_is_visible_in_the_head_secretary_dashboard(): void
+    {
+        $headSecretary = User::query()->create([
+            'gmail' => 'head@example.test',
+            'password' => 'secret-password',
+            'first_name' => 'Head',
+            'last_name' => 'Secretary',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        RecordAuditLog::query()->create([
+            'record_id' => 42,
+            'record_name' => 'Juan Dela Cruz',
+            'actor_email' => 'formalcharlesandreigalvan@gmail.com',
+            'action' => 'updated',
+            'summary' => 'Transferred Juan Dela Cruz from UWP to MS.',
+            'changes' => ['status' => ['from' => 'UWP', 'to' => 'MS']],
+            'created_at' => now(),
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->get(route('superadmin-dashboard'))
+            ->assertOk()
+            ->assertSee('Record Activity')
+            ->assertSee('Record Activity Log')
+            ->assertSee('formalcharlesandreigalvan@gmail.com')
+            ->assertSee('Juan Dela Cruz')
+            ->assertSee('Transferred Juan Dela Cruz from UWP to MS.');
+    }
+
+    public function test_record_activity_can_be_filtered_by_date_record_name_and_secretary_email(): void
+    {
+        $headSecretary = User::query()->create([
+            'gmail' => 'head@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        $base = [
+            'action' => 'updated',
+            'changes' => ['status' => ['from' => 'UWP', 'to' => 'MS']],
+        ];
+        RecordAuditLog::query()->create($base + [
+            'record_name' => 'Juan Dela Cruz',
+            'actor_email' => 'secretary.one@example.test',
+            'summary' => 'Target activity entry.',
+            'created_at' => '2026-10-02 18:00:00',
+        ]);
+        RecordAuditLog::query()->create($base + [
+            'record_name' => 'Juan Dela Cruz',
+            'actor_email' => 'secretary.two@example.test',
+            'summary' => 'Different secretary entry.',
+            'created_at' => '2026-10-02 18:00:00',
+        ]);
+        RecordAuditLog::query()->create($base + [
+            'record_name' => 'Maria Santos',
+            'actor_email' => 'secretary.one@example.test',
+            'summary' => 'Different record entry.',
+            'created_at' => '2026-10-02 18:00:00',
+        ]);
+        RecordAuditLog::query()->create($base + [
+            'record_name' => 'Juan Dela Cruz',
+            'actor_email' => 'secretary.one@example.test',
+            'summary' => 'Outside date range entry.',
+            'created_at' => '2026-10-03 18:00:00',
+        ]);
+
+        $filters = [
+            'date_from' => '2026-10-03',
+            'date_to' => '2026-10-03',
+            'record_name' => 'Juan Dela',
+            'actor_email' => 'secretary.one',
+        ];
+        $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->get(route('superadmin-dashboard', $filters))
+            ->assertOk()
+            ->assertSee('Target activity entry.')
+            ->assertSee('value="Juan Dela"', false)
+            ->assertSee('value="secretary.one"', false)
+            ->assertDontSee('Different secretary entry.')
+            ->assertDontSee('Different record entry.')
+            ->assertDontSee('Outside date range entry.');
+    }
+
+    public function test_filtered_record_activity_can_be_downloaded_as_a_word_table(): void
+    {
+        $headSecretary = User::query()->create([
+            'gmail' => 'head@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Head Secretary',
+            'is_verified' => true,
+        ]);
+        RecordAuditLog::query()->create([
+            'record_name' => 'Juan Dela Cruz',
+            'actor_email' => 'secretary.one@example.test',
+            'action' => 'updated',
+            'summary' => 'Transferred Juan Dela Cruz from UWP to MS.',
+            'changes' => ['status' => ['from' => 'UWP', 'to' => 'MS']],
+            'created_at' => '2026-10-02 18:00:00',
+        ]);
+        RecordAuditLog::query()->create([
+            'record_name' => 'Maria Santos',
+            'actor_email' => 'secretary.two@example.test',
+            'action' => 'updated',
+            'summary' => 'Should not be in the filtered export.',
+            'changes' => ['status' => ['from' => 'UWP', 'to' => 'MS']],
+            'created_at' => '2026-10-02 18:00:00',
+        ]);
+
+        $response = $this->withSession(['login_user' => ['id' => $headSecretary->id]])
+            ->get(route('superadmin.record-activity.download', [
+                'date_from' => '2026-10-03',
+                'date_to' => '2026-10-03',
+                'record_name' => 'Juan',
+                'actor_email' => 'secretary.one',
+            ]))
+            ->assertOk()
+            ->assertDownload('record-activity-log.doc')
+            ->assertHeader('Content-Type', 'application/msword; charset=UTF-8');
+
+        $word = $response->streamedContent();
+        $this->assertStringContainsString('<table>', $word);
+        $this->assertStringContainsString('<th>Secretary email</th>', $word);
+        $this->assertStringContainsString('<td>secretary.one@example.test</td>', $word);
+        $this->assertStringContainsString('Oct 03, 2026 02:00:00 AM', $word);
+        $this->assertStringContainsString('Transferred Juan Dela Cruz from UWP to MS.', $word);
+        $this->assertStringNotContainsString('Maria Santos', $word);
+        $this->assertStringNotContainsString('Should not be in the filtered export.', $word);
+    }
+
+    public function test_record_activity_download_is_head_secretary_only(): void
+    {
+        $secretary = User::query()->create([
+            'gmail' => 'secretary@example.test',
+            'password' => 'secret-password',
+            'tungkulin' => 'Secretary',
+            'is_verified' => true,
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $secretary->id]])
+            ->get(route('superadmin.record-activity.download'))
+            ->assertForbidden();
     }
 
     public function test_superadmin_layout_keeps_authenticated_head_secretary_identity_after_user_loops(): void
@@ -589,6 +748,10 @@ class SuperadminDashboardTest extends TestCase
         $this->assertDatabaseHas('system_maintenance_audits', [
             'action' => 'reset_bnh_helper_checks',
             'affected_count' => 1,
+        ]);
+        $this->assertDatabaseMissing('record_audit_logs', [
+            'record_id' => $checked->id,
+            'action' => 'updated',
         ]);
 
         $secretary = User::query()->create([

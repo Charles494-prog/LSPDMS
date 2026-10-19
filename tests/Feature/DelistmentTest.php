@@ -31,6 +31,7 @@ class DelistmentTest extends TestCase
             ->get(route('de-listment'))
             ->assertOk()
             ->assertSee('View delistment history')
+            ->assertSee('Download history (DOCX)')
             ->assertSee('id="delisted-history-dialog"', false)
             ->assertSee('<dialog', false)
             ->assertDontSee('<section class="delist-panel table-panel" aria-labelledby="delisted-records-heading">', false)
@@ -197,7 +198,52 @@ class DelistmentTest extends TestCase
             $this->assertStringContainsString('Recently Entered Endorsed Member', $xml);
             $this->assertStringContainsString('RECENT1234567', $xml);
             $this->assertStringContainsString('Endorsed · Not eligible — review required', $xml);
+            $this->assertStringContainsString('CONFIDENTIAL', $xml);
+            $this->assertStringContainsString('Authorized and Confidential Information Ahead', $xml);
+            $this->assertStringContainsString('This document contains confidential personal information.', $xml);
+            $this->assertStringContainsString('Access and use are limited to authorized purposes and personnel.', $xml);
+            $this->assertStringContainsString('securely delete this copy', $xml);
             $this->assertStringNotContainsString('Eligible Reported Member', $xml);
+        } finally {
+            unset($document);
+            @unlink($exportPath);
+        }
+    }
+
+    public function test_delistment_history_can_be_downloaded_as_a_confidential_docx(): void
+    {
+        $record = $this->record([
+            'full_name' => 'History Export Member',
+            'registry' => 'HISTORY123456',
+            'status' => 'INACTIVE',
+        ]);
+        DelistmentHistory::query()->create([
+            'record_id' => $record->id,
+            'delisted_by' => 'secretary@example.test',
+            'reason' => 'Moved to another locale',
+            'delisted_at' => '2026-10-01 10:30:00',
+        ]);
+
+        $this->withSession(['login_user' => ['id' => 1]])
+            ->get(route('de-listment.history.download'))
+            ->assertOk()
+            ->assertDownload('De-Listment History.docx');
+
+        $exportPath = app(\App\Services\DelistmentDocxExporter::class)->generate('De-Listment History', [[
+            'name' => 'History Export Member',
+            'registry' => 'HISTORY123456',
+            'delisted_at' => 'Oct 01, 2026 06:30 PM',
+            'reason' => 'Moved to another locale',
+            'delisted_by' => 'secretary@example.test',
+        ]], history: true);
+        try {
+            $document = new \PharData($exportPath);
+            $xml = $document['word/document.xml']->getContent();
+            $this->assertStringContainsString('History Export Member', $xml);
+            $this->assertStringContainsString('HISTORY123456', $xml);
+            $this->assertStringContainsString('Moved to another locale', $xml);
+            $this->assertStringContainsString('secretary@example.test', $xml);
+            $this->assertStringContainsString('CONFIDENTIAL', $xml);
         } finally {
             unset($document);
             @unlink($exportPath);
@@ -269,6 +315,14 @@ class DelistmentTest extends TestCase
             ->putJson(route('de-listment.delist', $mk), ['reason' => 'Member requested removal'])
             ->assertOk()
             ->assertJsonPath('data.status', 'INACTIVE');
+
+        $audit = \App\Models\RecordAuditLog::query()
+            ->where('record_id', $mk->id)
+            ->where('action', 'updated')
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame('delister@example.test', $audit->actor_email);
+        $this->assertStringContainsString('Changed the status of Endorsed MK from MK to INACTIVE.', $audit->summary);
 
         $this->assertDatabaseHas('records', [
             'id' => $mk->id,

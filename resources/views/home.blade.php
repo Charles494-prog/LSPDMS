@@ -4,203 +4,302 @@
 
 @section('content')
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Jost:wght@300;400;500&display=swap');
+
     .faith-page {
-        --navy: #0a1324; --navy-2: #14264a; --gold: #c8a24a; --gold-soft: #e6cf94;
-        --paper: #f6f3ec; --ink: #101828; --muted: #5d6878; --line: #e2dccd;
+        --navy: #0b1630; --navy-2: #121f40; --ivory: #f6f2e9; --ink: #141b2d;
+        --gold: #b9964f; --gold-soft: #e3cf9c; --muted: #6b7384; --line: rgba(185, 150, 79, .35);
         --ease: cubic-bezier(.2, .8, .2, 1);
-        color: var(--ink);
-        font-family: 'Source Serif 4', Georgia, serif;
-        padding-top: 1.2rem;
+        margin-top: 1.2rem; overflow: hidden; background: var(--ivory); color: var(--ink);
+        font-family: 'Jost', -apple-system, 'Helvetica Neue', Arial, sans-serif; font-weight: 300;
     }
-    .faith-page a { text-decoration: none; }
-    .faith-page .sans { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; }
+    .faith-page a { text-decoration: none; color: inherit; }
+    .faith-page .serif { font-family: 'Cormorant Garamond', Georgia, serif; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 0 clamp(1.4rem, 5vw, 3rem); }
 
-    /* ---------- Hero ---------- */
-    .hero {
-        position: relative; overflow: hidden; isolation: isolate;
-        min-height: 520px; display: grid; align-content: center; gap: 2.2rem;
-        padding: 4rem clamp(1.4rem, 5vw, 4rem) 2.6rem; border-radius: 18px;
-        background: linear-gradient(160deg, var(--navy) 0%, var(--navy-2) 100%); color: #fff;
-        --mx: 70%; --my: 30%;
+    /* Buttons: sharp rectangles */
+    .btn {
+        display: inline-block; padding: 1.05rem 2.2rem; border: 1px solid var(--gold); border-radius: 0; cursor: pointer;
+        font: 400 .74rem/1 'Jost', sans-serif; letter-spacing: .2em; text-transform: uppercase; background: transparent;
+        transition: background .35s var(--ease), color .35s var(--ease);
     }
-    .hero::before {
-        content: ""; position: absolute; inset: -30%; z-index: -1;
-        background:
-            radial-gradient(circle at var(--mx) var(--my), rgba(200, 162, 74, .28), transparent 38%),
-            radial-gradient(circle at 15% 85%, rgba(58, 110, 200, .30), transparent 40%);
-        animation: drift 18s ease-in-out infinite alternate;
-    }
-    .hero::after { /* slow-turning ring: thin concentric lines plus a dashed outer edge */
-        content: ""; position: absolute; z-index: -1; right: -140px; top: -140px; width: 520px; height: 520px; border-radius: 50%;
-        border: 1px dashed rgba(230, 207, 148, .4);
-        background: repeating-radial-gradient(circle, transparent 0 47px, rgba(230, 207, 148, .16) 47px 48px);
-        animation: spin 90s linear infinite;
-    }
-    @keyframes drift { to { transform: translate3d(4%, -3%, 0) scale(1.08); } }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @keyframes rise { to { transform: none; } }
-    @keyframes fade { to { opacity: 1; transform: none; } }
-
-    .hero-kicker { margin: 0 0 1rem; color: var(--gold-soft); font-size: .78rem; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; opacity: 0; transform: translateY(8px); animation: fade .8s var(--ease) .1s forwards; }
-    .hero-title { margin: 0; font-family: 'Playfair Display', Georgia, serif; font-weight: 800; font-size: clamp(2.8rem, 9vw, 6rem); line-height: 1.02; letter-spacing: -.02em; }
-    .hero-title .w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .08em; margin-right: .22em; }
-    .hero-title .w > span { display: inline-block; transform: translateY(110%); animation: rise 1s var(--ease) forwards; animation-delay: calc(var(--i) * .13s + .2s); }
-    .hero-sub { max-width: 52ch; margin: 1.2rem 0 0; color: #c9d3e3; font-size: 1.12rem; line-height: 1.7; opacity: 0; transform: translateY(10px); animation: fade .9s var(--ease) .75s forwards; }
-    .hero-nav { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.8rem; opacity: 0; animation: fade .9s var(--ease) 1s forwards; }
-    .btn { display: inline-flex; align-items: center; gap: .5rem; padding: .8rem 1.4rem; border-radius: 999px; font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; transition: background .25s, color .25s, transform .25s var(--ease), border-color .25s; }
     .btn-gold { background: var(--gold); color: var(--navy); }
-    .btn-gold:hover { background: var(--gold-soft); transform: translateY(-2px); }
-    .btn-line { border: 1px solid rgba(255,255,255,.4); color: #fff; }
-    .btn-line:hover { border-color: var(--gold-soft); color: var(--gold-soft); transform: translateY(-2px); }
+    .btn-gold:hover { background: var(--gold-soft); border-color: var(--gold-soft); }
+    .btn-light { color: var(--gold-soft); }
+    .btn-light:hover { background: var(--gold); color: var(--navy); }
+    .btn-dark { color: var(--navy); }
+    .btn-dark:hover { background: var(--navy); color: var(--gold-soft); border-color: var(--navy); }
 
-    .verse { max-width: 60ch; margin: 0; padding: .3rem 0 .3rem 1.4rem; border-left: 2px solid var(--gold); opacity: 0; transform: translateY(10px); animation: fade .9s var(--ease) 1.2s forwards; }
-    .verse blockquote { margin: 0; }
-    .verse p { margin: 0 0 .45rem; font-style: italic; font-size: 1.05rem; line-height: 1.6; color: #e8edf6; }
-    .verse cite { font-size: .8rem; font-style: normal; font-weight: 600; letter-spacing: .12em; color: var(--gold-soft); text-transform: uppercase; }
-
-    /* ---------- Sections ---------- */
-    .sec { padding: 4rem 0 0; }
-    .sec-head { max-width: 60ch; margin-bottom: 1.8rem; }
-    .sec-head h2 { margin: 0; font-family: 'Playfair Display', Georgia, serif; font-weight: 700; font-size: clamp(1.7rem, 4vw, 2.4rem); line-height: 1.15; letter-spacing: -.01em; }
-    .sec-head p { margin: .6rem 0 0; color: var(--muted); line-height: 1.7; }
-    .sec-head::after { content: ""; display: block; width: 56px; height: 3px; margin-top: 1rem; background: var(--gold); transform-origin: left; transform: scaleX(0); transition: transform .9s var(--ease) .2s; }
-    .sec-head.in::after { transform: none; }
-    .sec:focus { outline: none; }
-    .sec.landed .sec-head::after { animation: pulse 1.1s var(--ease); }
-    @keyframes pulse { from { box-shadow: 0 0 0 0 rgba(200, 162, 74, .7); } to { box-shadow: 0 0 0 16px rgba(200, 162, 74, 0); } }
-
-    /* Featured read */
-    .feature { display: grid; grid-template-columns: 1fr; border-radius: 18px; overflow: hidden; background: #fff; border: 1px solid var(--line); }
-    @media (min-width: 820px) { .feature { grid-template-columns: 5fr 6fr; } }
-    .cover { position: relative; display: grid; place-content: center; min-height: 300px; padding: 2rem; text-align: center; overflow: hidden; color: #fff; background: linear-gradient(140deg, var(--navy-2), var(--navy)); }
-    .cover::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 50% 120%, rgba(200,162,74,.45), transparent 60%); transition: transform 1.2s var(--ease); }
-    .feature:hover .cover::before { transform: scale(1.25); }
-    .cover-frame { position: absolute; inset: 1.1rem; border: 1px solid rgba(230,207,148,.5); }
-    .cover-title { position: relative; margin: 0; font-family: 'Playfair Display', Georgia, serif; font-size: clamp(2.6rem, 6vw, 3.8rem); font-weight: 800; letter-spacing: .02em; }
-    .cover-sub { position: relative; margin: .4rem 0 0; color: var(--gold-soft); font-size: .8rem; letter-spacing: .3em; text-transform: uppercase; }
-    .feature-body { display: grid; align-content: center; padding: clamp(1.6rem, 4vw, 3rem); }
-    .tag { color: #8a6a1f; font-size: .74rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
-    .feature-body h3 { margin: .4rem 0 .8rem; font-family: 'Playfair Display', Georgia, serif; font-size: clamp(1.5rem, 3.6vw, 2.1rem); line-height: 1.2; }
-    .feature-body p { margin: 0 0 1.5rem; max-width: 60ch; color: var(--muted); line-height: 1.85; }
-    .feature-body .btn { justify-self: start; background: var(--navy); color: #fff; }
-    .feature-body .btn:hover { background: var(--navy-2); transform: translateY(-2px); }
-
-    /* Tour cards */
-    .tours { display: grid; grid-template-columns: 1fr; gap: 1.2rem; }
-    @media (min-width: 640px) { .tours { grid-template-columns: 1fr 1fr; } }
-    .tour { position: relative; display: grid; align-content: start; padding: 1.9rem 1.9rem 1.7rem; border-radius: 16px; background: #fff; border: 1px solid var(--line); overflow: hidden; color: inherit; transition: transform .4s var(--ease), box-shadow .4s var(--ease), border-color .4s; }
-    .tour::before { content: ""; position: absolute; left: 0; top: 0; height: 4px; width: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-soft)); transform: scaleX(0); transform-origin: left; transition: transform .5s var(--ease); }
-    .tour::after { content: ""; position: absolute; right: -60px; bottom: -60px; width: 180px; height: 180px; border-radius: 50%; background: radial-gradient(circle, rgba(200,162,74,.18), transparent 70%); opacity: 0; transition: opacity .5s; }
-    .tour:hover { transform: translateY(-6px); border-color: var(--gold); box-shadow: 0 18px 36px rgba(10,19,36,.12); }
-    .tour:hover::before { transform: none; }
-    .tour:hover::after { opacity: 1; }
-    .tour h3 { margin: .35rem 0 .55rem; font-family: 'Playfair Display', Georgia, serif; font-size: 1.3rem; line-height: 1.25; }
-    .tour p { margin: 0 0 1.3rem; color: var(--muted); line-height: 1.7; font-size: .97rem; }
-    .go { display: inline-flex; align-items: center; gap: .5rem; color: var(--navy); font-size: .78rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
-    .go i { display: inline-block; font-style: normal; transition: transform .35s var(--ease); }
-    .tour:hover .go i { transform: translateX(6px); }
-
-    /* Scroll reveal */
-    .js .reveal { opacity: 0; transform: translateY(28px); transition: opacity .8s var(--ease), transform .8s var(--ease), box-shadow .4s var(--ease), border-color .4s; transition-delay: var(--d, 0s); }
-    .js .reveal.in { opacity: 1; transform: none; }
-    .js .tour.reveal.in:hover { transform: translateY(-6px); transition-delay: 0s; }
-
-    .foot { margin-top: 4rem; padding: 1.8rem 1rem; border-radius: 18px; background: var(--navy); color: #b9c4d6; text-align: center; font-size: .9rem; }
-    .foot strong { display: block; margin-bottom: .3rem; color: var(--gold-soft); font-family: 'Playfair Display', Georgia, serif; font-size: 1.15rem; }
-
-    .faith-page a:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
-    @media (prefers-reduced-motion: reduce) {
-        .faith-page *, .faith-page *::before, .faith-page *::after { animation: none !important; transition: none !important; }
-        .hero-kicker, .hero-sub, .hero-nav, .verse { opacity: 1; transform: none; }
-        .hero-title .w > span { transform: none; }
-        .js .reveal { opacity: 1; transform: none; }
-        .sec-head::after { transform: none; }
+    /* Hero: the verse is the centerpiece */
+    .hero {
+        position: relative; background: var(--navy); color: #fff; text-align: center;
+        padding: 2.4rem 1.4rem 6rem; min-height: 600px; display: flex; flex-direction: column; align-items: center;
+        background-image: radial-gradient(ellipse at 50% 0%, rgba(185, 150, 79, .22), transparent 55%);
     }
+    .brand { font-size: 1.5rem; font-weight: 500; letter-spacing: .12em; color: var(--gold-soft); }
+    .brand::after { content: ""; display: block; width: 40px; height: 1px; margin: 1rem auto 0; background: var(--gold); }
+    .verse { flex: 1; display: flex; flex-direction: column; justify-content: center; max-width: 920px; padding-top: 3.5rem; transition: opacity .4s ease; }
+    .verse.out { opacity: 0; }
+    .verse blockquote { margin: 0; }
+    .verse p {
+        margin: 0 0 1.8rem; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-weight: 500;
+        font-size: clamp(2rem, 5.4vw, 3.9rem); line-height: 1.28; color: #fff;
+    }
+    .verse.long p { font-size: clamp(1.6rem, 3.8vw, 2.7rem); }
+    .verse cite { font-style: normal; font-size: .85rem; letter-spacing: .22em; color: var(--gold-soft); }
+    .hero .btn { margin-top: 3rem; }
+
+    /* Sections */
+    .sec { padding: 6.5rem 0 0; }
+    .sec-head { text-align: center; margin-bottom: 3.5rem; }
+    .sec-head h2 { margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: clamp(2rem, 4.4vw, 3rem); line-height: 1.15; }
+    .sec-head p { margin: .9rem auto 0; max-width: 46ch; color: var(--muted); line-height: 1.8; }
+    .sec-head::after { content: ""; display: block; width: 40px; height: 1px; margin: 1.6rem auto 0; background: var(--gold); }
+
+    /* Featured read: arch cover + text, no card */
+    .feature { display: grid; gap: 3rem; align-items: center; justify-items: center; }
+    @media (min-width: 820px) { .feature { grid-template-columns: 5fr 6fr; gap: 5rem; justify-items: stretch; } }
+    .arch {
+        width: min(100%, 340px); aspect-ratio: 3 / 4; justify-self: center; border-radius: 999px 999px 0 0;
+        display: grid; place-content: center; text-align: center; color: #fff; position: relative;
+        background: linear-gradient(170deg, var(--navy-2), var(--navy));
+        box-shadow: 0 0 0 8px var(--ivory), 0 0 0 9px var(--gold);
+    }
+    .arch h3 { margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: 3rem; letter-spacing: .06em; }
+    .arch span { display: block; margin-top: .5rem; color: var(--gold-soft); font-size: .85rem; letter-spacing: .24em; }
+    .feature-body h3 { margin: 0 0 1.2rem; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: clamp(1.8rem, 3.4vw, 2.5rem); line-height: 1.2; }
+    .feature-body p { margin: 0 0 2.2rem; max-width: 52ch; color: var(--muted); line-height: 1.9; }
+
+    /* Where to go next: open editorial rows, no boxes */
+    .go { border-top: 1px solid var(--line); }
+    .go a {
+        display: grid; grid-template-columns: 1fr; gap: 1.2rem; align-items: center; padding: 2.6rem 1rem;
+        border-bottom: 1px solid var(--line); position: relative; isolation: isolate; transition: color .5s var(--ease);
+    }
+    @media (min-width: 860px) { .go a { grid-template-columns: 1.1fr 1.3fr auto; gap: 3rem; padding: 2.8rem 2rem; } }
+    .go a::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--navy); transform: scaleY(0); transform-origin: bottom; transition: transform .55s var(--ease); }
+    .go a:hover::before, .go a:focus-visible::before { transform: none; }
+    .go a:hover, .go a:focus-visible { color: #fff; }
+    .go h3 { margin: 0; font-family: 'Cormorant Garamond', Georgia, serif; font-weight: 500; font-size: clamp(1.7rem, 3vw, 2.2rem); line-height: 1.15; }
+    .go p { margin: 0; color: var(--muted); line-height: 1.8; font-size: .98rem; transition: color .5s var(--ease); }
+    .go a:hover p, .go a:focus-visible p { color: #c3cadb; }
+    .go a:hover .btn-dark, .go a:focus-visible .btn-dark { background: var(--gold); border-color: var(--gold); color: var(--navy); }
+
+    /* Official channels: round emblems on navy */
+    .official { margin-top: 7rem; padding: 6.5rem 0 5.5rem; background: var(--navy); color: #fff; background-image: radial-gradient(ellipse at 50% 100%, rgba(185, 150, 79, .18), transparent 60%); }
+    .official .sec-head p { color: #aab4c8; }
+    .official .sec-head h2 { color: #fff; }
+    .tabs { display: flex; justify-content: center; flex-wrap: wrap; gap: 1.2rem 2.2rem; margin-bottom: 4rem; }
+    .tab { background: none; border: 0; cursor: pointer; display: grid; justify-items: center; gap: .7rem; color: #aab4c8; font: 400 .78rem 'Jost', sans-serif; letter-spacing: .14em; transition: color .3s; }
+    .tab .orb { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; border: 1px solid rgba(227, 207, 156, .4); color: var(--gold-soft); transition: background .35s var(--ease), color .35s var(--ease), border-color .35s; }
+    .tab svg, .orb svg { fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; width: 26px; height: 26px; }
+    .tab:hover .orb { border-color: var(--gold); }
+    .tab.on { color: #fff; }
+    .tab.on .orb { background: var(--gold); border-color: var(--gold); color: var(--navy); }
+    .tab:focus-visible { outline: 2px solid var(--gold); outline-offset: 6px; }
+
+    .panel { display: none; justify-content: center; flex-wrap: wrap; gap: 2.6rem 1.2rem; }
+    .panel.on { display: flex; animation: panelIn .6s var(--ease); }
+    @keyframes panelIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    .emblem { width: 140px; display: grid; justify-items: center; gap: 1rem; text-align: center; }
+    .emblem .orb {
+        display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%;
+        border: 1px solid var(--gold); color: var(--gold-soft); background: rgba(255, 255, 255, .03);
+        font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.4rem; font-weight: 600; letter-spacing: .04em;
+        box-shadow: 0 0 0 5px rgba(11, 22, 48, 1), 0 0 0 6px rgba(185, 150, 79, .3);
+        transition: background .4s var(--ease), color .4s var(--ease), transform .5s var(--ease);
+    }
+    .emblem .orb svg { width: 30px; height: 30px; }
+    .emblem .name { font-size: .88rem; line-height: 1.4; color: #dbe1ee; overflow-wrap: anywhere; }
+    .emblem:hover .orb, .emblem:focus-visible .orb { background: var(--gold); color: var(--navy); transform: translateY(-6px); }
+    .emblem:focus-visible { outline: 2px solid var(--gold); outline-offset: 6px; }
+
+    .closing { margin: 4.5rem auto 0; max-width: 54ch; text-align: center; font-family: 'Cormorant Garamond', Georgia, serif; font-style: italic; font-size: 1.3rem; line-height: 1.7; color: var(--gold-soft); }
+    .closing cite { display: block; margin-top: .6rem; font-family: 'Jost', sans-serif; font-style: normal; font-size: .78rem; letter-spacing: .2em; color: #aab4c8; }
+    .foot { padding: 2.4rem 1rem; background: var(--deep, #070d1d); background: #070d1d; color: #8f9ab0; text-align: center; font-size: .85rem; }
+    .foot strong { display: block; margin-bottom: .3rem; font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.2rem; font-weight: 500; color: var(--gold-soft); letter-spacing: .06em; }
+
+    .faith-page a:focus-visible, .faith-page button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+    @media (prefers-reduced-motion: reduce) { .faith-page *, .faith-page *::before { animation: none !important; transition: none !important; } }
 </style>
+
+@php
+    $icons = [
+        'globe'     => '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.8 3 2.8 15 0 18M12 3c-2.8 3-2.8 15 0 18"/></svg>',
+        'facebook'  => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 21v-8h2.7l.4-3.2h-3.1V7.9c0-.9.3-1.5 1.6-1.5h1.7V3.5c-.3 0-1.3-.2-2.4-.2-2.4 0-4 1.4-4 4.1v2.4H8.7V13h2.7v8z"/></svg>',
+        'youtube'   => '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10 9.2v5.6l5-2.8z"/></svg>',
+        'tiktok'    => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3.5v11.2a3.6 3.6 0 1 1-3.6-3.6"/><path d="M14 3.5c.3 2.4 1.9 4 4.5 4.2"/></svg>',
+        'instagram' => '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17" cy="7" r=".7" fill="currentColor"/></svg>',
+        'x'         => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 4h4l11 16h-4z"/><path d="M19 4l-6.2 6.8M5 20l6.2-6.8"/></svg>',
+    ];
+
+    // [label, url, optional monogram for websites]
+    $official = [
+        ['name' => 'Websites', 'icon' => 'globe', 'items' => [
+            ['Iglesia Ni Cristo', 'https://iglesianicristo.net', 'INC'],
+            ['INC Media', 'https://incmedia.org', 'IM'],
+            ['Pasugo: God\'s Message', 'https://pasugo.com.ph', 'P'],
+            ['INC Giving', 'https://incgiving.org/', 'IG'],
+        ]],
+        ['name' => 'Facebook', 'icon' => 'facebook', 'items' => [
+            ['INC News and Updates', 'https://www.facebook.com/INCNewsandUpdates'],
+            ['INCNU Australia-Oceania', 'https://www.facebook.com/share/1E9XSvxtS1/'],
+            ['INCNU Japan', 'https://www.facebook.com/share/1CToaW2ZRQ/'],
+            ['INCNU North America', 'https://www.facebook.com/share/1Avxncjh6x/'],
+            ['INCNU Europe', 'https://www.facebook.com/share/1Q1xHLzmbr/'],
+            ['INCNU Africa', 'https://www.facebook.com/share/1EoY2g1iE2/'],
+            ['INC Media', 'https://www.facebook.com/incmedia.org'],
+            ['INC Giving Project', 'https://www.facebook.com/INCGivingProject'],
+            ['Christian Family Organizations', 'https://www.facebook.com/IglesiaNiCristoChristianFamilyOrganizations'],
+            ['INC Production Company', 'https://www.facebook.com/iglesianicristoproductioncompany'],
+            ['CFO CBI', 'https://www.facebook.com/CFO.CBI'],
+            ['SCAN International', 'https://www.facebook.com/scaninternational.org'],
+            ['INC Museum', 'https://www.facebook.com/incmuseum'],
+            ['Light Life INC', 'https://www.facebook.com/share/165mAG7irjg/'],
+            ['INC Radio', 'https://www.facebook.com/share/1WbggKCkwX/'],
+            ['INC CFO Magazine', 'https://www.facebook.com/share/185x8PC8eA/'],
+        ]],
+        ['name' => 'YouTube', 'icon' => 'youtube', 'items' => [
+            ['INC News and Updates', 'https://www.youtube.com/c/IglesiaNiCristoNewsandUpdatesChannel'],
+            ['INC Media', 'https://www.youtube.com/c/IncmediaOrgOFFICIAL'],
+            ['Evangelical Mission', 'https://www.youtube.com/c/IglesiaNiCristoEVangelicalMission'],
+            ['Christian Family Organizations', 'https://www.youtube.com/c/IglesiaNiCristoChristianFamilyOrganizations'],
+            ['INC Production Company', 'https://www.youtube.com/c/IglesiaNiCristoProductionCompany'],
+            ['INC Kids', 'https://youtube.com/c/INCKids'],
+            ['INC Original Music', 'https://youtube.com/c/INCOriginalMusic'],
+            ['INC TV', 'https://youtube.com/c/INCTVChannel'],
+            ['INC Radio DZEM 954', 'https://youtube.com/c/INCRadioDZEM954TheVoiceofTruth'],
+            ['INC Museum', 'https://youtube.com/c/INCMuseum'],
+            ['Light Life INC', 'https://youtube.com/@lightlife_inc'],
+        ]],
+        ['name' => 'TikTok', 'icon' => 'tiktok', 'items' => [
+            ['@incnauofficial', 'https://www.tiktok.com/@incnauofficial'],
+            ['@inctvcebsiofficial', 'https://www.tiktok.com/@inctvcebsiofficial'],
+            ['@lightlife_inc', 'https://www.tiktok.com/@lightlife_inc'],
+        ]],
+        ['name' => 'Instagram', 'icon' => 'instagram', 'items' => [
+            ['incnewsandupdates', 'https://www.instagram.com/incnewsandupdates'],
+            ['inc_cfo', 'https://www.instagram.com/inc_cfo'],
+            ['incmedianews', 'https://www.instagram.com/incmedianews'],
+            ['incgivingproject', 'https://www.instagram.com/incgivingproject'],
+            ['weare.incpc', 'https://www.instagram.com/weare.incpc'],
+            ['cfo.csd', 'https://www.instagram.com/cfo.csd'],
+            ['incmuseum', 'https://www.instagram.com/incmuseum'],
+            ['incradioofficial', 'https://www.instagram.com/incradioofficial/'],
+            ['lightlife_inc', 'https://www.instagram.com/lightlife_inc/'],
+            ['cfo_mag', 'https://www.instagram.com/cfo_mag/'],
+        ]],
+        ['name' => 'X (Twitter)', 'icon' => 'x', 'items' => [
+            ['@incnews_updates', 'https://twitter.com/incnews_updates'],
+            ['@inc_media', 'https://twitter.com/inc_media'],
+            ['@inc_cfo', 'https://twitter.com/inc_cfo'],
+            ['@CFO_CSD', 'https://twitter.com/CFO_CSD'],
+            ['@INCGivingShow', 'https://twitter.com/INCGivingShow'],
+        ]],
+    ];
+@endphp
 
 <div class="faith-page">
 
-    <section class="hero" id="top">
-        <div>
-            <p class="hero-kicker sans">Your weekly guide to faith online</p>
-            <h1 class="hero-title" aria-label="The Daily Faith">
-                <span class="w" style="--i:0" aria-hidden="true"><span>The</span></span>
-                <span class="w" style="--i:1" aria-hidden="true"><span>Daily</span></span>
-                <span class="w" style="--i:2" aria-hidden="true"><span>Faith</span></span>
-            </h1>
-            <p class="hero-sub">Something to read, a service to attend, news to catch up on. We've gathered the best places to go, all in one spot.</p>
-            <div class="hero-nav sans">
-                <a class="btn btn-gold" href="#read">Start reading</a>
-                <a class="btn btn-line" href="#explore">Explore</a>
-            </div>
-        </div>
-
-        <figure class="verse" aria-label="Talata mula sa Biblia">
+    {{-- Hero: the verse takes centre stage --}}
+    <section class="hero" id="top" aria-label="Talata mula sa Biblia">
+        <div class="brand serif">The Daily Faith</div>
+        <div class="verse" id="verse">
             <blockquote lang="tl">
                 <p id="verse-text">Ang Panginoon ay aking pastor; hindi ako magkukulang.</p>
-                <cite class="sans" id="verse-ref">Awit 23:1, Ang Dating Biblia</cite>
+                <cite id="verse-ref">Awit 23:1 · Ang Dating Biblia</cite>
             </blockquote>
-        </figure>
+        </div>
+        <button type="button" class="btn btn-light" id="verse-next">Another verse</button>
     </section>
 
+    {{-- Featured read --}}
     <section class="sec" id="read">
-        <div class="sec-head reveal sans">
-            <h2 style="font-family:'Playfair Display',Georgia,serif">Featured read</h2>
-        </div>
-        <article class="feature reveal">
-            <div class="cover" aria-hidden="true">
-                <div class="cover-frame"></div>
-                <div>
-                    <h3 class="cover-title">Pasugo</h3>
-                    <p class="cover-sub sans">God's Message</p>
+        <div class="wrap">
+            <div class="feature">
+                <div class="arch" aria-hidden="true">
+                    <div><h3>Pasugo</h3><span>God's Message</span></div>
+                </div>
+                <div class="feature-body">
+                    <h3 class="serif">Read God's Message here</h3>
+                    <p>There's something grounding about sitting down with God's word, especially when life gets busy. Pasugo: God's Message has been sharing articles, reflections and stories of faith for years, and it's a wonderful place to start or continue your spiritual reading. Whether you have five minutes or an hour, there's always something worth discovering.</p>
+                    <a class="btn btn-dark" href="https://www.pasugo.com.ph/" target="_blank" rel="noopener">Visit Pasugo</a>
                 </div>
             </div>
-            <div class="feature-body">
-                <span class="tag sans">Featured read</span>
-                <h3>Read God's Message here!</h3>
-                <p>There's something grounding about sitting down with God's word, especially when life gets busy. Pasugo: God's Message has been sharing articles, reflections and stories of faith for years, and it's a wonderful place to start or continue your spiritual reading. Whether you have five minutes or an hour, there's always something worth discovering.</p>
-                <a class="btn sans" href="https://www.pasugo.com.ph/" target="_blank" rel="noopener">Visit Pasugo <i style="font-style:normal">→</i></a>
-            </div>
-        </article>
+        </div>
     </section>
 
+    {{-- Where to go next --}}
     <section class="sec" id="explore">
-        <div class="sec-head reveal">
-            <h2>Where to go next</h2>
-            <p>Four places worth a visit, each opens in a new tab.</p>
-        </div>
-
-        <div class="tours">
-            <a class="tour reveal" style="--d:.0s" href="https://iglesianicristo.net/directory/" target="_blank" rel="noopener">
-                <span class="tag sans">Worship &amp; community</span>
-                <h3>Accessible schedule of worship service</h3>
-                <p>Not sure when or where the nearest worship service is? This handy directory makes it easy to find a congregation near you, along with service times, so you're never far from a place to gather and worship.</p>
-                <span class="go sans">Find a schedule <i>→</i></span>
-            </a>
-            <a class="tour reveal" style="--d:.1s" href="https://iglesianicristo.net/" target="_blank" rel="noopener">
-                <span class="tag sans">Stay informed</span>
-                <h3>News about God's Church</h3>
-                <p>Curious about what's happening across the Iglesia Ni Cristo community? This is the official home for announcements, updates and stories worth knowing about, kept fresh and easy to browse.</p>
-                <span class="go sans">Catch up on news <i>→</i></span>
-            </a>
-            <a class="tour reveal" style="--d:.2s" href="https://incmedia.org/" target="_blank" rel="noopener">
-                <span class="tag sans">Get involved</span>
-                <h3>True Christian activities</h3>
-                <p>From heartfelt programs to community outreach, INC Media captures the everyday moments of faith in action. It's a great way to see the church's activities up close, wherever you are.</p>
-                <span class="go sans">See what's happening <i>→</i></span>
-            </a>
-            <a class="tour reveal" style="--d:.3s" href="https://incmuseum.net/" target="_blank" rel="noopener">
-                <span class="tag sans">Look back</span>
-                <h3>Know the true Church's history</h3>
-                <p>Ever wondered how it all began? The Iglesia Ni Cristo Museum walks you through the church's rich history, a meaningful visit for anyone curious about where this journey of faith started.</p>
-                <span class="go sans">Explore the history <i>→</i></span>
-            </a>
+        <div class="wrap">
+            <div class="sec-head">
+                <h2>Where to go next</h2>
+                <p>Four places worth a visit. Each opens in a new tab.</p>
+            </div>
+            <div class="go">
+                <a href="https://iglesianicristo.net/directory/" target="_blank" rel="noopener">
+                    <h3>Accessible schedule of worship service</h3>
+                    <p>Not sure when or where the nearest worship service is? This directory helps you find a congregation near you, along with service times.</p>
+                    <span class="btn btn-dark">Find a schedule</span>
+                </a>
+                <a href="https://iglesianicristo.net/" target="_blank" rel="noopener">
+                    <h3>News about God's Church</h3>
+                    <p>The official home for announcements, updates and stories from across the Iglesia Ni Cristo community, kept fresh and easy to browse.</p>
+                    <span class="btn btn-dark">Catch up on news</span>
+                </a>
+                <a href="https://incmedia.org/" target="_blank" rel="noopener">
+                    <h3>True Christian activities</h3>
+                    <p>From heartfelt programs to community outreach, INC Media captures everyday moments of faith in action, wherever you are.</p>
+                    <span class="btn btn-dark">See what's happening</span>
+                </a>
+                <a href="https://incmuseum.net/" target="_blank" rel="noopener">
+                    <h3>Know the true Church's history</h3>
+                    <p>The Iglesia Ni Cristo Museum walks you through the church's history, a meaningful visit for anyone curious about how it all began.</p>
+                    <span class="btn btn-dark">Explore the history</span>
+                </a>
+            </div>
         </div>
     </section>
 
-    <footer class="foot reveal">
+    {{-- Official channels --}}
+    <section class="official" id="official">
+        <div class="wrap">
+            <div class="sec-head">
+                <h2>Official sites &amp; social media</h2>
+                <p>The official Iglesia Ni Cristo websites and pages (2026 update). Choose a platform; each link opens in a new tab.</p>
+            </div>
+
+            <div class="tabs" role="tablist" aria-label="Platforms">
+                @foreach ($official as $i => $g)
+                    <button type="button" class="tab {{ $i === 0 ? 'on' : '' }}" role="tab" aria-selected="{{ $i === 0 ? 'true' : 'false' }}" data-panel="panel-{{ $i }}">
+                        <span class="orb">{!! $icons[$g['icon']] !!}</span>
+                        <span>{{ $g['name'] }}</span>
+                    </button>
+                @endforeach
+            </div>
+
+            @foreach ($official as $i => $g)
+                <div class="panel {{ $i === 0 ? 'on' : '' }}" id="panel-{{ $i }}" role="tabpanel">
+                    @foreach ($g['items'] as $item)
+                        <a class="emblem" href="{{ $item[1] }}" target="_blank" rel="noopener noreferrer">
+                            <span class="orb" aria-hidden="true">
+                                @if (!empty($item[2])) {{ $item[2] }} @else {!! $icons[$g['icon']] !!} @endif
+                            </span>
+                            <span class="name">{{ $item[0] }}</span>
+                        </a>
+                    @endforeach
+                </div>
+            @endforeach
+
+            <p class="closing">“Then he told them, ‘As you go into all the world, proclaim the gospel to everyone.’”
+                <cite>Mark 16:15 ISV</cite>
+            </p>
+        </div>
+    </section>
+
+    <footer class="foot">
         <strong>Thanks for stopping by</strong>
-        Tap any card above to open it in a new tab.
+        Tap any link above to open it in a new tab.
     </footer>
 </div>
 @endsection
@@ -210,20 +309,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const page = document.querySelector('.faith-page');
     const still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    page.classList.add('js');
 
-    // Scroll reveal
-    const items = page.querySelectorAll('.reveal, .sec-head');
-    if ('IntersectionObserver' in window && !still) {
-        const io = new IntersectionObserver(entries => entries.forEach(e => {
-            if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
-        }), { threshold: .15, rootMargin: '0px 0px -6% 0px' });
-        items.forEach(n => io.observe(n));
-    } else {
-        items.forEach(n => n.classList.add('in'));
-    }
-
-    // A different verse each time the page loads (never the same one twice in a row)
     const VERSES = [
         ['Ang Panginoon ay aking pastor; hindi ako magkukulang.', 'Awit 23:1'],
         ['Sapagka\'t nalalaman ko ang mga pagiisip na iniisip ko tungkol sa inyo, sabi ng Panginoon, mga pagiisip ng kapayapaan, at hindi ng kasamaan, upang bigyan kayo ng pagasa sa inyong huling wakas.', 'Jeremias 29:11'],
@@ -256,56 +342,43 @@ document.addEventListener('DOMContentLoaded', () => {
         ["Bago sa bawa't umaga: dakila ang iyong pagtatapat.", 'Panaghoy 3:23'],
         ["Kayo'y magpakalakas at magpakatapang, huwag kayong matakot; hindi ka niya iiwan, ni pababayaan ka man.", 'Deuteronomio 31:6'],
     ];
-    let last = -1;
-    try { last = Number(localStorage.getItem('faith-verse')); } catch (e) {}
-    let pick;
-    do { pick = Math.floor(Math.random() * VERSES.length); } while (pick === last && VERSES.length > 1);
-    try { localStorage.setItem('faith-verse', String(pick)); } catch (e) {}
-    document.getElementById('verse-text').textContent = VERSES[pick][0];
-    document.getElementById('verse-ref').textContent = VERSES[pick][1] + ', Ang Dating Biblia';
-
-    // Eased scrolling for the hero buttons (works whether the page or an inner container scrolls)
-    const scroller = node => {
-        for (let p = node.parentElement; p; p = p.parentElement) {
-            const o = getComputedStyle(p).overflowY;
-            if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p;
-        }
-        return document.scrollingElement;
+    const box = document.getElementById('verse');
+    const vText = document.getElementById('verse-text');
+    const vRef = document.getElementById('verse-ref');
+    const paint = i => {
+        vText.textContent = VERSES[i][0];
+        vRef.textContent = VERSES[i][1] + ' · Ang Dating Biblia';
+        box.classList.toggle('long', VERSES[i][0].length > 110);
     };
-    const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-    page.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener('click', e => {
-        const target = document.querySelector(a.getAttribute('href'));
-        if (!target) return;
-        e.preventDefault();
-        const box = scroller(target), isDoc = box === document.scrollingElement;
-        const boxTop = isDoc ? 0 : box.getBoundingClientRect().top;
-        const end = Math.max(0, box.scrollTop + target.getBoundingClientRect().top - boxTop - 16);
-        const land = () => {
-            box.style.scrollBehavior = '';
-            target.setAttribute('tabindex', '-1');
-            target.focus({ preventScroll: true });
-            target.classList.remove('landed'); void target.offsetWidth; target.classList.add('landed');
-        };
-        box.style.scrollBehavior = 'auto';
-        if (still) { box.scrollTop = end; land(); return; }
-        const start = box.scrollTop, dist = end - start, dur = Math.min(1200, 550 + Math.abs(dist) * .35), t0 = performance.now();
-        const step = now => {
-            const t = Math.min((now - t0) / dur, 1);
-            box.scrollTop = start + dist * ease(t);
-            if (t < 1) requestAnimationFrame(step); else land();
-        };
-        requestAnimationFrame(step);
-    }));
+    const other = from => {
+        let n;
+        do { n = Math.floor(Math.random() * VERSES.length); } while (n === from && VERSES.length > 1);
+        return n;
+    };
+    let current = -1;
+    try { current = Number(localStorage.getItem('faith-verse')); } catch (e) {}
+    current = other(current);
+    try { localStorage.setItem('faith-verse', String(current)); } catch (e) {}
+    paint(current);
 
-    // Soft light that follows the pointer across the hero
-    const hero = page.querySelector('.hero');
-    if (!still && window.matchMedia('(pointer: fine)').matches) {
-        hero.addEventListener('pointermove', e => {
-            const r = hero.getBoundingClientRect();
-            hero.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100) + '%');
-            hero.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100) + '%');
+    document.getElementById('verse-next').addEventListener('click', () => {
+        current = other(current);
+        try { localStorage.setItem('faith-verse', String(current)); } catch (e) {}
+        if (still) { paint(current); return; }
+        box.classList.add('out');
+        setTimeout(() => { paint(current); box.classList.remove('out'); }, 400);
+    });
+
+    // Platform tabs
+    const tabs = [...page.querySelectorAll('.tab')];
+    const panels = [...page.querySelectorAll('.panel')];
+    tabs.forEach(t => t.addEventListener('click', () => {
+        tabs.forEach(x => {
+            x.classList.toggle('on', x === t);
+            x.setAttribute('aria-selected', x === t ? 'true' : 'false');
         });
-    }
+        panels.forEach(p => p.classList.toggle('on', p.id === t.dataset.panel));
+    }));
 });
 </script>
 @endpush

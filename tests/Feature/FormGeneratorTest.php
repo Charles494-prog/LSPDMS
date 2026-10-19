@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Record;
 use App\Models\GlobalVariable;
 use App\Models\MonthlyRecordSnapshot;
+use App\Models\R401Snapshot;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -617,6 +618,120 @@ class FormGeneratorTest extends TestCase
             ->assertSee('No saved monthly session snapshots match these filters.');
     }
 
+    public function test_monthly_r401_snapshot_summary_describes_archived_actions_and_codes(): void
+    {
+        $user = $this->makeSecretary(['form_generator_allow' => true]);
+        $sessionId = DB::table('monthly_movement_sessions')->insertGetId([
+            'active_key' => null,
+            'status' => 'completed',
+            'period_month' => '2026-10-01',
+            'started_by' => 'Secretary',
+            'started_at' => '2026-10-01 09:00:00',
+            'completed_by' => 'Head Secretary',
+            'completed_at' => '2026-10-01 10:00:00',
+        ]);
+        $snapshot = R401Snapshot::query()->create([
+            'session_id' => $sessionId,
+            'period_month' => '2026-10-01',
+            'report_type' => 'Monthly session',
+            'kalagayan' => '',
+            'purok_selection' => 'All Puroks',
+            'format' => 'docx',
+            'file_path' => 'monthly-session-snapshots/2026-10/session-'.$sessionId.'.docx',
+            'file_name' => 'Monthly_October_2026_RESUMEN_MS_UWP.docx',
+            'generated_by' => 'Head Secretary',
+        ]);
+        $insertHistory = static function (array $values) use ($sessionId): void {
+            DB::table('permanent_history')->insert($values + [
+                'session_id' => $sessionId,
+                'period_month' => '2026-10-01',
+                'registry' => null,
+                'gender' => null,
+                'kapisanan' => null,
+                'destination_description' => null,
+                'description' => null,
+                'changed_by' => 'Head Secretary',
+                'changed_at' => '2026-10-01 10:00:00',
+                'date_of_baptism' => null,
+                'evangelist' => null,
+            ]);
+        };
+
+        $insertHistory([
+            'record_id' => 1,
+            'action' => 'add',
+            'full_name' => 'Charles Andrei Galvan',
+            'status' => 'MS',
+            'monthly_code' => 'MS: B',
+            'previous_values' => json_encode(['status' => 'MS', 'purok' => '1', 'grupo' => '1']),
+            'next_values' => json_encode(['status' => 'MS', 'purok' => '1', 'grupo' => '1']),
+        ]);
+        $insertHistory([
+            'record_id' => 2,
+            'action' => 'add',
+            'full_name' => 'Juan Dela Cruz',
+            'status' => 'UWP',
+            'monthly_code' => 'UWP: B',
+            'previous_values' => json_encode(['status' => 'UWP', 'purok' => '2', 'grupo' => '3']),
+            'next_values' => json_encode(['status' => 'UWP', 'purok' => '2', 'grupo' => '3']),
+        ]);
+        $insertHistory([
+            'record_id' => 2,
+            'action' => 'status',
+            'full_name' => 'Juan Dela Cruz',
+            'status' => 'MS',
+            'monthly_code' => 'MS: G',
+            'previous_values' => json_encode(['status' => 'MS', 'purok' => '2', 'grupo' => '3']),
+            'next_values' => json_encode(['status' => 'UWP', 'purok' => '2', 'grupo' => '3']),
+        ]);
+        $insertHistory([
+            'record_id' => 3,
+            'action' => 'subtract',
+            'full_name' => 'Kimberly Ostil',
+            'status' => 'UWP',
+            'monthly_code' => 'UWP: D',
+            'previous_values' => json_encode(['status' => 'UWP', 'purok' => '1', 'grupo' => '4']),
+            'next_values' => json_encode(['status' => 'INACTIVE', 'purok' => '1', 'grupo' => '4']),
+        ]);
+        $insertHistory([
+            'record_id' => 4,
+            'action' => 'transfer',
+            'full_name' => 'Emman Ostil',
+            'status' => 'MS',
+            'monthly_code' => 'MS: C- / MS: C+',
+            'previous_values' => json_encode(['status' => 'MS', 'purok' => '4', 'grupo' => '9']),
+            'next_values' => json_encode(['status' => 'MS', 'purok' => '3', 'grupo' => '5']),
+        ]);
+        $insertHistory([
+            'record_id' => 5,
+            'action' => 'status',
+            'full_name' => 'Jed Wong',
+            'status' => 'UWP',
+            'monthly_code' => 'UWP: E',
+            'previous_values' => json_encode(['status' => 'UWP', 'purok' => '5', 'grupo' => '2']),
+            'next_values' => json_encode(['status' => 'MK', 'purok' => '5', 'grupo' => '2']),
+        ]);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->get(route('forms.monthly.r4-01.snapshots'))
+            ->assertOk()
+            ->assertSee('Summary')
+            ->assertSee(route('forms.monthly.r4-01.snapshots.summary', $snapshot), false);
+
+        $this->withSession(['login_user' => ['id' => $user->id]])
+            ->getJson(route('forms.monthly.r4-01.snapshots.summary', $snapshot))
+            ->assertOk()
+            ->assertJsonPath('period', 'October 2026')
+            ->assertJsonCount(5, 'entries')
+            ->assertJsonPath('entries.0.name', 'Charles Andrei Galvan')
+            ->assertJsonPath('entries.0.summary', 'in: MS (Code: B)')
+            ->assertJsonPath('entries.1.name', 'Juan Dela Cruz')
+            ->assertJsonPath('entries.1.summary', 'transfer: MS (Code: G) -> UWP (Code: B)')
+            ->assertJsonPath('entries.2.summary', 'out: UWP (Code: D)')
+            ->assertJsonPath('entries.3.summary', 'transfer 4-9 (Code: C-) -> 3-5 (Code: C+)')
+            ->assertJsonPath('entries.4.summary', 'transfer: UWP (Code: E) -> MK');
+    }
+
     public function test_resumen_assigns_snapshot_counts_to_separate_split_purok_rows(): void
     {
         $user = $this->makeSecretary(['form_generator_allow' => true]);
@@ -883,6 +998,47 @@ class FormGeneratorTest extends TestCase
         $this->assertSame(2, $archiveReport['rows'][0]['uwp']['G']);
         $this->assertSame(4, $archiveReport['rows'][0]['ms_total']);
         $this->assertSame(2, $archiveReport['rows'][0]['uwp_total']);
+    }
+
+    public function test_monthly_archive_resumen_reconciles_ending_totals_to_current_records(): void
+    {
+        DB::table('puroks')->insert([
+            'purok_number' => 1,
+            'purok_name' => 'Purok Uno',
+            'manggagawa' => 'Worker One',
+            'ministerial_id' => 'MIN-001',
+            'grupo_start' => 1,
+            'grupo_end' => 24,
+            'full_purok' => true,
+        ]);
+        foreach ([['MS', '1'], ['MS', '2'], ['UWP', '3'], ['UWP', '']] as $index => [$status, $grupo]) {
+            Record::query()->create([
+                'full_name' => 'Current Member '.$index,
+                'purok' => '1',
+                'grupo' => $grupo,
+                'status' => $status,
+            ]);
+        }
+        $this->createMonthlySession('2026-10-01', 'completed');
+        MonthlyRecordSnapshot::query()->create([
+            'month' => '2026-10-01',
+            'purok_number' => 1,
+            'ms_count' => 3,
+            'uwp_count' => 1,
+            'mk_count' => 0,
+            'movement_counts' => ['MS' => ['B' => 1], 'UWP' => ['G' => 1]],
+            'session_generated' => true,
+        ]);
+
+        $report = app(\App\Services\MonthlyResumenReport::class)
+            ->generate(\Illuminate\Support\Carbon::parse('2026-10-01'), true, true);
+
+        $this->assertSame(2, $report['totals']['ms_total']);
+        $this->assertSame(2, $report['totals']['uwp_total']);
+        $this->assertSame(1, $report['rows'][0]['ms']['A']);
+        $this->assertSame(1, $report['rows'][0]['ms']['B']);
+        $this->assertSame(3, $report['rows'][0]['uwp']['A']);
+        $this->assertSame(1, $report['rows'][0]['uwp']['G']);
     }
 
     public function test_resumen_and_r4_01_count_add_reactivation_and_status_entry_consistently(): void

@@ -137,6 +137,41 @@ class DelistmentController extends Controller
         )->deleteFileAfterSend(true);
     }
 
+    public function exportHistory(DelistmentDocxExporter $exporter)
+    {
+        $history = DelistmentHistory::query()
+            ->with('record:id,full_name,registry')
+            ->orderByDesc('delisted_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (DelistmentHistory $entry): array => [
+                'name' => $entry->record?->full_name ?: 'Deleted record',
+                'registry' => $entry->record?->registry ?: '',
+                'delisted_at' => $entry->delisted_at?->timezone('Asia/Manila')->format('M d, Y h:i A') ?: '—',
+                'reason' => $entry->reason,
+                'delisted_by' => $entry->delisted_by,
+            ])
+            ->all();
+
+        if ($history === []) {
+            $history[] = [
+                'name' => 'No delistment history recorded.',
+                'registry' => '',
+                'delisted_at' => '—',
+                'reason' => '—',
+                'delisted_by' => '—',
+            ];
+        }
+
+        $path = $exporter->generate('De-Listment History', $history, history: true);
+
+        return response()->download(
+            $path,
+            'De-Listment History.docx',
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+        )->deleteFileAfterSend(true);
+    }
+
     public function endorse(Request $request, Record $record, R210Eligibility $eligibility): JsonResponse
     {
         $validated = $request->validate([

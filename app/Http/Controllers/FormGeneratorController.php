@@ -171,6 +171,118 @@ class FormGeneratorController extends Controller
         ]);
     }
 
+    public function r401SnapshotSummary(R401Snapshot $snapshot): JsonResponse
+    {
+        abort_unless($snapshot->report_type === 'Monthly session', 404);
+
+        $history = $snapshot->session_id === null
+            ? collect()
+            : DB::table('permanent_history')
+                ->where('session_id', $snapshot->session_id)
+                ->orderBy('id')
+                ->get();
+        $incomingCodes = [];
+        foreach ($history as $entry) {
+            [$status, $code] = $this->snapshotMonthlyCodeParts((string) $entry->monthly_code, (string) $entry->status);
+            if ($entry->action === 'add' && $code === 'B' && $entry->record_id !== null) {
+                $incomingCodes[(int) $entry->record_id][$status] = $code;
+            }
+        }
+
+        $pairedIncomingCodes = [];
+        foreach ($history as $entry) {
+            if ($entry->action !== 'status' || $entry->record_id === null) {
+                continue;
+            }
+            $next = json_decode((string) ($entry->next_values ?? ''), true) ?: [];
+            $nextStatus = mb_strtoupper(trim((string) ($next['status'] ?? '')));
+            $recordId = (int) $entry->record_id;
+            if ($nextStatus !== '' && isset($incomingCodes[$recordId][$nextStatus])) {
+                $pairedIncomingCodes[$recordId][$nextStatus] = true;
+            }
+        }
+
+        $entries = [];
+        $seenEvents = [];
+        foreach ($history as $entry) {
+            [$status, $code] = $this->snapshotMonthlyCodeParts((string) $entry->monthly_code, (string) $entry->status);
+            $previous = json_decode((string) ($entry->previous_values ?? ''), true) ?: [];
+            $next = json_decode((string) ($entry->next_values ?? ''), true) ?: [];
+            $name = trim((string) $entry->full_name) ?: 'Unnamed record';
+            $summary = null;
+            $signature = null;
+
+            if ($entry->action === 'transfer') {
+                $from = $this->snapshotLocation($previous);
+                $to = $this->snapshotLocation($next);
+                $summary = "transfer {$from} (Code: C-) -> {$to} (Code: C+)";
+                $signature = implode('|', [$entry->record_id, 'transfer', $from, $to]);
+            } elseif ($entry->action === 'status') {
+                $previousStatus = mb_strtoupper(trim((string) ($previous['status'] ?? $entry->status)));
+                $nextStatus = mb_strtoupper(trim((string) ($next['status'] ?? '')));
+                if ($previousStatus !== '' && $nextStatus !== '' && $previousStatus !== $nextStatus) {
+                    $incomingCode = $incomingCodes[(int) $entry->record_id][$nextStatus] ?? null;
+                    $oldCode = $code ?: 'A';
+                    $summary = "transfer: {$previousStatus} (Code: {$oldCode}) -> {$nextStatus}"
+                        .($incomingCode ? " (Code: {$incomingCode})" : '');
+                    $signature = implode('|', [$entry->record_id, 'status', $previousStatus, $nextStatus, $oldCode]);
+                }
+            } elseif ($entry->action === 'add') {
+                if ($code !== 'B' || isset($pairedIncomingCodes[(int) $entry->record_id][$status])) {
+                    continue;
+                }
+                $summary = "in: {$status} (Code: B)";
+                $signature = implode('|', [$entry->record_id, 'add', $status, $this->snapshotLocation($next)]);
+            } elseif ($entry->action === 'subtract') {
+                $summary = "out: {$status} (Code: {$code})";
+                $signature = implode('|', [$entry->record_id, 'subtract', $status, $code, $this->snapshotLocation($previous)]);
+            }
+
+            if ($summary === null || ($signature !== null && isset($seenEvents[$signature]))) {
+                continue;
+            }
+            if ($signature !== null) {
+                $seenEvents[$signature] = true;
+            }
+            $description = trim((string) $entry->description);
+            $entries[] = [
+                'name' => $name,
+                'summary' => $summary.($description !== '' ? ' — '.$description : ''),
+            ];
+        }
+
+        return response()->json([
+            'period' => $snapshot->period_month->format('F Y'),
+            'entries' => $entries,
+        ]);
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private function snapshotMonthlyCodeParts(string $monthlyCode, string $fallbackStatus): array
+    {
+        $parts = explode(':', trim($monthlyCode), 2);
+        $status = mb_strtoupper(trim($parts[0] ?? $fallbackStatus));
+        if (! in_array($status, ['MS', 'UWP', 'MK'], true)) {
+            $status = mb_strtoupper(trim($fallbackStatus));
+        }
+        preg_match('/(C\+|C-|DD|B|D|E|G|H|A)(?![A-Z])/i', $parts[1] ?? $monthlyCode, $match);
+
+        return [$status, mb_strtoupper($match[1] ?? '')];
+    }
+
+    /**
+     * @param  array<string, mixed>  $values
+     */
+    private function snapshotLocation(array $values): string
+    {
+        $purok = trim((string) ($values['purok'] ?? ''));
+        $grupo = trim((string) ($values['grupo'] ?? ''));
+
+        return $purok === '' && $grupo === '' ? 'Unassigned' : ($purok ?: 'Unassigned').'-'.($grupo ?: 'Unassigned');
+    }
+
     public function deleteR401Snapshot(Request $request, R401Snapshot $snapshot)
     {
         $request->validate([

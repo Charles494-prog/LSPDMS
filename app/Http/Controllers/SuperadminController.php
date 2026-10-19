@@ -5,19 +5,24 @@ namespace App\Http\Controllers;
 use App\Models\GlobalVariable;
 use App\Models\Purok;
 use App\Models\Record;
+use App\Models\RecordAuditLog;
 use App\Models\R402Hakbang;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SuperadminController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
+        $auditFilters = $this->validatedAuditFilters($request);
         $users = User::query()
             ->select([
                 'id',
@@ -50,7 +55,75 @@ class SuperadminController extends Controller
                 ->orderBy('status')
                 ->orderBy('code')
                 ->get(),
+            'recordAuditLogs' => $this->recordAuditQuery($auditFilters)
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->paginate(50)
+                ->withQueryString(),
+            'auditFilters' => $auditFilters,
         ]);
+    }
+
+    public function downloadRecordAuditLogs(Request $request): StreamedResponse
+    {
+        $auditFilters = $this->validatedAuditFilters($request);
+        $query = $this->recordAuditQuery($auditFilters)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        return response()->streamDownload(function () use ($query): void {
+            echo '<!doctype html><html><head><meta charset="utf-8"><title>Record Activity Log</title>'
+                .'<style>@page{margin:.5in}body{font-family:Arial,sans-serif;font-size:9pt}h1{text-align:center;font-size:16pt}p{margin:4px 0 12px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #222;padding:5px;text-align:left;vertical-align:top}th{background:#e8edf5}</style>'
+                .'</head><body><h1>Record Activity Log</h1><table><thead><tr>'
+                .'<th>Date of action</th><th>Secretary email</th><th>Record</th><th>Record ID</th><th>Action</th><th>Details</th><th>Changed values</th>'
+                .'</tr></thead><tbody>';
+            foreach ($query->cursor() as $auditLog) {
+                $values = [
+                    $auditLog->created_at?->timezone('Asia/Manila')->format('M d, Y h:i:s A') ?? '',
+                    $auditLog->actor_email ?? 'System / background task',
+                    $auditLog->record_name ?? 'Deleted record',
+                    (string) ($auditLog->record_id ?? ''),
+                    $auditLog->action,
+                    $auditLog->summary,
+                    json_encode($auditLog->changes, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                ];
+                echo '<tr>';
+                foreach ($values as $value) {
+                    echo '<td>'.e($value).'</td>';
+                }
+                echo '</tr>';
+            }
+            echo '</tbody></table></body></html>';
+        }, 'record-activity-log.doc', [
+            'Content-Type' => 'application/msword; charset=UTF-8',
+        ]);
+    }
+
+    private function validatedAuditFilters(Request $request): array
+    {
+        return $request->validate([
+            'date_from' => ['nullable', 'date_format:Y-m-d'],
+            'date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:date_from'],
+            'record_name' => ['nullable', 'string', 'max:150'],
+            'actor_email' => ['nullable', 'string', 'max:255'],
+        ]);
+    }
+
+    private function recordAuditQuery(array $filters): Builder
+    {
+        return RecordAuditLog::query()
+            ->when($filters['date_from'] ?? null, function (Builder $query, string $date): void {
+                $query->where('created_at', '>=', Carbon::parse($date, 'Asia/Manila')->startOfDay()->utc());
+            })
+            ->when($filters['date_to'] ?? null, function (Builder $query, string $date): void {
+                $query->where('created_at', '<=', Carbon::parse($date, 'Asia/Manila')->endOfDay()->utc());
+            })
+            ->when($filters['record_name'] ?? null, function (Builder $query, string $name): void {
+                $query->where('record_name', 'like', '%'.$name.'%');
+            })
+            ->when($filters['actor_email'] ?? null, function (Builder $query, string $email): void {
+                $query->where('actor_email', 'like', '%'.$email.'%');
+            });
     }
 
     public function storeR402Hakbang(Request $request): JsonResponse
@@ -359,7 +432,16 @@ class SuperadminController extends Controller
             if ($count === 0) {
                 return 0;
             }
-            Record::query()->update(['is_valid1' => false, 'is_valid2' => false]);
+            Record::query()
+                ->where(fn ($query) => $query->where('is_valid1', true)->orWhere('is_valid2', true))
+                ->orderBy('id')
+                ->chunkById(100, function ($records): void {
+                    foreach ($records as $record) {
+                        $record->is_valid1 = false;
+                        $record->is_valid2 = false;
+                        $record->save();
+                    }
+                });
             DB::table('system_maintenance_audits')->insert([
                 'action' => 'reset_bnh_helper_checks',
                 'affected_count' => $count,

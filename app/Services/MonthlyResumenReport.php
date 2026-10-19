@@ -9,12 +9,17 @@ use App\Models\Record;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 class MonthlyResumenReport
 {
     private const CODES = ['A', 'B', 'C+', 'C-', 'D', 'DD', 'E', 'G', 'H'];
 
-    public function generate(Carbon $month, bool $includeCompletedSessionMovements = false): array
+    public function generate(
+        Carbon $month,
+        bool $includeCompletedSessionMovements = false,
+        bool $reconcileToCurrentRecords = false
+    ): array
     {
         $month = $month->copy()->startOfMonth();
         $previousMonth = $month->copy()->subMonthNoOverflow();
@@ -58,7 +63,7 @@ class MonthlyResumenReport
             ->sort()
             ->values();
 
-        $rows = $purokNumbers->flatMap(function (int $number) use ($purokDetails, $records, $baselineCounts, $movementCounts, $exactMovementCounts): array {
+        $rows = $purokNumbers->flatMap(function (int $number) use ($purokDetails, $records, $baselineCounts, $movementCounts, $exactMovementCounts, $reconcileToCurrentRecords): array {
             $segments = $purokDetails->where('purok_number', $number)->values();
             if ($segments->isEmpty()) {
                 $segments = collect([[
@@ -73,12 +78,15 @@ class MonthlyResumenReport
             }
             $weights = $segments->mapWithKeys(function ($segment) use ($records, $number): array {
                 $id = is_array($segment) ? 'fallback' : (string) $segment->id;
-                $start = is_array($segment) ? 1 : ($segment->full_purok ? 1 : (int) $segment->grupo_start);
-                $end = is_array($segment) ? PHP_INT_MAX : ($segment->full_purok ? PHP_INT_MAX : (int) $segment->grupo_end);
+                $fullPurok = is_array($segment) || $segment->full_purok;
+                $start = is_array($segment) ? 1 : (int) $segment->grupo_start;
+                $end = is_array($segment) ? PHP_INT_MAX : (int) $segment->grupo_end;
                 $memberCounts = $records->filter(fn (Record $record): bool =>
                     $this->purokNumber((string) $record->purok) === $number
-                    && (int) $record->grupo >= $start
-                    && (int) $record->grupo <= $end
+                    && ($fullPurok || (
+                        (int) $record->grupo >= $start
+                        && (int) $record->grupo <= $end
+                    ))
                 )->countBy(fn (Record $record): string => mb_strtoupper(trim((string) $record->status)));
 
                 return [$id => $memberCounts->only(['MS', 'UWP'])->all()];
@@ -121,7 +129,7 @@ class MonthlyResumenReport
                 }
             }
 
-            return $segments->map(function ($segment) use ($number, $weights, $allocatedBaseline, $allocatedMovements): array {
+            return $segments->map(function ($segment) use ($number, $weights, $allocatedBaseline, $allocatedMovements, $reconcileToCurrentRecords): array {
                 $id = is_array($segment) ? 'fallback' : (string) $segment->id;
                 $codesByStatus = [];
                 foreach (['MS', 'UWP'] as $status) {
@@ -131,6 +139,15 @@ class MonthlyResumenReport
                     }
                     foreach (($allocatedMovements[$status] ?? []) as $code => $distribution) {
                         $codes[$code] += $distribution[$id] ?? 0;
+                    }
+                    if ($reconcileToCurrentRecords) {
+                        $openingCount = $codes['A']
+                            + (int) ($weights[$id][$status] ?? 0)
+                            - $this->endingCount($codes);
+                        if ($openingCount < 0) {
+                            throw new RuntimeException("Monthly {$status} movement totals exceed the current record count.");
+                        }
+                        $codes['A'] = $openingCount;
                     }
                     $codesByStatus[$status] = $codes;
                 }
@@ -303,8 +320,11 @@ class MonthlyResumenReport
             if ((int) $candidate->purok_number !== $number) {
                 return false;
             }
-            $start = $candidate->full_purok ? 1 : (int) $candidate->grupo_start;
-            $end = $candidate->full_purok ? PHP_INT_MAX : (int) $candidate->grupo_end;
+            if ($candidate->full_purok) {
+                return true;
+            }
+            $start = (int) $candidate->grupo_start;
+            $end = (int) $candidate->grupo_end;
 
             return $groupNumber >= $start && $groupNumber <= $end;
         });
